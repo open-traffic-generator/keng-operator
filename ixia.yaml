@@ -1,0 +1,7 @@
+apiVersion: network.keysight.com/v1alpha1
+kind: IxiaTG
+metadata:
+  name: ixia-sample
+  namespace: ixiatg-op-system
+spec:
+  config: "ubuntu:20:04" 

@@ -1,0 +1,7 @@
+apiVersion: network.keysight.com/v1alpha1
+kind: IxiaTG
+metadata:
+  name: ixiatg-sample
+spec:
+  # Add fields here
+  foo: "ubuntu:20:04"

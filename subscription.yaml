@@ -1,0 +1,11 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: ixiatg-op-v0-0-20-sub
+  namespace: operators
+spec:
+  channel: stable
+  name: ixiatg-op-v0-0-20-sub
+  source: ixiatg-op-catalog
+  sourceNamespace: operators
+  installPlanApproval: Manual
