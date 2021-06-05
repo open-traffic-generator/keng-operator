@@ -19,8 +19,10 @@ package controllers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
@@ -51,6 +53,7 @@ type IxiaTGReconciler struct {
 //+kubebuilder:rbac:groups=network.keysight.com,resources=ixiatgs/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=network.keysight.com,resources=ixiatgs/finalizers,verbs=update
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -82,6 +85,9 @@ func (r *IxiaTGReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		log.Error(err, "Failed to get Ixia")
 		return ctrl.Result{}, err
 	}
+
+	// Check if we need to creatte resources or not
+	r.ReconcileSecret(ctx, req, ixia)
 
 	myFinalizerName := "keysight.com/finalizer"
 
@@ -176,7 +182,7 @@ func (r *IxiaTGReconciler) containersForIxia(ixia *networkv1alpha1.IxiaTG) []cor
 	config := &topopb.Config{}
 	err := json.Unmarshal([]byte(ixia.Spec.Config), config)
 	if err != nil {
-		log.Infof("Unmarshelling failed, creating container with defaults. Error : %v", err)
+		log.Infof("Unmarshalling failed, creating container with defaults. Error : %v", err)
 		containers = []corev1.Container{{
 			Name:            ixia.Name,
 			Image:           conImage,
@@ -185,7 +191,7 @@ func (r *IxiaTGReconciler) containersForIxia(ixia *networkv1alpha1.IxiaTG) []cor
 			SecurityContext: conSecurityCtx,
 		}}
 	} else {
-		log.Infof("Unmarshelling successful, creating container with config data: %v", config)
+		log.Infof("Unmarshalling successful, creating container with config data: %v", config)
 		if len(config.Env) > 0 {
 			conEnvs = updateEnvData(config.Env, conEnvs)
 		}
@@ -275,4 +281,102 @@ func getDefaultSecurityContext() *corev1.SecurityContext {
 	sc.Privileged = new(bool)
 	sc.Privileged = &t
 	return sc
+}
+
+func (r *IxiaTGReconciler) ReconcileSecret(ctx context.Context,
+	req ctrl.Request, ixia *networkv1alpha1.IxiaTG) (ctrl.Result, error) {
+	_ = r.Log.WithValues("ixiatg", req.NamespacedName)
+	// Fetch the Secret instance
+	instance := &corev1.Secret{}
+
+	//err := r.Get(ctx, req.NamespacedName, instance)
+	currNamespace := new(types.NamespacedName)
+	currNamespace.Namespace = "ixiatg-op-system"
+	currNamespace.Name = "secret-basic-auth"
+	log.Infof("Getting Secret for namespace : %v", *currNamespace)
+	err := r.Get(ctx, *currNamespace, instance)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			// Request object not found, could have been deleted after reconcile request.
+			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
+			// Return and don't requeue
+			log.Infof("No Secret found in namespace : %v", *currNamespace)
+			return ctrl.Result{}, nil
+		}
+		// Error reading the object - requeue the request.
+		return ctrl.Result{}, err
+	}
+
+	namespaceMissing := false
+	if rep, ok := instance.Annotations["secretsync.ixiatg.com/replicate"]; ok {
+		if rep == "true" {
+			targetSecret, err := createSecret(instance, currNamespace.Name, ixia.Namespace)
+			if err != nil {
+				return ctrl.Result{}, err
+			}
+			secret := &corev1.Secret{}
+			err = r.Get(ctx, types.NamespacedName{Name: targetSecret.Name, Namespace: targetSecret.Namespace}, secret)
+			if err != nil && errors.IsNotFound(err) {
+				log.Info(fmt.Sprintf("Target secret %s doesn't exist, creating it in namespace %s", targetSecret.Name, targetSecret.Namespace))
+				err = r.Create(ctx, targetSecret)
+				if err != nil {
+					return ctrl.Result{}, err
+				}
+			} else {
+				log.Info(fmt.Sprintf("Target secret %s exists, updating it now in namespace %s", targetSecret.Name, targetSecret.Namespace))
+				err = r.Update(ctx, targetSecret)
+				if err != nil {
+					return ctrl.Result{}, err
+				}
+			}
+		}
+	}
+
+	if namespaceMissing {
+		//if a namespace is missing then retry to sync after 5 minutes in case it gets added at a later time
+		return ctrl.Result{RequeueAfter: time.Minute * 5}, nil
+	} else {
+		return ctrl.Result{}, nil
+	}
+}
+
+func getNamespaces(namespaceList []corev1.Namespace) []string {
+	var namespaces []string
+	for _, namespace := range namespaceList {
+		namespaces = append(namespaces, namespace.Name)
+	}
+	return namespaces
+}
+
+func valueInList(value string, list []string) bool {
+	for _, v := range list {
+		if v == value {
+			return true
+		}
+	}
+	return false
+}
+
+func createSecret(secret *corev1.Secret, name string, namespace string) (*corev1.Secret, error) {
+	labels := map[string]string{
+		"secretsync.ixiatg.com/replicated-from": fmt.Sprintf("%s.%s", secret.Namespace, secret.Name),
+	}
+	annotations := map[string]string{
+		"secretsync.ixiatg.com/replicated-time":             time.Now().Format("Mon Jan 2 15:04:05 MST 2006"),
+		"secretsync.ixiatg.com/replicated-resource-version": secret.ResourceVersion,
+	}
+	return &corev1.Secret{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: secret.TypeMeta.APIVersion,
+			Kind:       secret.Kind,
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        name,
+			Namespace:   namespace,
+			Labels:      labels,
+			Annotations: annotations,
+		},
+		Data: secret.Data,
+		Type: secret.Type,
+	}, nil
 }
