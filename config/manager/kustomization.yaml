@@ -13,4 +13,4 @@ kind: Kustomization
 images:
 - name: controller
   newName: us-central1-docker.pkg.dev/kt-nts-athena-dev/keysight/athena/operator
-  newTag: 0.0.30
+  newTag: 0.0.32

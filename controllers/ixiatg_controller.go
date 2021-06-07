@@ -87,7 +87,7 @@ func (r *IxiaTGReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	}
 
 	// Check if we need to creatte resources or not
-	r.ReconcileSecret(ctx, req, ixia)
+	secret, err := r.ReconcileSecret(ctx, req, ixia)
 
 	myFinalizerName := "keysight.com/finalizer"
 
@@ -128,7 +128,7 @@ func (r *IxiaTGReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	if err != nil && errors.IsNotFound(err) {
 		// need to deploy
 		log.Infof("Creating pod")
-		pod := r.podForIxia(ixia)
+		pod := r.podForIxia(ixia, secret)
 		log.Infof("Creating pod %v", pod)
 		err = r.Create(ctx, pod)
 		if err != nil {
@@ -144,8 +144,9 @@ func (r *IxiaTGReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	return ctrl.Result{}, nil
 }
 
-func (r *IxiaTGReconciler) podForIxia(ixia *networkv1alpha1.IxiaTG) *corev1.Pod {
+func (r *IxiaTGReconciler) podForIxia(ixia *networkv1alpha1.IxiaTG, secret *corev1.Secret) *corev1.Pod {
 
+	imagePullSecrets := getImgPullSctSecret(secret)
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      ixia.Name,
@@ -165,13 +166,14 @@ func (r *IxiaTGReconciler) podForIxia(ixia *networkv1alpha1.IxiaTG) *corev1.Pod 
 				},
 				ImagePullPolicy: "IfNotPresent",
 			}},
-			Containers: r.containersForIxia(ixia),
+			Containers:       r.containersForIxia(ixia, secret),
+			ImagePullSecrets: imagePullSecrets,
 		},
 	}
 	return pod
 }
 
-func (r *IxiaTGReconciler) containersForIxia(ixia *networkv1alpha1.IxiaTG) []corev1.Container {
+func (r *IxiaTGReconciler) containersForIxia(ixia *networkv1alpha1.IxiaTG, secret *corev1.Secret) []corev1.Container {
 
 	log.Infof("Inside containersForIxia: %v", ixia.Spec.Config)
 	conImage := "gcr.io/kt-nts-athena-dev/athena/traffic-engine:1.2.0.8"
@@ -284,7 +286,7 @@ func getDefaultSecurityContext() *corev1.SecurityContext {
 }
 
 func (r *IxiaTGReconciler) ReconcileSecret(ctx context.Context,
-	req ctrl.Request, ixia *networkv1alpha1.IxiaTG) (ctrl.Result, error) {
+	req ctrl.Request, ixia *networkv1alpha1.IxiaTG) (*corev1.Secret, error) {
 	_ = r.Log.WithValues("ixiatg", req.NamespacedName)
 	// Fetch the Secret instance
 	instance := &corev1.Secret{}
@@ -292,7 +294,7 @@ func (r *IxiaTGReconciler) ReconcileSecret(ctx context.Context,
 	//err := r.Get(ctx, req.NamespacedName, instance)
 	currNamespace := new(types.NamespacedName)
 	currNamespace.Namespace = "ixiatg-op-system"
-	currNamespace.Name = "secret-basic-auth"
+	currNamespace.Name = "ixia-pull-secret"
 	log.Infof("Getting Secret for namespace : %v", *currNamespace)
 	err := r.Get(ctx, *currNamespace, instance)
 	if err != nil {
@@ -301,60 +303,38 @@ func (r *IxiaTGReconciler) ReconcileSecret(ctx context.Context,
 			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
 			// Return and don't requeue
 			log.Infof("No Secret found in namespace : %v", *currNamespace)
-			return ctrl.Result{}, nil
+			return nil, nil
 		}
 		// Error reading the object - requeue the request.
-		return ctrl.Result{}, err
+		return nil, err
 	}
 
-	namespaceMissing := false
 	if rep, ok := instance.Annotations["secretsync.ixiatg.com/replicate"]; ok {
 		if rep == "true" {
 			targetSecret, err := createSecret(instance, currNamespace.Name, ixia.Namespace)
 			if err != nil {
-				return ctrl.Result{}, err
+				return nil, err
 			}
+			//https://github.com/kubernetes-client/go/blob/master/kubernetes/docs/V1PodSpec.md
 			secret := &corev1.Secret{}
 			err = r.Get(ctx, types.NamespacedName{Name: targetSecret.Name, Namespace: targetSecret.Namespace}, secret)
 			if err != nil && errors.IsNotFound(err) {
 				log.Info(fmt.Sprintf("Target secret %s doesn't exist, creating it in namespace %s", targetSecret.Name, targetSecret.Namespace))
 				err = r.Create(ctx, targetSecret)
 				if err != nil {
-					return ctrl.Result{}, err
+					return nil, err
 				}
 			} else {
 				log.Info(fmt.Sprintf("Target secret %s exists, updating it now in namespace %s", targetSecret.Name, targetSecret.Namespace))
 				err = r.Update(ctx, targetSecret)
 				if err != nil {
-					return ctrl.Result{}, err
+					return nil, err
 				}
 			}
+			return targetSecret, err
 		}
 	}
-
-	if namespaceMissing {
-		//if a namespace is missing then retry to sync after 5 minutes in case it gets added at a later time
-		return ctrl.Result{RequeueAfter: time.Minute * 5}, nil
-	} else {
-		return ctrl.Result{}, nil
-	}
-}
-
-func getNamespaces(namespaceList []corev1.Namespace) []string {
-	var namespaces []string
-	for _, namespace := range namespaceList {
-		namespaces = append(namespaces, namespace.Name)
-	}
-	return namespaces
-}
-
-func valueInList(value string, list []string) bool {
-	for _, v := range list {
-		if v == value {
-			return true
-		}
-	}
-	return false
+	return nil, nil
 }
 
 func createSecret(secret *corev1.Secret, name string, namespace string) (*corev1.Secret, error) {
@@ -379,4 +359,10 @@ func createSecret(secret *corev1.Secret, name string, namespace string) (*corev1
 		Data: secret.Data,
 		Type: secret.Type,
 	}, nil
+}
+
+func getImgPullSctSecret(secret *corev1.Secret) []corev1.LocalObjectReference {
+	var ips []corev1.LocalObjectReference
+	ips = append(ips, corev1.LocalObjectReference{Name: string(secret.Data[".dockerconfigjson"][:])})
+	return ips
 }
