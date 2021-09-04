@@ -42,6 +42,9 @@ import (
 	topopb "github.com/google/kne/proto/topo"
 )
 
+var CURRENT_NAMESPACE string = "ixiatg-op-system"
+var SECRET_NAME string = "ixia-pull-secret"
+
 // IxiaTGReconciler reconciles a IxiaTG object
 type IxiaTGReconciler struct {
 	client.Client
@@ -293,8 +296,8 @@ func (r *IxiaTGReconciler) ReconcileSecret(ctx context.Context,
 
 	//err := r.Get(ctx, req.NamespacedName, instance)
 	currNamespace := new(types.NamespacedName)
-	currNamespace.Namespace = "ixiatg-op-system"
-	currNamespace.Name = "ixia-pull-secret"
+	currNamespace.Namespace = CURRENT_NAMESPACE
+	currNamespace.Name = SECRET_NAME
 	log.Infof("Getting Secret for namespace : %v", *currNamespace)
 	err := r.Get(ctx, *currNamespace, instance)
 	if err != nil {
@@ -315,7 +318,6 @@ func (r *IxiaTGReconciler) ReconcileSecret(ctx context.Context,
 			if err != nil {
 				return nil, err
 			}
-			//https://github.com/kubernetes-client/go/blob/master/kubernetes/docs/V1PodSpec.md
 			secret := &corev1.Secret{}
 			err = r.Get(ctx, types.NamespacedName{Name: targetSecret.Name, Namespace: targetSecret.Namespace}, secret)
 			if err != nil && errors.IsNotFound(err) {
@@ -363,6 +365,7 @@ func createSecret(secret *corev1.Secret, name string, namespace string) (*corev1
 
 func getImgPullSctSecret(secret *corev1.Secret) []corev1.LocalObjectReference {
 	var ips []corev1.LocalObjectReference
-	ips = append(ips, corev1.LocalObjectReference{Name: string(secret.Data[".dockerconfigjson"][:])})
+	//ips = append(ips, corev1.LocalObjectReference{Name: string(secret.Data[".dockerconfigjson"][:])})a
+	ips = append(ips, corev1.LocalObjectReference{Name: string(SECRET_NAME)})
 	return ips
 }
