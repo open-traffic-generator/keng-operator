@@ -41,6 +41,9 @@ spec:
                 type: string
               links:
                 type: integer
+              version:
+                description: Version of the node
+                type: string
             type: object
           status:
             description: IxiaTGStatus defines the observed state of IxiaTG

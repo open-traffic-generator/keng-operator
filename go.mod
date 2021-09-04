@@ -1,4 +1,4 @@
-module github.com/lemoncrust/iris
+module gitlab.it.keysight.com/athena/operator
 
 go 1.15
 

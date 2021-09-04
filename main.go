@@ -31,8 +31,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	networkv1alpha1 "github.com/lemoncrust/iris/api/v1alpha1"
-	"github.com/lemoncrust/iris/controllers"
+	networkv1alpha1 "gitlab.it.keysight.com/athena/operator/api/v1alpha1"
+	"gitlab.it.keysight.com/athena/operator/controllers"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -58,7 +58,7 @@ func main() {
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
 	opts := zap.Options{
-		Development: true,
+		Development: false,
 	}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()

@@ -28,6 +28,8 @@ type IxiaTGSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
+	// Version of the node
+	Version string `json:"version,omitempty"`
 	// Config of the node
 	Config string `json:"config,omitempty"`
 	Links  int    `json:"links,omitempty"`
