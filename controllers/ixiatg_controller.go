@@ -88,6 +88,10 @@ type pubRel struct {
 	Images  []componentRel `json:"images"`
 }
 
+type pubReleases struct {
+	Releases []pubRel `json:"releases"`
+}
+
 //+kubebuilder:rbac:groups=network.keysight.com,resources=ixiatgs,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=network.keysight.com,resources=ixiatgs/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=network.keysight.com,resources=ixiatgs/finalizers,verbs=update
@@ -237,49 +241,60 @@ func (r *IxiaTGReconciler) getRelInfo(ctx context.Context, release string) error
 		return err
 	}
 
-	return r.loadRelInfo(release, &data)
+	return r.loadRelInfo(release, &data, false)
 }
 
-func (r *IxiaTGReconciler) loadRelInfo(release string, relData *[]byte) error {
+func (r *IxiaTGReconciler) loadRelInfo(release string, relData *[]byte, list bool) error {
 	var rel pubRel
+	var relList pubReleases
+	var err error
 
-	if err := json.Unmarshal(*relData, &rel); err != nil {
+	if list {
+		err = json.Unmarshal(*relData, &relList)
+	} else {
+		err = json.Unmarshal(*relData, &rel)
+		relList = pubReleases{}
+		relList.Releases = append(relList.Releases, rel)
+	}
+	if err != nil {
 		log.Infof("Failed to unmarshall release dependency json - %v", err)
 		return err
 	}
 
-	if _, ok := componentDep[rel.Release]; ok {
-		return nil
-	}
-
-	topoEntry := topoDep{Controller: Node{Name: CONTROLLER_NAME, Containers: make(map[string]componentRel)}, Ixia: Node{Containers: make(map[string]componentRel)}}
-	for _, image := range rel.Images {
-		switch image.Name {
-		case "controller":
-			fallthrough
-		case "gnmi-server":
-			fallthrough
-		case "grpc-server":
-			topoEntry.Controller.Containers[image.Name] = image
-		case "traffic-engine":
-			fallthrough
-		case "protocol-engine":
-			topoEntry.Ixia.Containers[image.Name] = image
-		case "default":
-			log.Errorf("Error unknown image name: %s", image.Name)
-			return errors.New("Unknown image name")
+	for _, relEntry := range relList.Releases {
+		if _, ok := componentDep[rel.Release]; ok {
+			continue
 		}
-	}
 
-	componentDep[rel.Release] = topoEntry
-	log.Infof("\nFound version info for: %s", rel.Release)
-	log.Infof("Mapped controller components:")
-	for _, val := range topoEntry.Controller.Containers {
-		log.Infof("Name: %s, Image %s:%s", val.Name, val.Path, val.Tag)
-	}
-	log.Infof("Mapped ixiatg node components:")
-	for _, val := range topoEntry.Ixia.Containers {
-		log.Infof("Name: %s, Image %s:%s", val.Name, val.Path, val.Tag)
+		topoEntry := topoDep{Controller: Node{Name: CONTROLLER_NAME, Containers: make(map[string]componentRel)}, Ixia: Node{Containers: make(map[string]componentRel)}}
+		for _, image := range relEntry.Images {
+			switch image.Name {
+			case "controller":
+				fallthrough
+			case "gnmi-server":
+				fallthrough
+			case "grpc-server":
+				topoEntry.Controller.Containers[image.Name] = image
+			case "traffic-engine":
+				fallthrough
+			case "protocol-engine":
+				topoEntry.Ixia.Containers[image.Name] = image
+			case "default":
+				log.Errorf("Error unknown image name: %s", image.Name)
+				return errors.New("Unknown image name")
+			}
+		}
+
+		componentDep[relEntry.Release] = topoEntry
+		log.Infof("\nFound version info for: %s", relEntry.Release)
+		log.Infof("Mapped controller components:")
+		for _, val := range topoEntry.Controller.Containers {
+			log.Infof("Name: %s, Image %s:%s", val.Name, val.Path, val.Tag)
+		}
+		log.Infof("Mapped ixiatg node components:")
+		for _, val := range topoEntry.Ixia.Containers {
+			log.Infof("Name: %s, Image %s:%s", val.Name, val.Path, val.Tag)
+		}
 	}
 
 	if _, ok := componentDep[release]; !ok {
@@ -339,14 +354,20 @@ func (r *IxiaTGReconciler) deployController(ctx context.Context, ixia *networkv1
 
 	// First check if we have the component dependency data for the release
 	depVersion := DEFAULT_VERSION
-	if componentDep == nil {
-		componentDep = make(map[string]topoDep)
-	}
-
 	if ixia.Spec.Version != "" {
 		depVersion = ixia.Spec.Version
 	} else {
 		log.Infof("No ixiatg version specified, using default version %s", depVersion)
+	}
+
+	if len(componentDep) == 0 {
+		// This is also when we load the build it release info file
+		data, err := ioutil.ReadFile("releases.json")
+		if err != nil {
+			log.Infof("Failed to read the release info file: %v", err)
+		} else {
+			r.loadRelInfo(depVersion, &data, true)
+		}
 	}
 
 	log.Infof("Deploying components for version %s for ns %s", depVersion, ixia.Namespace)
