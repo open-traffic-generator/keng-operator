@@ -51,7 +51,8 @@ var SERVER_URL string = "https://github.com/open-traffic-generator/ixia-c/releas
 var RELEASE_FILE string = "/versions.json"
 
 var CONTROLLER_NAME string = "ixia-c"
-var CONFIG_MAP_NAME string = "ixia-component-dep"
+var CONFIG_MAP_NAME string = "ixiatg-release-config"
+var CONFIG_MAP_NAMESPACE string = "ixiatg-op-system"
 var DEFAULT_VERSION string = "0.0.1-2020"
 var CONTROLLER_SERVICE string = "ixia-c-service"
 var GRPC_SERVICE string = "grpc-service"
@@ -225,7 +226,7 @@ func (r *IxiaTGReconciler) getRelInfo(ctx context.Context, release string) error
 		log.Infof("Failed to get response from server - %v", err)
 		log.Infof("Try locating in ConfigMap...")
 		cfgData := &corev1.ConfigMap{}
-		nsName := types.NamespacedName{Name: CONFIG_MAP_NAME, Namespace: "default"}
+		nsName := types.NamespacedName{Name: CONFIG_MAP_NAME, Namespace: CONFIG_MAP_NAMESPACE}
 		if err = r.Get(ctx, nsName, cfgData); err != nil {
 			log.Infof("Version specific information could not be located; ensure a valid version is used")
 			log.Infof("Also ensure the version specific ConfigMap yaml is applied if working in offline mode")

@@ -1,34 +1,4 @@
 {
     "releases": [
-            {
-                "release": "0.0.1-2020",
-                "images": [
-                    {
-                        "name": "controller",
-                        "path": "ixiacom/ixia-c-controller",
-                        "tag": "0.0.1-2020"
-                    },
-                    {
-                        "name": "gnmi-server",
-                        "path": "otgservices/otg-gnmi-server",
-                        "tag": "0.4.4"
-                    },
-                    {
-                        "name": "grpc-server",
-                        "path": "otgservices/otg-grpc-server",
-                        "tag": "0.0.9"
-                    },
-                    {
-                        "name": "traffic-engine",
-                        "path": "ixiacom/ixia-c-traffic-engine",
-                        "tag": "1.4.0.9"
-                    },
-                    {
-                        "name": "protocol-engine",
-                        "path": "us-central1-docker.pkg.dev/kt-nts-athena-dev/keysight/athena/ixia-c-protocol-engine",
-                        "tag": "1.00.0.50"
-                    }
-                ]
-            }
         ]
 }
