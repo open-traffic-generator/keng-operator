@@ -13,6 +13,7 @@ BUILD_REVISION=""
 BUILD_COMMIT_HASH=""
 
 IXIA_C_OPERATOR_IMAGE=ixia-c-operator
+GO_TARGZ=""
 
 # get installers based on host architecture
 if [ "$(arch)" = "aarch64" ] || [ "$(arch)" = "arm64" ]
@@ -160,15 +161,19 @@ gen_operator_artifacts() {
 
 cicd_install_deps() {
     echo "Installing CICD deps"
-    apk update
-    apk add curl git openssh vim unzip tar make bash wget
-    apk add --no-cache libc6-compat
-    wget https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz
-    tar -C /usr/local -xzf go${GO_VERSION}.linux-amd64.tar.gz
+    apk update \
+    && apk add curl git openssh vim unzip tar make bash wget \
+    && apk add --no-cache libc6-compat \
+    && apk add build-base
+
+    echo "Installing go in alpine ..."
+    wget https://dl.google.com/go/${GO_TARGZ} \
+    && tar -C /usr/local -xzf ${GO_TARGZ}
     export PATH=$PATH:/usr/local/go/bin
     go version
 
-    get_go_deps
+    echo "Installing go mod dependencies in alpine ..."
+    go mod download
 }
 
 cicd () {
