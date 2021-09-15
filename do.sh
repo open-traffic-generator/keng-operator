@@ -162,8 +162,7 @@ cicd_install_deps() {
     echo "Installing CICD deps"
     apk update \
     && apk add curl git openssh vim unzip tar make bash \
-    && get_go
-    export PATH=$PATH:/usr/local/go/bin
+    && apk add go~=${GO_VERSION}
     get_go_deps
 }
 
