@@ -23,3 +23,5 @@ testbin/*
 *.swp
 *.swo
 *~
+
+ixiatg-operator.yaml
