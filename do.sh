@@ -15,6 +15,15 @@ BUILD_COMMIT_HASH=""
 IXIA_C_OPERATOR_IMAGE=ixia-c-operator
 GO_TARGZ=""
 
+IXIA_C_CONTROLLER=0.0.1-2185
+IXIA_C_PROTOCOL_ENGINE=1.00.0.56
+IXIA_C_TRAFFIC_ENGINE=1.4.0.11
+IXIA_C_GRPC_SERVER=0.5.3
+IXIA_C_GNMI_SERVER=0.5.3
+ARISTA_CEOS_VERSION=4.26.1F
+
+GCP_DOCKER_REPO=us-central1-docker.pkg.dev/kt-nts-athena-dev/keysight
+
 # get installers based on host architecture
 if [ "$(arch)" = "aarch64" ] || [ "$(arch)" = "arm64" ]
 then
@@ -177,6 +186,43 @@ gen_operator_artifacts() {
     docker save ${IXIA_C_OPERATOR_IMAGE}:${version} | gzip > ${art}/ixia-c-oprator.tar.gz
 }
 
+cicd_gen_local_ixia_c_artifacts() {
+    ixia_c_art=./ixia_c_art
+    mkdir -p ${ixia_c_art}
+
+    echo "Downloading ixia-c-controller:${IXIA_C_CONTROLLER}"
+    docker pull ${ARTIFACTORY_DOCKER_REPO}/controller:${IXIA_C_CONTROLLER} \
+    && docker tag ${ARTIFACTORY_DOCKER_REPO}/controller:${IXIA_C_CONTROLLER} ${GCP_DOCKER_REPO}/ixia-c-controller:${IXIA_C_CONTROLLER} \
+    && docker save ${GCP_DOCKER_REPO}/ixia-c-controller:${IXIA_C_CONTROLLER} | gzip > ${ixia_c_art}/ixia-c-controller.tar.gz
+
+    echo "Downloading ixia-c-traffic-engine:${IXIA_C_TRAFFIC_ENGINE}"
+    docker pull docker-local-ixvm-lbj.artifactorylbj.it.keysight.com/athena-traffic-engine:${IXIA_C_TRAFFIC_ENGINE} \
+    && docker tag docker-local-ixvm-lbj.artifactorylbj.it.keysight.com/athena-traffic-engine:${IXIA_C_TRAFFIC_ENGINE} ${GCP_DOCKER_REPO}/ixia-c-traffic-engine:${IXIA_C_TRAFFIC_ENGINE} \
+    && docker save ${GCP_DOCKER_REPO}/ixia-c-traffic-engine:${IXIA_C_TRAFFIC_ENGINE} | gzip > ${ixia_c_art}/ixia-c-traffic-engine.tar.gz
+
+    echo "Downloading ixia-c-protocol-engine:${IXIA_C_PROTOCOL_ENGINE}"
+    docker pull docker-local-nas.artifactorylbj.it.keysight.com/packages_rustic/l23_protocols:${IXIA_C_PROTOCOL_ENGINE} \
+    && docker tag docker-local-nas.artifactorylbj.it.keysight.com/packages_rustic/l23_protocols:${IXIA_C_PROTOCOL_ENGINE} ${GCP_DOCKER_REPO}/ixia-c-protocol-engine:${IXIA_C_PROTOCOL_ENGINE} \
+    && docker save ${GCP_DOCKER_REPO}/ixia-c-protocol-engine:${IXIA_C_PROTOCOL_ENGINE} | gzip > ${ixia_c_art}/ixia-c-protocol-engine.tar.gz
+
+    echo "Downloading ixia-c-grpc-server:${IXIA_C_GRPC_SERVER}"
+    docker pull otgservices/otg-grpc-server:${IXIA_C_GRPC_SERVER} \
+    && docker tag otgservices/otg-grpc-server:${IXIA_C_GRPC_SERVER} ${GCP_DOCKER_REPO}/ixia-c-grpc-server:${IXIA_C_GRPC_SERVER} \
+    && docker save ${GCP_DOCKER_REPO}/ixia-c-grpc-server:${IXIA_C_GRPC_SERVER} | gzip > ${ixia_c_art}/ixia-c-grpc-server.tar.gz
+
+    echo "Downloading ixia-c-gnmi-server:${IXIA_C_GNMI_SERVER}"
+    docker pull otgservices/otg-gnmi-server:${IXIA_C_GNMI_SERVER} \
+    && docker tag otgservices/otg-gnmi-server:${IXIA_C_GNMI_SERVER} ${GCP_DOCKER_REPO}/ixia-c-gnmi-server:${IXIA_C_GNMI_SERVER} \
+    && docker save ${GCP_DOCKER_REPO}/ixia-c-gnmi-server:${IXIA_C_GNMI_SERVER} | gzip > ${ixia_c_art}/ixia-c-gnmi-server.tar.gz
+
+    echo "Downloading arista-ceos:${ARISTA_CEOS_VERSION}"
+    cd ${ixia_c_art}
+    curl -kLO "https://artifactory.it.keysight.com/artifactory/generic-local-athena/external/ceos/${ARISTA_CEOS_VERSION}/cEOS64-lab-${ARISTA_CEOS_VERSION}.tar"
+    cd ..
+
+    echo "Files in ./ixia_c_art: $(ls -lht ${ixia_c_art})"
+}
+
 cicd_install_deps() {
     echo "Installing CICD deps"
     apk update \
@@ -198,21 +244,22 @@ cicd () {
     art=./art
     mkdir -p ${art}
 
-    cicd_install_deps \
-    && gen_ixia_c_op_dep_yaml \
-    && get_docker_build \
-    && gen_operator_artifacts ${art}
+    cicd_install_deps
+    cicd_gen_local_ixia_c_artifacts
+    # && gen_ixia_c_op_dep_yaml \
+    # && get_docker_build \
+    # && gen_operator_artifacts ${art}
 
-    version=$(echo_version)
-    echo "Build Version: $version"
-    echo "Files in ./art: $(ls -lht ${art})"
+    # version=$(echo_version)
+    # echo "Build Version: $version"
+    # echo "Files in ./art: $(ls -lht ${art})"
 
-    if [ ${CI_COMMIT_REF_NAME} = "main" ]
-    then 
-        cicd_publish_to_docker_repo ${version}
-        cicd_publish_to_generic_repo ${art} ${version}
-    fi
-    docker rmi -f ${IXIA_C_OPERATOR_IMAGE}:${version} 2> /dev/null || true
+    # if [ ${CI_COMMIT_REF_NAME} = "main" ]
+    # then 
+    #     cicd_publish_to_docker_repo ${version}
+    #     cicd_publish_to_generic_repo ${art} ${version}
+    # fi
+    # docker rmi -f ${IXIA_C_OPERATOR_IMAGE}:${version} 2> /dev/null || true
 }
 
 case $1 in
