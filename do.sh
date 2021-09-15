@@ -51,6 +51,28 @@ get_go_deps() {
     go mod download
 }
 
+get_new_version() {
+    # output of git describe
+    # tag1-1-gb772e8b
+    # ^    ^  ^
+    # |    |  |
+    # |    |  git hash of the commit
+    # |    |
+    # |   number of commits after the tag
+    # |
+    # |
+    # Most recent tag
+    version=$(git describe --tags 2> /dev/null || echo v0.0.1-1-$(git rev-parse --short HEAD))
+    BUILD_VERSION=$(echo $version | cut -d- -f1 | cut -dv -f2)
+    BUILD_REVISION=$(echo $version | cut -d- -f2)
+    BUILD_COMMIT_HASH=$(echo $version | cut -d- -f3 | sed -e "s/^g//g")
+}
+
+echo_version() {
+    get_new_version
+    echo "${BUILD_VERSION}-${BUILD_REVISION}"
+}
+
 get_local_build() {
     # Generating local build using Makefile
     echo "Generating local build ..."
@@ -60,7 +82,7 @@ get_local_build() {
 get_docker_build() {
     # Generating docker build using Makefile
     echo "Generating docker build ..."
-    export VERSION=0.0.2
+    export VERSION=$(echo_version)
     export IMAGE_TAG_BASE=${IXIA_C_OPERATOR_IMAGE}
     make docker-build
     docker rmi -f $(docker images | grep '<none>') 2> /dev/null || true
@@ -69,9 +91,92 @@ get_docker_build() {
 gen_ixia_c_op_dep_yaml() {
     # Generating ixia-c-operator deployment yaml using Makefile
     echo "Generating ixia-c-operator deployment yaml ..."
-    export VERSION=0.0.2
+    export VERSION=$(echo_version)
     export IMAGE_TAG_BASE=${IXIA_C_OPERATOR_IMAGE}
     make yaml
+}
+
+cicd_is_dev_branch() {
+    echo "Current ref: ${CI_COMMIT_REF_NAME}"
+    echo "${CI_COMMIT_REF_NAME}" | grep --color=no -E "^dev-"
+}
+
+cicd_publishing_docker_images() {
+    for var in "$@"
+    do
+        image=${var}
+        echo "Publishing ${image}..."
+        docker login -p ${ARTIFACTORY_KEY} -u ${ARTIFACTORY_USER} ${ARTIFACTORY_DOCKER_REPO} \
+        && docker push ${image} \
+        && docker logout ${ARTIFACTORY_DOCKER_REPO}
+        echo "${image} Published"
+    done
+}
+
+cicd_publish_to_docker_repo() {
+    version=${1}
+    # don't post images when on dev-* branch
+    cicd_is_dev_branch && return 0
+
+    op="${ARTIFACTORY_DOCKER_REPO}/${IXIA_C_OPERATOR_IMAGE}:${version}"
+    op_latest="${ARTIFACTORY_DOCKER_REPO}/${IXIA_C_OPERATOR_IMAGE}:latest"
+    docker tag ${IXIA_C_OPERATOR_IMAGE}:${version} ${op} \
+    && docker tag ${op} ${op_latest} \
+    && cicd_publishing_docker_images ${op} ${op_latest}
+
+    docker rmi -f $op $op_latest 2> /dev/null || true
+    echo "Created docker images has been deleted from runner"
+    cicd_verify_dockerhub_images ${op} ${op_latest}
+}
+
+
+cicd_verify_dockerhub_images() {
+    echo "Verfying posted images in ${ARTIFACTORY_DOCKER_REPO}"
+    for var in "$@"
+    do
+        image=${var}
+        echo "pulling ${image} from ${ARTIFACTORY_DOCKER_REPO}"
+        docker pull ${image}
+        if docker image inspect ${image} >/dev/null 2>&1; then
+            echo "${image} pulled successfully from ${ARTIFACTORY_DOCKER_REPO}"
+            docker rmi -f $image 2> /dev/null 2> /dev/null || true
+        else
+            echo "${image} not found locally!!!"
+            docker rmi -f $image 2> /dev/null 2> /dev/null || true
+            exit 1
+        fi
+    done
+}
+
+gen_operator_artifacts() {
+    art=${1}
+    version=$(echo_version)
+    rm -rf ${art}/*.yaml
+    rm -rf ${art}/*.tar.gz
+    mv ./ixiatg-operator.yaml ${art}/
+    docker save ${IXIA_C_OPERATOR_IMAGE}:${version} | gzip > ${art}/ixia-c-oprator.tar.gz
+}
+
+cicd_install_deps() {
+    echo "Installing CICD deps"
+    apk add curl git ssh vim unzip tar \
+    && get_go \
+    && get_go_deps
+}
+
+cicd () {
+    art=./art
+    mkdir -p ${art}
+    gen_ixia_c_op_dep_yaml \
+    && get_docker_build \
+    && gen_operator_artifacts
+
+    if [ ${CI_COMMIT_REF_NAME} = "main" ]
+    then 
+        version=$(echo_version)
+        cicd_publish_to_docker_repo ${version}
+    fi
+    docker rmi -f ${IXIA_C_OPERATOR_IMAGE}:${version} 2> /dev/null || true
 }
 
 case $1 in
@@ -87,7 +192,13 @@ case $1 in
     yaml   )
         gen_ixia_c_op_dep_yaml
         ;;
+    cicd   )
+        cicd
+        ;;
+    version   )
+        echo_version
+        ;;
 	*		)
-        $1 || echo "usage: $0 [deps|local|docker|yaml]"
+        $1 || echo "usage: $0 [deps|local|docker|yaml|cicd|version]"
 		;;
 esac
