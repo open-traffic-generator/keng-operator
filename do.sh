@@ -19,7 +19,7 @@ IXIA_C_CONTROLLER=0.0.1-2185
 IXIA_C_PROTOCOL_ENGINE=1.00.0.56
 IXIA_C_TRAFFIC_ENGINE=1.4.0.11
 IXIA_C_GRPC_SERVER=0.5.3
-IXIA_C_GNMI_SERVER=0.5.3
+IXIA_C_GNMI_SERVER=0.5.2
 ARISTA_CEOS_VERSION=4.26.1F
 
 GCP_DOCKER_REPO=us-central1-docker.pkg.dev/kt-nts-athena-dev/keysight
@@ -244,22 +244,22 @@ cicd () {
     art=./art
     mkdir -p ${art}
 
-    cicd_install_deps
+    cicd_install_deps \
+    && gen_ixia_c_op_dep_yaml \
+    && get_docker_build \
+    && gen_operator_artifacts ${art}
+    version=$(echo_version)
+    echo "Build Version: $version"
+    echo "Files in ./art: $(ls -lht ${art})"
+
     cicd_gen_local_ixia_c_artifacts
-    # && gen_ixia_c_op_dep_yaml \
-    # && get_docker_build \
-    # && gen_operator_artifacts ${art}
 
-    # version=$(echo_version)
-    # echo "Build Version: $version"
-    # echo "Files in ./art: $(ls -lht ${art})"
-
-    # if [ ${CI_COMMIT_REF_NAME} = "main" ]
-    # then 
-    #     cicd_publish_to_docker_repo ${version}
-    #     cicd_publish_to_generic_repo ${art} ${version}
-    # fi
-    # docker rmi -f ${IXIA_C_OPERATOR_IMAGE}:${version} 2> /dev/null || true
+    if [ ${CI_COMMIT_REF_NAME} = "main" ]
+    then 
+        cicd_publish_to_docker_repo ${version}
+        cicd_publish_to_generic_repo ${art} ${version}
+    fi
+    docker rmi -f ${IXIA_C_OPERATOR_IMAGE}:${version} 2> /dev/null || true
 }
 
 case $1 in
