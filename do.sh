@@ -161,8 +161,10 @@ gen_operator_artifacts() {
 cicd_install_deps() {
     echo "Installing CICD deps"
     apk update \
-    && apk add curl git openssh vim unzip tar go make bash\
-    && get_go_deps
+    && apk add curl git openssh vim unzip tar make bash \
+    && get_go
+    export PATH=$PATH:/usr/local/go/bin
+    get_go_deps
 }
 
 cicd () {
