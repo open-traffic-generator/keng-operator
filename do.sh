@@ -187,7 +187,9 @@ cicd () {
 
     version=$(echo_version)
     echo "Build Version: $version"
-    echo "Files in ./art: $(ls -lht $art)"
+    cd ${art}
+    echo "Files in ./art: $(ls -lht)"
+    cd ..
 
     if [ ${CI_COMMIT_REF_NAME} = "main" ]
     then 
