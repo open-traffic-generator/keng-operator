@@ -118,7 +118,7 @@ cicd_publish_to_docker_repo() {
     version=${1}
     # don't post images when on dev-* branch
     cicd_is_dev_branch && return 0
-
+    echo "Publishing ixia-c-operator images to artifactory docker repo ..."
     op="${ARTIFACTORY_DOCKER_REPO}/${IXIA_C_OPERATOR_IMAGE}:${version}"
     op_latest="${ARTIFACTORY_DOCKER_REPO}/${IXIA_C_OPERATOR_IMAGE}:latest"
     docker tag ${IXIA_C_OPERATOR_IMAGE}:${version} ${op} \
@@ -146,6 +146,24 @@ cicd_verify_dockerhub_images() {
             docker rmi -f $image 2> /dev/null 2> /dev/null || true
             exit 1
         fi
+    done
+}
+
+cicd_publish_to_generic_repo() {
+    art=${1}
+    version=${2}
+    targetfolder="external"
+
+    # don't post images when on dev-* branch
+    cicd_is_dev_branch && return 0;
+
+    echo "Publishing ixia-c-operator artifacts to generic repo ..."
+    target="https://artifactory.it.keysight.com/artifactory/generic-local-athena/${targetfolder}/operator/${version}"
+   
+    for filename in ${art}/*
+    do
+        # return immediately curl fails
+        curl -H "X-JFrog-Art-Api:${ARTIFACTORY_KEY}" -T ${filename} "${target}/$(basename ${filename})" || return 1
     done
 }
 
@@ -187,14 +205,12 @@ cicd () {
 
     version=$(echo_version)
     echo "Build Version: $version"
-    cd ${art}
-    ls
-    echo "Files in ./art: $(ls -lht)"
-    cd ..
+    echo "Files in ./art: $(ls -lht ${art})"
 
     if [ ${CI_COMMIT_REF_NAME} = "main" ]
     then 
         cicd_publish_to_docker_repo ${version}
+        cicd_publish_to_generic_repo ${art} ${version}
     fi
     docker rmi -f ${IXIA_C_OPERATOR_IMAGE}:${version} 2> /dev/null || true
 }
