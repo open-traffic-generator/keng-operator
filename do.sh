@@ -160,8 +160,8 @@ gen_operator_artifacts() {
 
 cicd_install_deps() {
     echo "Installing CICD deps"
-    apk update \
-    && apk add curl git openssh vim unzip tar make bash \
+    apk update
+    apk add curl git openssh vim unzip tar make bash wget
     wget https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz
     tar -C /usr/local -xzf go${GO_VERSION}.linux-amd64.tar.gz
     export PATH=$PATH:/usr/local/go/bin
