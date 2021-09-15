@@ -1,0 +1,27 @@
+image: docker:19.03.12
+
+stages:
+  - build
+
+build:
+  tags:
+    - docker
+    - ubuntu18.04
+
+  stage: build
+
+  variables:
+    GIT_STRATEGY: clone
+    GIT_SUBMODULE_STRATEGY: recursive
+    GIT_DEPTH: 0
+    PROJECT_ROOT: /home/keysight/athena/operator
+
+  script:
+    - chmod u+x ./do.sh | tee -a ixia-c-operator-pipeline-job.log
+    - ./do.sh cicd | tee -a ixia-c-operator-pipeline-job.log
+
+  artifacts:
+    when: always
+    paths:
+      - ixia-c-operator-pipeline-job.log
+    expire_in: 90 days
