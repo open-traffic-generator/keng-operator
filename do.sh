@@ -183,7 +183,7 @@ cicd () {
     cicd_install_deps \
     && gen_ixia_c_op_dep_yaml \
     && get_docker_build \
-    && gen_operator_artifacts
+    && gen_operator_artifacts ${art}
 
     version=$(echo_version)
     echo "Build Version: $version"
