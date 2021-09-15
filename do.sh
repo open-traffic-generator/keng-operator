@@ -188,6 +188,7 @@ cicd () {
     version=$(echo_version)
     echo "Build Version: $version"
     cd ${art}
+    ls
     echo "Files in ./art: $(ls -lht)"
     cd ..
 
