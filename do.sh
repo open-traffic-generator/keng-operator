@@ -149,6 +149,7 @@ cicd_verify_dockerhub_images() {
 }
 
 gen_operator_artifacts() {
+    echo "Generating ixia-c-operator offline artifacts ..."
     art=${1}
     version=$(echo_version)
     rm -rf ${art}/*.yaml
@@ -173,9 +174,12 @@ cicd () {
     && get_docker_build \
     && gen_operator_artifacts
 
+    version=$(echo_version)
+    echo "Build Version: $version"
+    echo "Files in ./art: $(ls -lht ${art})"
+
     if [ ${CI_COMMIT_REF_NAME} = "main" ]
     then 
-        version=$(echo_version)
         cicd_publish_to_docker_repo ${version}
     fi
     docker rmi -f ${IXIA_C_OPERATOR_IMAGE}:${version} 2> /dev/null || true
