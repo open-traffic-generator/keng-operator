@@ -167,7 +167,9 @@ cicd_install_deps() {
 cicd () {
     art=./art
     mkdir -p ${art}
-    gen_ixia_c_op_dep_yaml \
+
+    cicd_install_deps \
+    && gen_ixia_c_op_dep_yaml \
     && get_docker_build \
     && gen_operator_artifacts
 
