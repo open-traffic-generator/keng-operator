@@ -338,7 +338,7 @@ cicd_copy_results_from_testbed() {
 cicd_pull_results_from_testbed() {
     version=${1}
     mkdir -p ${SANITY_REPORTS}
-    cicd_copy_results_from_testbed reports-${version}-* sanity-summary-${version}.csv
+    cicd_copy_results_from_testbed reports-*.html sanity-summary-${version}.csv
 }
 
 cicd_cleanup_in_testbed() {
@@ -399,6 +399,7 @@ cicd_install_deps() {
 }
 
 cicd_gen_tests_artifacts() {
+    echo "Generating Ixia-C-Operator test artifacts ..."
     tests_art=./tests_art
     mkdir -p ${tests_art}
     tar -zcvf ${tests_art}/operator-tests.tar.gz ./operator-tests
@@ -411,9 +412,8 @@ cicd_gen_tests_artifacts() {
         sed "s/IXIA_C_TRAFFIC_ENGINE_VERSION/${IXIA_C_TRAFFIC_ENGINE}/g" | \
         sed "s/IXIA_C_PROTOCOL_ENGINE_VERSION/${IXIA_C_PROTOCOL_ENGINE}/g" | \
         tee ${tests_art}/ixia-configmap.yaml > /dev/null
-
     rm -rf template-*
-
+    echo "Files in ./tests_art: $(ls -lht ${tests_art})"
 }
 
 cicd () {
@@ -452,7 +452,7 @@ remove_cicd_folder_from_testbed(){
         if  [[ ${status} ]]
         then
             cicd_exec_on_testbed "sudo -S <<< ${TESTBED_PASSWORD} rm -rf ${TESTBED_CICD_DIR}" 
-            echo "${TESTBED_CICD_DIR}: deletd from testbed"
+            echo "${TESTBED_CICD_DIR}: deleted from testbed"
         else
             echo "${TESTBED_CICD_DIR}: not found in testbed"
         fi
