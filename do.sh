@@ -183,7 +183,7 @@ gen_operator_artifacts() {
     rm -rf ${art}/*.yaml
     rm -rf ${art}/*.tar.gz
     mv ./ixiatg-operator.yaml ${art}/
-    docker save ${IXIA_C_OPERATOR_IMAGE}:${version} | gzip > ${art}/ixia-c-oprator.tar.gz
+    docker save ${IXIA_C_OPERATOR_IMAGE}:${version} | gzip > ${art}/ixia-c-operator.tar.gz
 }
 
 cicd_gen_local_ixia_c_artifacts() {
