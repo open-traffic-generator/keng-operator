@@ -42,13 +42,15 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	topopb "github.com/google/kne/proto/topo"
+
+	"gopkg.in/yaml.v2"
 )
 
 var CURRENT_NAMESPACE string = "ixiatg-op-system"
 var SECRET_NAME string = "ixia-pull-secret"
 
 var SERVER_URL string = "https://github.com/open-traffic-generator/ixia-c/releases/download/v"
-var RELEASE_FILE string = "/versions.json"
+var RELEASE_FILE string = "/ixia-configmap.yaml"
 
 var CONTROLLER_NAME string = "ixia-c"
 var CONFIG_MAP_NAME string = "ixiatg-release-config"
@@ -91,6 +93,15 @@ type pubRel struct {
 
 type pubReleases struct {
 	Releases []pubRel `json:"releases"`
+}
+
+type ixiaConfigMap struct {
+	ApiVersion string            `yaml:"apiVersion"`
+	Kind       string            `yaml:"kind"`
+	MetaData   map[string]string `yaml:"metadata"`
+	Data       struct {
+		Versions string `yaml:"versions"`
+	} `yaml:"data"`
 }
 
 //+kubebuilder:rbac:groups=network.keysight.com,resources=ixiatgs,verbs=get;list;watch;create;update;patch;delete
@@ -216,14 +227,23 @@ func (r *IxiaTGReconciler) getRelInfo(ctx context.Context, release string) error
 	if err == nil {
 		defer resp.Body.Close()
 		if resp.StatusCode == http.StatusOK {
-			data, err = ioutil.ReadAll(resp.Body)
+			yamlData, err := ioutil.ReadAll(resp.Body)
+			var yamlCfg ixiaConfigMap
+			err = yaml.Unmarshal([]byte(yamlData), &yamlCfg)
+			if err != nil {
+				log.Infof("Failed to parse downloaded release config file - %v", err)
+			} else {
+				data = []byte(yamlCfg.Data.Versions)
+			}
 		} else {
 			err = errors.New(fmt.Sprintf("Got http response %v", resp.StatusCode))
+			log.Infof("Failed to download release config file - %v", err)
 		}
+	} else {
+		log.Infof("Failed to download release config file - %v", err)
 	}
 
 	if err != nil {
-		log.Infof("Failed to get response from server - %v", err)
 		log.Infof("Try locating in ConfigMap...")
 		cfgData := &corev1.ConfigMap{}
 		nsName := types.NamespacedName{Name: CONFIG_MAP_NAME, Namespace: CONFIG_MAP_NAMESPACE}
@@ -475,6 +495,7 @@ func (r *IxiaTGReconciler) getControllerService(ixia *networkv1alpha1.IxiaTG) []
 				"app": CONTROLLER_NAME,
 			},
 			Ports: []corev1.ServicePort{contPort},
+			Type:  "LoadBalancer",
 		},
 	})
 
@@ -490,6 +511,7 @@ func (r *IxiaTGReconciler) getControllerService(ixia *networkv1alpha1.IxiaTG) []
 				"app": CONTROLLER_NAME,
 			},
 			Ports: []corev1.ServicePort{contPort},
+			Type:  "LoadBalancer",
 		},
 	})
 
@@ -505,6 +527,7 @@ func (r *IxiaTGReconciler) getControllerService(ixia *networkv1alpha1.IxiaTG) []
 				"app": CONTROLLER_NAME,
 			},
 			Ports: []corev1.ServicePort{contPort},
+			Type:  "LoadBalancer",
 		},
 	})
 
