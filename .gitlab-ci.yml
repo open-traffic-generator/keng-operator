@@ -20,8 +20,13 @@ build:
     - chmod u+x ./do.sh | tee -a ixia-c-operator-pipeline-job.log
     - ./do.sh cicd | tee -a ixia-c-operator-pipeline-job.log
 
+  after_script:
+    - chmod u+x ./do.sh | tee -a ixia-c-operator-pipeline-job.log
+    - ./do.sh unlock | tee -a ixia-c-operator-pipeline-job.log
+
   artifacts:
     when: always
     paths:
       - ixia-c-operator-pipeline-job.log
+      - ./reports
     expire_in: 90 days
