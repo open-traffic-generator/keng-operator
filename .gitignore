@@ -26,3 +26,5 @@ testbin/*
 
 ixiatg-operator.yaml
 art
+tests_art
+ixia_c_art

@@ -398,6 +398,24 @@ cicd_install_deps() {
     go mod download
 }
 
+cicd_gen_tests_artifacts() {
+    tests_art=./tests_art
+    mkdir -p ${tests_art}
+    tar -zcvf ${tests_art}/operator-tests.tar.gz ./operator-tests
+    cp ./operator-tests/helper/* ${tests_art}/
+
+    cat ${tests_art}/template-ixia-configmap.yaml | \
+        sed "s/IXIA_C_CONTROLLER_VERSION/${IXIA_C_CONTROLLER}/g" | \
+        sed "s/IXIA_C_GNMI_SERVER_VERSION/${IXIA_C_GNMI_SERVER}/g" | \
+        sed "s/IXIA_C_GRPC_SERVER_VERSION/${IXIA_C_GRPC_SERVER}/g" | \
+        sed "s/IXIA_C_TRAFFIC_ENGINE_VERSION/${IXIA_C_TRAFFIC_ENGINE}/g" | \
+        sed "s/IXIA_C_PROTOCOL_ENGINE_VERSION/${IXIA_C_PROTOCOL_ENGINE}/g" | \
+        tee ${tests_art}/ixia-configmap.yaml > /dev/null
+
+    rm -rf template-*
+
+}
+
 cicd () {
     art=./art
     mkdir -p ${art}
@@ -410,7 +428,8 @@ cicd () {
     echo "Build Version: $version"
     echo "Files in ./art: $(ls -lht ${art})"
 
-    cicd_gen_local_ixia_c_artifacts
+    cicd_gen_local_ixia_c_artifacts \
+    && cicd_gen_tests_artifacts
 
     # pipeline wait for testbed to be unlocked for sanity
     cicd_wait_for_testbed_to_unlock \
@@ -475,6 +494,9 @@ case $1 in
         ;;
     version   )
         echo_version
+        ;;
+    unlock  )
+        unlock_testbed
         ;;
 	*		)
         $1 || echo "usage: $0 [deps|local|docker|yaml|cicd|version]"
