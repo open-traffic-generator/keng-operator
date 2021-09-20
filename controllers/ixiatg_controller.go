@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -50,18 +51,21 @@ var CURRENT_NAMESPACE string = "ixiatg-op-system"
 var SECRET_NAME string = "ixia-pull-secret"
 
 var SERVER_URL string = "https://github.com/open-traffic-generator/ixia-c/releases/download/v"
+var SERVER_LATEST_URL string = "https://github.com/open-traffic-generator/ixia-c/releases/latest/download"
 var RELEASE_FILE string = "/ixia-configmap.yaml"
 
 var CONTROLLER_NAME string = "ixia-c"
 var CONFIG_MAP_NAME string = "ixiatg-release-config"
 var CONFIG_MAP_NAMESPACE string = "ixiatg-op-system"
-var DEFAULT_VERSION string = "0.0.1-2020"
+var DEFAULT_VERSION string = "latest"
+var LATEST_VERSION string = ""
+var DS_RESTAPI string = "Rest API"
+var DS_CONFIGMAP string = "Config Map"
 var CONTROLLER_SERVICE string = "ixia-c-service"
 var GRPC_SERVICE string = "grpc-service"
 var GNMI_SERVICE string = "gnmi-service"
 
 var componentDep map[string]topoDep = make(map[string]topoDep)
-var namespaceRel map[string]string = make(map[string]string)
 
 // IxiaTGReconciler reconciles a IxiaTG object
 type IxiaTGReconciler struct {
@@ -82,6 +86,7 @@ type Node struct {
 }
 
 type topoDep struct {
+	Source     string
 	Controller Node
 	Ixia       Node
 }
@@ -143,6 +148,11 @@ func (r *IxiaTGReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return ctrl.Result{}, err
 	}
 
+	if ixia.Name == CONTROLLER_NAME {
+		err = errors.New(fmt.Sprintf("Error: %s name is reserved for Controller pod, use some other name", CONTROLLER_NAME))
+		log.Error(err, "Failed to create pod")
+		return ctrl.Result{}, err
+	}
 	// Check if we need to creatte resources or not
 	secret, err := r.ReconcileSecret(ctx, req, ixia)
 
@@ -218,12 +228,20 @@ func (r *IxiaTGReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 
 func (r *IxiaTGReconciler) getRelInfo(ctx context.Context, release string) error {
 	var data []byte
+	var err error
+	source := DS_RESTAPI
 
-	// First try downloading release dependency json file
+	// First try downloading release dependency yaml file
 	url := SERVER_URL + release + RELEASE_FILE
+	if release == DEFAULT_VERSION {
+		url = SERVER_LATEST_URL + RELEASE_FILE
+	}
 	log.Infof("Contacting Ixia server for release dependency info - %s", url)
 
-	resp, err := http.Get(url)
+	client := http.Client{
+		Timeout: 5 * time.Second,
+	}
+	resp, err := client.Get(url)
 	if err == nil {
 		defer resp.Body.Close()
 		if resp.StatusCode == http.StatusOK {
@@ -243,29 +261,39 @@ func (r *IxiaTGReconciler) getRelInfo(ctx context.Context, release string) error
 		log.Infof("Failed to download release config file - %v", err)
 	}
 
-	if err != nil {
+	if err != nil || len(data) == 0 {
+		if release == DEFAULT_VERSION {
+			log.Infof("Could not retrieve latest release information")
+			return nil
+		}
+
 		log.Infof("Try locating in ConfigMap...")
 		cfgData := &corev1.ConfigMap{}
 		nsName := types.NamespacedName{Name: CONFIG_MAP_NAME, Namespace: CONFIG_MAP_NAMESPACE}
+		source = DS_CONFIGMAP
 		if err = r.Get(ctx, nsName, cfgData); err != nil {
+			log.Infof("Failed to read ConfigMap - %v", err)
+		} else {
+			confData := cfgData.Data["versions"]
+			//log.Infof("READ DATA: %v", confData)
+			data = []byte(confData)
+		}
+	}
+
+	if len(data) == 0 {
+		if _, ok := componentDep[release]; !ok {
 			log.Infof("Version specific information could not be located; ensure a valid version is used")
 			log.Infof("Also ensure the version specific ConfigMap yaml is applied if working in offline mode")
-			return err
+			return errors.New("Release dependency info could not be located")
 		}
 
-		confData := cfgData.Data["versions"]
-		//log.Infof("READ DATA: %v", confData)
-		data = []byte(confData)
+		return nil
 	}
 
-	if err != nil {
-		return err
-	}
-
-	return r.loadRelInfo(release, &data, false)
+	return r.loadRelInfo(release, &data, false, source)
 }
 
-func (r *IxiaTGReconciler) loadRelInfo(release string, relData *[]byte, list bool) error {
+func (r *IxiaTGReconciler) loadRelInfo(release string, relData *[]byte, list bool, source string) error {
 	var rel pubRel
 	var relList pubReleases
 	var err error
@@ -278,16 +306,16 @@ func (r *IxiaTGReconciler) loadRelInfo(release string, relData *[]byte, list boo
 		relList.Releases = append(relList.Releases, rel)
 	}
 	if err != nil {
-		log.Infof("Failed to unmarshall release dependency json - %v", err)
+		log.Error(err, "Failed to unmarshall release dependency json")
 		return err
 	}
 
 	for _, relEntry := range relList.Releases {
-		if _, ok := componentDep[rel.Release]; ok {
+		if len(relEntry.Release) == 0 {
 			continue
 		}
 
-		topoEntry := topoDep{Controller: Node{Name: CONTROLLER_NAME, Containers: make(map[string]componentRel)}, Ixia: Node{Containers: make(map[string]componentRel)}}
+		topoEntry := topoDep{Source: source, Controller: Node{Name: CONTROLLER_NAME, Containers: make(map[string]componentRel)}, Ixia: Node{Containers: make(map[string]componentRel)}}
 		for _, image := range relEntry.Images {
 			switch image.Name {
 			case "controller":
@@ -307,7 +335,11 @@ func (r *IxiaTGReconciler) loadRelInfo(release string, relData *[]byte, list boo
 		}
 
 		componentDep[relEntry.Release] = topoEntry
-		log.Infof("\nFound version info for: %s", relEntry.Release)
+		if release == DEFAULT_VERSION {
+			LATEST_VERSION = relEntry.Release
+			release = LATEST_VERSION
+		}
+		log.Infof("Found version info for %s through %s", relEntry.Release, source)
 		log.Infof("Mapped controller components:")
 		for _, val := range topoEntry.Controller.Containers {
 			log.Infof("Name: %s, Image %s:%s", val.Name, val.Path, val.Tag)
@@ -362,17 +394,16 @@ func (r *IxiaTGReconciler) deleteController(ctx context.Context, ixia *networkv1
 		log.Infof("Deleted gNMI service %v", service)
 	}
 
-	delete(namespaceRel, ixia.Namespace)
 	return nil
 }
 
 func (r *IxiaTGReconciler) deployController(ctx context.Context, ixia *networkv1alpha1.IxiaTG, secret *corev1.Secret) error {
-	if _, ok := namespaceRel[ixia.Namespace]; ok {
-		// Controller already deployed
-		log.Infof("Controller already deployed for %s", ixia.Name)
-		return nil
+	podList := &corev1.PodList{}
+	opts := []client.ListOption{
+		client.InNamespace(ixia.Namespace),
 	}
-
+	var err error
+	peVersion := ""
 	// First check if we have the component dependency data for the release
 	depVersion := DEFAULT_VERSION
 	if ixia.Spec.Version != "" {
@@ -381,7 +412,38 @@ func (r *IxiaTGReconciler) deployController(ctx context.Context, ixia *networkv1
 		log.Infof("No ixiatg version specified, using default version %s", depVersion)
 	}
 
-	if len(componentDep) == 0 {
+	if err = r.List(ctx, podList, opts...); err != nil {
+		log.Errorf("Failed to list current pods %v", err)
+		return err
+	}
+	for _, p := range podList.Items {
+		if p.ObjectMeta.Name == CONTROLLER_NAME {
+			//scontrollerVersion := ""
+			log.Infof("Controller already deployed for %s", ixia.Name)
+			for _, c := range p.Spec.Containers {
+				if c.Name == CONTROLLER_NAME {
+					if strings.HasSuffix(c.Image, ":"+depVersion) {
+						return nil
+					}
+					contVersion := strings.Split(c.Image, ":")
+					if depVersion == DEFAULT_VERSION && contVersion[1] == LATEST_VERSION {
+						return nil
+					}
+					err = errors.New(fmt.Sprintf("Version mismatch - expected %s, found %s", contVersion[1], depVersion))
+					return err
+				}
+			}
+		} else if peVersion == "" {
+			for _, c := range p.Spec.Containers {
+				if strings.Contains(c.Image, "ixia-c-protocol-engine") {
+					version := strings.Split(c.Image, ":")
+					peVersion = version[1]
+				}
+			}
+		}
+	}
+
+	/* if len(componentDep) == 0 {
 		// This is also when we load the build it release info file
 		data, err := ioutil.ReadFile("releases.json")
 		if err != nil {
@@ -389,20 +451,28 @@ func (r *IxiaTGReconciler) deployController(ctx context.Context, ixia *networkv1
 		} else {
 			r.loadRelInfo(depVersion, &data, true)
 		}
-	}
+	} */
 
-	log.Infof("Deploying components for version %s for ns %s", depVersion, ixia.Namespace)
-	if _, ok := componentDep[depVersion]; !ok {
-		log.Infof("Try lookup release %s related information...", depVersion)
+	if _, ok := componentDep[depVersion]; !ok || depVersion == DEFAULT_VERSION || componentDep[depVersion].Source == DS_CONFIGMAP {
 		if err := r.getRelInfo(ctx, depVersion); err != nil {
-			log.Infof("Failed to get release information for %s - %v", depVersion, err)
+			log.Errorf("Failed to get release information for %s", depVersion)
 			return err
 		}
 	}
+	if depVersion == DEFAULT_VERSION {
+		if LATEST_VERSION == "" {
+			log.Errorf("Failed to get release information for %s", depVersion)
+			return errors.New("Failed to get release information")
+		} else {
+			depVersion = LATEST_VERSION
+		}
+	}
+	log.Infof("Deploying Controller for version %s for ns %s source %s", depVersion, ixia.Namespace, componentDep[depVersion].Source)
 
 	// Deploy controller and services
 	imagePullSecrets := getImgPullSctSecret(secret)
 	containers, err := r.containersForController(ixia, depVersion)
+	timeoutTime := int64(10)
 	if err != nil {
 		return err
 	}
@@ -416,8 +486,9 @@ func (r *IxiaTGReconciler) deployController(ctx context.Context, ixia *networkv1
 			},
 		},
 		Spec: corev1.PodSpec{
-			Containers:       containers,
-			ImagePullSecrets: imagePullSecrets,
+			Containers:                    containers,
+			ImagePullSecrets:              imagePullSecrets,
+			TerminationGracePeriodSeconds: &timeoutTime,
 		},
 	}
 	log.Infof("Creating controller pod %v", pod)
@@ -437,23 +508,12 @@ func (r *IxiaTGReconciler) deployController(ctx context.Context, ixia *networkv1
 		}
 	}
 
-	namespaceRel[ixia.Namespace] = depVersion
-
 	return nil
 }
 
 func (r *IxiaTGReconciler) podForIxia(ixia *networkv1alpha1.IxiaTG, secret *corev1.Secret) (*corev1.Pod, error) {
-	depVersion := DEFAULT_VERSION
-	if ixia.Spec.Version != "" {
-		depVersion = ixia.Spec.Version
-	}
-	controllerVersion := namespaceRel[ixia.Namespace]
-	if controllerVersion != depVersion && !(controllerVersion == DEFAULT_VERSION && ixia.Spec.Version == "") {
-		log.Errorf("Error: mismatch in Ixia version for node %s, expected version %s", ixia.Name, namespaceRel[ixia.Namespace])
-		return nil, errors.New(fmt.Sprintf("Version mismatch expected %s, found %s", namespaceRel[ixia.Namespace], depVersion))
-	}
-
 	imagePullSecrets := getImgPullSctSecret(secret)
+	timeoutTime := int64(10)
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      ixia.Name,
@@ -473,8 +533,9 @@ func (r *IxiaTGReconciler) podForIxia(ixia *networkv1alpha1.IxiaTG, secret *core
 				},
 				ImagePullPolicy: "IfNotPresent",
 			}},
-			Containers:       r.containersForIxia(ixia),
-			ImagePullSecrets: imagePullSecrets,
+			Containers:                    r.containersForIxia(ixia),
+			ImagePullSecrets:              imagePullSecrets,
+			TerminationGracePeriodSeconds: &timeoutTime,
 		},
 	}
 	return pod, nil
@@ -619,7 +680,10 @@ func (r *IxiaTGReconciler) containersForIxia(ixia *networkv1alpha1.IxiaTG) []cor
 		}
 	}
 
-	versionToDeploy := namespaceRel[ixia.Namespace]
+	versionToDeploy := LATEST_VERSION
+	if ixia.Spec.Version != "" && ixia.Spec.Version != DEFAULT_VERSION {
+		versionToDeploy = ixia.Spec.Version
+	}
 	for k, v := range componentDep[versionToDeploy].Ixia.Containers {
 		name := ixia.Name + "-" + k
 		image := v.Path + ":" + v.Tag
