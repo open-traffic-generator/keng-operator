@@ -21,6 +21,7 @@ IXIA_C_TRAFFIC_ENGINE=1.4.0.11
 IXIA_C_GRPC_SERVER=0.5.3
 IXIA_C_GNMI_SERVER=0.5.2
 ARISTA_CEOS_VERSION=4.26.1F
+IXIA_C_TEST_CLIENT=0.0.1-863
 
 GCP_DOCKER_REPO=us-central1-docker.pkg.dev/kt-nts-athena-dev/keysight
 
@@ -207,6 +208,11 @@ cicd_gen_local_ixia_c_artifacts() {
     docker pull ${ARTIFACTORY_DOCKER_REPO}/controller:${IXIA_C_CONTROLLER} \
     && docker tag ${ARTIFACTORY_DOCKER_REPO}/controller:${IXIA_C_CONTROLLER} ${GCP_DOCKER_REPO}/ixia-c-controller:${IXIA_C_CONTROLLER} \
     && docker save ${GCP_DOCKER_REPO}/ixia-c-controller:${IXIA_C_CONTROLLER} | gzip > ${ixia_c_art}/ixia-c-controller.tar.gz
+
+    echo "Downloading ixia-c-test-client:${IXIA_C_TEST_CLIENT}"
+    docker pull ${ARTIFACTORY_DOCKER_REPO}/ixia-c-test-client:${IXIA_C_TEST_CLIENT} \
+    && docker tag ${ARTIFACTORY_DOCKER_REPO}/ixia-c-test-client:${IXIA_C_TEST_CLIENT} ${GCP_DOCKER_REPO}/ixia-c-test-client:${IXIA_C_TEST_CLIENT} \
+    && docker save ${GCP_DOCKER_REPO}/ixia-c-test-client:${IXIA_C_TEST_CLIENT} | gzip > ${ixia_c_art}/ixia-c-test-client.tar.gz
 
     echo "Downloading ixia-c-traffic-engine:${IXIA_C_TRAFFIC_ENGINE}"
     docker pull docker-local-ixvm-lbj.artifactorylbj.it.keysight.com/athena-traffic-engine:${IXIA_C_TRAFFIC_ENGINE} \
@@ -412,7 +418,12 @@ cicd_gen_tests_artifacts() {
         sed "s/IXIA_C_TRAFFIC_ENGINE_VERSION/${IXIA_C_TRAFFIC_ENGINE}/g" | \
         sed "s/IXIA_C_PROTOCOL_ENGINE_VERSION/${IXIA_C_PROTOCOL_ENGINE}/g" | \
         tee ${tests_art}/ixia-configmap.yaml > /dev/null
-    rm -rf template-*
+
+    cat ${tests_art}/template-ixia-c-test-client.yaml | \
+        sed "s/IXIA_C_TEST_CLIENT/${IXIA_C_TEST_CLIENT}/g" | \
+        tee ${tests_art}/ixia-c-test-client.yaml > /dev/null
+
+    rm -rf template-*.yaml
     echo "Files in ./tests_art: $(ls -lht ${tests_art})"
 }
 
