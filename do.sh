@@ -321,7 +321,7 @@ cicd_push_artifacts_to_testbed() {
 cicd_run_sanity_in_testbed() {
     version=${1}
     echo "sanity run in testbed: starting"
-    sanity_run_cmd="python3 operator_cicd.py --test -build ${version} -mark sanity"
+    sanity_run_cmd="python3 operator_cicd.py --test -build ${version} -mark sanity --ixia_c_release ${IXIA_C_CONTROLLER}"
     cicd_exec_on_testbed "cd ./${TESTBED_CICD_DIR} && sudo -S <<< ${TESTBED_PASSWORD} ${sanity_run_cmd}"
     echo "sanity run in testbed: done"
 }
