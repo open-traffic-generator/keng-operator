@@ -403,7 +403,6 @@ func (r *IxiaTGReconciler) deployController(ctx context.Context, ixia *networkv1
 		client.InNamespace(ixia.Namespace),
 	}
 	var err error
-	peVersion := ""
 	// First check if we have the component dependency data for the release
 	depVersion := DEFAULT_VERSION
 	if ixia.Spec.Version != "" {
@@ -411,47 +410,6 @@ func (r *IxiaTGReconciler) deployController(ctx context.Context, ixia *networkv1
 	} else {
 		log.Infof("No ixiatg version specified, using default version %s", depVersion)
 	}
-
-	if err = r.List(ctx, podList, opts...); err != nil {
-		log.Errorf("Failed to list current pods %v", err)
-		return err
-	}
-	for _, p := range podList.Items {
-		if p.ObjectMeta.Name == CONTROLLER_NAME {
-			//scontrollerVersion := ""
-			log.Infof("Controller already deployed for %s", ixia.Name)
-			for _, c := range p.Spec.Containers {
-				if c.Name == CONTROLLER_NAME {
-					if strings.HasSuffix(c.Image, ":"+depVersion) {
-						return nil
-					}
-					contVersion := strings.Split(c.Image, ":")
-					if depVersion == DEFAULT_VERSION && contVersion[1] == LATEST_VERSION {
-						return nil
-					}
-					err = errors.New(fmt.Sprintf("Version mismatch - expected %s, found %s", contVersion[1], depVersion))
-					return err
-				}
-			}
-		} else if peVersion == "" {
-			for _, c := range p.Spec.Containers {
-				if strings.Contains(c.Image, "ixia-c-protocol-engine") {
-					version := strings.Split(c.Image, ":")
-					peVersion = version[1]
-				}
-			}
-		}
-	}
-
-	/* if len(componentDep) == 0 {
-		// This is also when we load the build it release info file
-		data, err := ioutil.ReadFile("releases.json")
-		if err != nil {
-			log.Infof("Failed to read the release info file: %v", err)
-		} else {
-			r.loadRelInfo(depVersion, &data, true)
-		}
-	} */
 
 	if _, ok := componentDep[depVersion]; !ok || depVersion == DEFAULT_VERSION || componentDep[depVersion].Source == DS_CONFIGMAP {
 		if err := r.getRelInfo(ctx, depVersion); err != nil {
@@ -467,12 +425,45 @@ func (r *IxiaTGReconciler) deployController(ctx context.Context, ixia *networkv1
 			depVersion = LATEST_VERSION
 		}
 	}
+
+	if err = r.List(ctx, podList, opts...); err != nil {
+		log.Errorf("Failed to list current pods %v", err)
+		return err
+	}
+	for _, p := range podList.Items {
+		if p.ObjectMeta.Name == CONTROLLER_NAME {
+			//scontrollerVersion := ""
+			log.Infof("Controller already deployed for %s", ixia.Name)
+			for _, c := range p.Spec.Containers {
+				if c.Name == CONTROLLER_NAME {
+					expVersion := componentDep[depVersion].Controller.Containers["controller"].Tag
+					if strings.HasSuffix(c.Image, ":"+expVersion) {
+						return nil
+					}
+					contVersion := strings.Split(c.Image, ":")
+					err = errors.New(fmt.Sprintf("Version mismatch - expected %s, found %s", contVersion[1], depVersion))
+					return err
+				}
+			}
+		}
+	}
+
+	/* if len(componentDep) == 0 {
+		// This is also when we load the build it release info file
+		data, err := ioutil.ReadFile("releases.json")
+		if err != nil {
+			log.Infof("Failed to read the release info file: %v", err)
+		} else {
+			r.loadRelInfo(depVersion, &data, true)
+		}
+	} */
+
 	log.Infof("Deploying Controller for version %s for ns %s source %s", depVersion, ixia.Namespace, componentDep[depVersion].Source)
 
 	// Deploy controller and services
 	imagePullSecrets := getImgPullSctSecret(secret)
 	containers, err := r.containersForController(ixia, depVersion)
-	timeoutTime := int64(10)
+	timeoutTime := int64(5)
 	if err != nil {
 		return err
 	}
@@ -513,7 +504,7 @@ func (r *IxiaTGReconciler) deployController(ctx context.Context, ixia *networkv1
 
 func (r *IxiaTGReconciler) podForIxia(ixia *networkv1alpha1.IxiaTG, secret *corev1.Secret) (*corev1.Pod, error) {
 	imagePullSecrets := getImgPullSctSecret(secret)
-	timeoutTime := int64(10)
+	timeoutTime := int64(5)
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      ixia.Name,
