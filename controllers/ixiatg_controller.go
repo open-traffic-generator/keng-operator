@@ -47,23 +47,25 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-var CURRENT_NAMESPACE string = "ixiatg-op-system"
-var SECRET_NAME string = "ixia-pull-secret"
+const CURRENT_NAMESPACE string = "ixiatg-op-system"
+const SECRET_NAME string = "ixia-pull-secret"
 
-var SERVER_URL string = "https://github.com/open-traffic-generator/ixia-c/releases/download/v"
-var SERVER_LATEST_URL string = "https://github.com/open-traffic-generator/ixia-c/releases/latest/download"
-var RELEASE_FILE string = "/ixia-configmap.yaml"
+const SERVER_URL string = "https://github.com/open-traffic-generator/ixia-c/releases/download/v"
+const SERVER_LATEST_URL string = "https://github.com/open-traffic-generator/ixia-c/releases/latest/download"
+const RELEASE_FILE string = "/ixia-configmap.yaml"
 
-var CONTROLLER_NAME string = "ixia-c"
-var CONFIG_MAP_NAME string = "ixiatg-release-config"
-var CONFIG_MAP_NAMESPACE string = "ixiatg-op-system"
-var DEFAULT_VERSION string = "latest"
+const CONTROLLER_NAME string = "ixia-c"
+const CONFIG_MAP_NAME string = "ixiatg-release-config"
+const CONFIG_MAP_NAMESPACE string = "ixiatg-op-system"
+const DEFAULT_VERSION string = "latest"
+
 var LATEST_VERSION string = ""
-var DS_RESTAPI string = "Rest API"
-var DS_CONFIGMAP string = "Config Map"
-var CONTROLLER_SERVICE string = "ixia-c-service"
-var GRPC_SERVICE string = "grpc-service"
-var GNMI_SERVICE string = "gnmi-service"
+
+const DS_RESTAPI string = "Rest API"
+const DS_CONFIGMAP string = "Config Map"
+const CONTROLLER_SERVICE string = "ixia-c-service"
+const GRPC_SERVICE string = "grpc-service"
+const GNMI_SERVICE string = "gnmi-service"
 
 var componentDep map[string]topoDep = make(map[string]topoDep)
 
@@ -249,16 +251,16 @@ func (r *IxiaTGReconciler) getRelInfo(ctx context.Context, release string) error
 			var yamlCfg ixiaConfigMap
 			err = yaml.Unmarshal([]byte(yamlData), &yamlCfg)
 			if err != nil {
-				log.Infof("Failed to parse downloaded release config file - %v", err)
+				log.Errorf("Failed to parse downloaded release config file - %v", err)
 			} else {
 				data = []byte(yamlCfg.Data.Versions)
 			}
 		} else {
 			err = errors.New(fmt.Sprintf("Got http response %v", resp.StatusCode))
-			log.Infof("Failed to download release config file - %v", err)
+			log.Errorf("Failed to download release config file - %v", err)
 		}
 	} else {
-		log.Infof("Failed to download release config file - %v", err)
+		log.Errorf("Failed to download release config file - %v", err)
 	}
 
 	if err != nil || len(data) == 0 {
@@ -458,8 +460,6 @@ func (r *IxiaTGReconciler) deployController(ctx context.Context, ixia *networkv1
 		}
 	} */
 
-	log.Infof("Deploying Controller for version %s for ns %s source %s", depVersion, ixia.Namespace, componentDep[depVersion].Source)
-
 	// Deploy controller and services
 	imagePullSecrets := getImgPullSctSecret(secret)
 	containers, err := r.containersForController(ixia, depVersion)
@@ -593,6 +593,8 @@ func (r *IxiaTGReconciler) containersForController(ixia *networkv1alpha1.IxiaTG,
 
 	// Adding controller container
 	if pubRel, ok := contPodMap["controller"]; ok {
+		log.Infof("Deploying Controller version %s for config version %s, ns %s (source %s)", pubRel.Tag, release, ixia.Namespace, componentDep[release].Source)
+
 		name := CONTROLLER_NAME
 		image := pubRel.Path + ":" + pubRel.Tag
 		args := []string{"--accept-eula", "--debug"}
@@ -609,6 +611,8 @@ func (r *IxiaTGReconciler) containersForController(ixia *networkv1alpha1.IxiaTG,
 
 	// Adding grpc container
 	if pubRel, ok := contPodMap["grpc-server"]; ok {
+		log.Infof("Deploying gRPC version %s for config version %s, ns %s (source %s)", pubRel.Tag, release, ixia.Namespace, componentDep[release].Source)
+
 		name := "grpc"
 		image := pubRel.Path + ":" + pubRel.Tag
 		command := []string{"python3", "-m", "grpc_server", "--app-mode", "athena", "--target-host", CONTROLLER_SERVICE, "--target-port", "443", "--log-stdout", "--log-debug"}
@@ -628,6 +632,8 @@ func (r *IxiaTGReconciler) containersForController(ixia *networkv1alpha1.IxiaTG,
 
 	// Adding gnmi container
 	if pubRel, ok := contPodMap["gnmi-server"]; ok {
+		log.Infof("Deploying gNMI version %s for config version %s, ns %s (source %s)", pubRel.Tag, release, ixia.Namespace, componentDep[release].Source)
+
 		name := "gnmi"
 		image := pubRel.Path + ":" + pubRel.Tag
 		command := []string{"python3", "-m", "otg_gnmi", "--server-port", "50051", "--app-mode", "athena", "--target-host", CONTROLLER_SERVICE, "--target-port", "443", "--insecure"}
@@ -676,6 +682,8 @@ func (r *IxiaTGReconciler) containersForIxia(ixia *networkv1alpha1.IxiaTG) []cor
 		versionToDeploy = ixia.Spec.Version
 	}
 	for k, v := range componentDep[versionToDeploy].Ixia.Containers {
+		log.Infof("Deploying %s version %s for config version %s, ns %s (source %s)", k, v.Tag, versionToDeploy, ixia.Namespace, componentDep[versionToDeploy].Source)
+
 		name := ixia.Name + "-" + k
 		image := v.Path + ":" + v.Tag
 		log.Infof("Adding Pod: %s, Container: %s, Image: %s", ixia.Name, name, image)
