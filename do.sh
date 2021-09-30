@@ -481,7 +481,7 @@ remove_testbed_lock_status() {
 }
 
 unlock_testbed(){
-    echo "unlocking testbed"
+    echo "unlocking testbed..."
     remove_cicd_folder_from_testbed
     remove_testbed_lock_status
     echo "testbed unlocked"
