@@ -381,7 +381,7 @@ cicd_run_sanity() {
     cicd_push_artifacts_to_testbed ${art}
     cicd_run_sanity_in_testbed ${version}
     cicd_pull_results_from_testbed ${version}
-    cicd_cleanup_in_testbed
+    # cicd_cleanup_in_testbed
 
     echo "Reports in ${SANITY_REPORTS}: $(ls -lht ${SANITY_REPORTS})"
     cicd_check_sanity_status ${version}
