@@ -27,6 +27,8 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"k8s.io/utils/pointer"
+
 	corev1 "k8s.io/api/core/v1"
 	errapi "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -47,27 +49,30 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-const CURRENT_NAMESPACE string = "ixiatg-op-system"
-const SECRET_NAME string = "ixia-pull-secret"
+const (
+	CURRENT_NAMESPACE string = "ixiatg-op-system"
+	SECRET_NAME       string = "ixia-pull-secret"
 
-const SERVER_URL string = "https://github.com/open-traffic-generator/ixia-c/releases/download/v"
-const SERVER_LATEST_URL string = "https://github.com/open-traffic-generator/ixia-c/releases/latest/download"
-const RELEASE_FILE string = "/ixia-configmap.yaml"
+	SERVER_URL        string = "https://github.com/open-traffic-generator/ixia-c/releases/download/v"
+	SERVER_LATEST_URL string = "https://github.com/open-traffic-generator/ixia-c/releases/latest/download"
+	RELEASE_FILE      string = "/ixia-configmap.yaml"
 
-const CONTROLLER_NAME string = "ixia-c"
-const CONFIG_MAP_NAME string = "ixiatg-release-config"
-const CONFIG_MAP_NAMESPACE string = "ixiatg-op-system"
-const DEFAULT_VERSION string = "latest"
+	CONTROLLER_NAME      string = "ixia-c"
+	CONFIG_MAP_NAME      string = "ixiatg-release-config"
+	CONFIG_MAP_NAMESPACE string = "ixiatg-op-system"
+	DEFAULT_VERSION      string = "latest"
 
-var LATEST_VERSION string = ""
+	DS_RESTAPI         string = "Rest API"
+	DS_CONFIGMAP       string = "Config Map"
+	CONTROLLER_SERVICE string = "ixia-c-service"
+	GRPC_SERVICE       string = "grpc-service"
+	GNMI_SERVICE       string = "gnmi-service"
+)
 
-const DS_RESTAPI string = "Rest API"
-const DS_CONFIGMAP string = "Config Map"
-const CONTROLLER_SERVICE string = "ixia-c-service"
-const GRPC_SERVICE string = "grpc-service"
-const GNMI_SERVICE string = "gnmi-service"
-
-var componentDep map[string]topoDep = make(map[string]topoDep)
+var (
+	componentDep  map[string]topoDep = make(map[string]topoDep)
+	latestVersion string             = ""
+)
 
 // IxiaTGReconciler reconciles a IxiaTG object
 type IxiaTGReconciler struct {
@@ -150,11 +155,6 @@ func (r *IxiaTGReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return ctrl.Result{}, err
 	}
 
-	if ixia.Name == CONTROLLER_NAME {
-		err = errors.New(fmt.Sprintf("Error: %s name is reserved for Controller pod, use some other name", CONTROLLER_NAME))
-		log.Error(err, "Failed to create pod")
-		return ctrl.Result{}, err
-	}
 	// Check if we need to creatte resources or not
 	secret, err := r.ReconcileSecret(ctx, req, ixia)
 
@@ -202,25 +202,30 @@ func (r *IxiaTGReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	err = r.Get(ctx, types.NamespacedName{Name: ixia.Name, Namespace: ixia.Namespace}, found)
 	if err != nil && errapi.IsNotFound(err) {
 		// need to deploy, but first deploy controller if not present
-		err = r.deployController(ctx, ixia, secret)
-		if err != nil {
-			log.Errorf("Failed to deploy controller pod in %v, err %v", ixia.Namespace, err)
-			return ctrl.Result{}, err
+		if err = r.deployController(ctx, ixia, secret); err == nil {
+			log.Infof("Successfully deployed controller pod")
+			if pod, err := r.podForIxia(ixia, secret); err == nil {
+				//log.Infof("Creating pod %v", pod)
+				err = r.Create(ctx, pod)
+			}
 		}
 
-		log.Infof("Creating pod")
-		pod, err := r.podForIxia(ixia, secret)
-		if err != nil {
-			return ctrl.Result{}, err
+		requeue := false
+		if err == nil {
+			log.Infof("Created!")
+			ixia.Status.Status = "Success"
+			requeue = true
+		} else {
+			log.Errorf("Failed to create pod for %v in %v - %v", ixia.Name, ixia.Namespace, err)
+			ixia.Status.Status = "Failed"
+			ixia.Status.Reason = err.Error()
 		}
-		log.Infof("Creating pod %v", pod)
-		err = r.Create(ctx, pod)
+
+		err = r.Status().Update(ctx, ixia)
 		if err != nil {
-			log.Errorf("Failed to create pod %v in %v, err %v", pod.Name, pod.Namespace, err)
-			return ctrl.Result{}, err
+			log.Errorf("Failed to update ixia status - %v", err)
 		}
-		log.Infof("Created!")
-		return ctrl.Result{Requeue: true}, nil
+		return ctrl.Result{Requeue: requeue}, nil
 	} else if err != nil {
 		log.Error(err, "Failed to get pod")
 		return ctrl.Result{}, err
@@ -338,8 +343,8 @@ func (r *IxiaTGReconciler) loadRelInfo(release string, relData *[]byte, list boo
 
 		componentDep[relEntry.Release] = topoEntry
 		if release == DEFAULT_VERSION {
-			LATEST_VERSION = relEntry.Release
-			release = LATEST_VERSION
+			latestVersion = relEntry.Release
+			release = latestVersion
 		}
 		log.Infof("Found version info for %s through %s", relEntry.Release, source)
 		log.Infof("Mapped controller components:")
@@ -405,6 +410,12 @@ func (r *IxiaTGReconciler) deployController(ctx context.Context, ixia *networkv1
 		client.InNamespace(ixia.Namespace),
 	}
 	var err error
+	if ixia.Name == CONTROLLER_NAME {
+		err = errors.New(fmt.Sprintf("Error: %s name is reserved for Controller pod, use some other name", CONTROLLER_NAME))
+		log.Error(err, "Failed to create pod")
+		return err
+	}
+
 	// First check if we have the component dependency data for the release
 	depVersion := DEFAULT_VERSION
 	if ixia.Spec.Version != "" {
@@ -420,11 +431,11 @@ func (r *IxiaTGReconciler) deployController(ctx context.Context, ixia *networkv1
 		}
 	}
 	if depVersion == DEFAULT_VERSION {
-		if LATEST_VERSION == "" {
+		if latestVersion == "" {
 			log.Errorf("Failed to get release information for %s", depVersion)
 			return errors.New("Failed to get release information")
 		} else {
-			depVersion = LATEST_VERSION
+			depVersion = latestVersion
 		}
 	}
 
@@ -463,7 +474,6 @@ func (r *IxiaTGReconciler) deployController(ctx context.Context, ixia *networkv1
 	// Deploy controller and services
 	imagePullSecrets := getImgPullSctSecret(secret)
 	containers, err := r.containersForController(ixia, depVersion)
-	timeoutTime := int64(5)
 	if err != nil {
 		return err
 	}
@@ -479,7 +489,7 @@ func (r *IxiaTGReconciler) deployController(ctx context.Context, ixia *networkv1
 		Spec: corev1.PodSpec{
 			Containers:                    containers,
 			ImagePullSecrets:              imagePullSecrets,
-			TerminationGracePeriodSeconds: &timeoutTime,
+			TerminationGracePeriodSeconds: pointer.Int64(5),
 		},
 	}
 	log.Infof("Creating controller pod %v", pod)
@@ -504,7 +514,6 @@ func (r *IxiaTGReconciler) deployController(ctx context.Context, ixia *networkv1
 
 func (r *IxiaTGReconciler) podForIxia(ixia *networkv1alpha1.IxiaTG, secret *corev1.Secret) (*corev1.Pod, error) {
 	imagePullSecrets := getImgPullSctSecret(secret)
-	timeoutTime := int64(5)
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      ixia.Name,
@@ -526,7 +535,7 @@ func (r *IxiaTGReconciler) podForIxia(ixia *networkv1alpha1.IxiaTG, secret *core
 			}},
 			Containers:                    r.containersForIxia(ixia),
 			ImagePullSecrets:              imagePullSecrets,
-			TerminationGracePeriodSeconds: &timeoutTime,
+			TerminationGracePeriodSeconds: pointer.Int64(5),
 		},
 	}
 	return pod, nil
@@ -677,7 +686,7 @@ func (r *IxiaTGReconciler) containersForIxia(ixia *networkv1alpha1.IxiaTG) []cor
 		}
 	}
 
-	versionToDeploy := LATEST_VERSION
+	versionToDeploy := latestVersion
 	if ixia.Spec.Version != "" && ixia.Spec.Version != DEFAULT_VERSION {
 		versionToDeploy = ixia.Spec.Version
 	}
