@@ -140,7 +140,7 @@ func (r *IxiaTGReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	ixia := &networkv1alpha1.IxiaTG{}
 	err := r.Get(ctx, req.NamespacedName, ixia)
 
-	log.Infof("INSIDE Reconcile: %v, %v", ixia, err)
+	log.Infof("INSIDE Reconcile: %v, %s", ixia.Name, ixia.Namespace)
 
 	if err != nil {
 		if errapi.IsNotFound(err) {
@@ -198,6 +198,7 @@ func (r *IxiaTGReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return ctrl.Result{}, nil
 	}
 
+	requeue := false
 	found := &corev1.Pod{}
 	err = r.Get(ctx, types.NamespacedName{Name: ixia.Name, Namespace: ixia.Namespace}, found)
 	if err != nil && errapi.IsNotFound(err) {
@@ -210,27 +211,65 @@ func (r *IxiaTGReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 			}
 		}
 
-		requeue := false
 		if err == nil {
 			log.Infof("Created!")
-			ixia.Status.Status = "Success"
 			requeue = true
 		} else {
 			log.Errorf("Failed to create pod for %v in %v - %v", ixia.Name, ixia.Namespace, err)
+		}
+	} else if err != nil {
+		// Log but don't update status
+		log.Error(err, "Failed to get pod")
+		requeue = true
+		err = nil
+	} else {
+		contPod := &corev1.Pod{}
+		err = r.Get(ctx, types.NamespacedName{Name: CONTROLLER_NAME, Namespace: ixia.Namespace}, contPod)
+		if err == nil {
+			if found.Status.Phase == corev1.PodFailed {
+				err = errors.New(fmt.Sprintf("Pod %s failed - %s", found.Name, found.Status.Reason))
+			} else if contPod.Status.Phase == corev1.PodFailed {
+				err = errors.New(fmt.Sprintf("Pod %s failed - %s", contPod.Name, contPod.Status.Reason))
+			} else if found.Status.Phase != corev1.PodRunning || contPod.Status.Phase != corev1.PodRunning {
+				requeue = true
+				var contStatus []corev1.ContainerStatus
+				for _, s := range found.Status.ContainerStatuses {
+					contStatus = append(contStatus, s)
+				}
+				for _, s := range contPod.Status.ContainerStatuses {
+					contStatus = append(contStatus, s)
+				}
+				for _, c := range contStatus {
+					if c.State.Waiting != nil && c.State.Waiting.Reason == "ErrImagePull" {
+						err = errors.New(fmt.Sprintf("Container %s failed - %s", c.Name, c.State.Waiting.Message))
+						break
+					}
+				}
+			}
+		}
+	}
+
+	if !requeue || err != nil {
+		if err != nil {
 			ixia.Status.Status = "Failed"
 			ixia.Status.Reason = err.Error()
+			// Ensure this is an end state, no need to requeue
+			requeue = false
+		} else {
+			ixia.Status.Status = "Success"
 		}
 
 		err = r.Status().Update(ctx, ixia)
 		if err != nil {
 			log.Errorf("Failed to update ixia status - %v", err)
+			requeue = true
 		}
-		return ctrl.Result{Requeue: requeue}, nil
-	} else if err != nil {
-		log.Error(err, "Failed to get pod")
-		return ctrl.Result{}, err
 	}
-	return ctrl.Result{}, nil
+
+	if requeue {
+		return ctrl.Result{RequeueAfter: time.Second}, err
+	}
+	return ctrl.Result{}, err
 }
 
 func (r *IxiaTGReconciler) getRelInfo(ctx context.Context, release string) error {
