@@ -48,10 +48,12 @@ spec:
           status:
             description: IxiaTGStatus defines the observed state of IxiaTG
             properties:
-              pod:
+              reason:
+                type: string
+              status:
                 description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
                   of cluster Important: Run "make" to regenerate code after modifying
-                  this file'
+                  this file Pod    string `json:"pod,omitempty"`'
                 type: string
             type: object
         type: object
