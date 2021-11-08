@@ -1,3 +1,3 @@
-[submodule "operator-tests"]
-	path = operator-tests
-	url = http://gitlab.it.keysight.com/athena/operator-tests.git
+# [submodule "operator-tests"]
+# 	path = operator-tests
+# 	url = http://gitlab.it.keysight.com/athena/operator-tests.git
