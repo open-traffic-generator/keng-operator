@@ -258,7 +258,7 @@ cicd_check_for_timeout() {
     REM_TIME="$(($TOTAL_TIME-$ELAPSED))"
     echo "Remaining time for pipeline : ${REM_TIME} seconds"
     echo "Estimated Time required to run sanity ${APPROX_SANITY_TIME} seconds"
-    if [[ ${REM_TIME} -lt ${APPROX_SANITY_TIME} ]]
+    if [ ${REM_TIME} -lt ${APPROX_SANITY_TIME} ]
     then
         echo "Pipeline may expire during running tests in testbed, please retry the pipeline sometimes later"
         exit 1
@@ -269,14 +269,14 @@ cicd_check_for_timeout() {
 
 cicd_wait_for_testbed_to_unlock() {
     local_lock_status=$(ls ${LOCK_STATUS_FILE} 2> /dev/null)
-    if [[ ${local_lock_status} ]]
+    if [ ${local_lock_status} ]
     then
         echo "Local lock status file forund, so testbed is already locked by this process"
     else
         while :
         do
             status=$(cicd_exec_on_testbed "ls -d ${TESTBED_CICD_DIR} 2> /dev/null")
-            if  [[ ${status} ]]
+            if  [ ${status} ]
             then
                 echo "Testbed is locked due to another sanity is still running....."
                 echo "Retry after 1 minute"
@@ -344,12 +344,12 @@ cicd_check_sanity_status() {
     sanity_pass=$(grep All ${SANITY_REPORTS}/sanity-summary-${version}.csv | grep -Eo '[0-9]{1,4}')
     echo "Sanity pass rate : ${sanity_pass}"
     sanity_pass_rate=$(echo "${sanity_pass}" | tr -d $'\r' | bc -l)
-    if [[ ${sanity_pass_rate} -ge ${EXPECTED_SANITY_PASS_RATE} ]]
+    if [ ${sanity_pass_rate} -ge ${EXPECTED_SANITY_PASS_RATE} ]
     then
         SANITY_STATUS=PASS
     fi
     echo "Sanity expected pass rate : ${EXPECTED_SANITY_PASS_RATE}"
-    if [[ ${SANITY_STATUS} == PASS ]]
+    if [ ${SANITY_STATUS} == PASS ]
     then
         echo "sanity : pass"
     else 
@@ -391,8 +391,8 @@ cicd_gen_tests_artifacts() {
     echo "Generating Ixia-C-Operator test artifacts ..."
     tests_art=./tests_art
     mkdir -p ${tests_art}
-    tar -zcvf ${tests_art}/operator-tests.tar.gz ./ixia-c-operator-tests
-    cp ./ixia-c-operator-tests/helper/* ${tests_art}/
+    tar -zcvf ${tests_art}/operator-tests.tar.gz ./operator-tests
+    cp ./operator-tests/helper/* ${tests_art}/
 
     cat ${tests_art}/template-ixia-configmap.yaml | \
         sed "s/IXIA_C_CONTROLLER_VERSION/${IXIA_C_CONTROLLER}/g" | \
@@ -422,6 +422,10 @@ cicd_build() {
 }
 
 cicd_test() {
+
+    cicd_gen_local_ixia_c_artifacts \
+    && cicd_gen_tests_artifacts
+
     cicd_wait_for_testbed_to_unlock \
     && cicd_run_sanity ${art} ${version}
 
@@ -439,10 +443,10 @@ cicd_test() {
 
 remove_cicd_folder_from_testbed(){
     lock_status=$(ls ${LOCK_STATUS_FILE} 2> /dev/null)
-    if [[ ${lock_status} ]]
+    if [ ${lock_status} ]
     then
         status=$(cicd_exec_on_testbed "ls -d ${TESTBED_CICD_DIR} 2> /dev/null")
-        if  [[ ${status} ]]
+        if  [ ${status} ]
         then
             cicd_exec_on_testbed "sudo -S <<< ${TESTBED_PASSWORD} rm -rf ${TESTBED_CICD_DIR}" 
             echo "${TESTBED_CICD_DIR}: deleted from testbed"
@@ -455,7 +459,7 @@ remove_cicd_folder_from_testbed(){
 remove_testbed_lock_status() {
     echo "removing testbed lock status file"
     lock_status=$(ls ${LOCK_STATUS_FILE} 2> /dev/null)
-    if [[ ${lock_status} ]]
+    if [ ${lock_status} ]
     then 
         rm ${LOCK_STATUS_FILE}
         echo "testbed lock status file removed"
