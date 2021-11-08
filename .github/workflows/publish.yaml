@@ -4,13 +4,11 @@ on: [push, pull_request, workflow_dispatch, repository_dispatch]
 
 jobs:
   cicd:
-    runs-on: [self-hosted, linux, Ubuntu, X64, Operator]
+    runs-on: [self-hosted, linux, Ubuntu, x64, docker]
     strategy:
       max-parallel: 1
 
     steps:
-      - name: Setup Docker
-        uses: docker-practice/actions-setup-docker@master
       
       - name: Checkout
         uses: actions/checkout@v2
