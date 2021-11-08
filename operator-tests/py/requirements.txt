@@ -1,0 +1,3 @@
+pytest == 6.2.2
+pytest-html
+flake8 == 3.8.4

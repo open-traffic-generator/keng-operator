@@ -1,0 +1,88 @@
+name: "ixia-c"
+nodes: {
+    name: "ixia-c-port1"
+    type: IXIA_TG
+    version: "local-latest"
+    services: {
+        key: 5555
+        value: {
+            inside: 5555
+            outside: 0
+            node_port: 31061
+        }
+    }
+    services: {
+        key: 50071
+        value: {
+            inside: 50071
+            outside: 0
+            node_port: 31062
+        }
+    }
+}
+nodes: {
+    name: "arista1"
+    type: ARISTA_CEOS
+    config: {
+    	image: "ceos:4.26.1F"
+    }
+    services:{
+        key: 22
+        value: {
+            name: "ssh"
+            inside: 22
+            node_port: 31063
+        }
+    }
+    services:{
+        key: 443
+        value: {
+            name: "ssl"
+            inside: 443
+            node_port: 31064
+        }
+    }
+    services:{
+        key: 6030
+        value: {
+            name: "gnmi"
+            inside: 6030
+            node_port: 31065
+        }
+    }
+}
+
+nodes: {
+    name: "ixia-c-port2"
+    type: IXIA_TG
+    version: "local-latest"
+    services: {
+        key: 5555
+        value: {
+            inside: 5555
+            outside: 0
+            node_port: 31066
+        }
+    }
+    services: {
+        key: 50071
+        value: {
+            inside: 50071
+            outside: 0
+            node_port: 31067
+        }
+    }
+}
+
+links: {
+    a_node: "ixia-c-port1"
+    a_int: "eth1"
+    z_node: "arista1"
+    z_int: "eth1"
+}
+links: {
+    a_node: "arista1"
+    a_int: "eth2"
+    z_node: "ixia-c-port2"
+    z_int: "eth1"
+}
