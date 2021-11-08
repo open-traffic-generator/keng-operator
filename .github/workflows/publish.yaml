@@ -12,7 +12,7 @@ jobs:
 
       - name: Give Permission
         run: |
-          sudo chown -R $USER:$USER /home/github/actions-runner/_work/{ixia_c_operator}
+          sudo chown -R $USER:$USER /home/github/actions-runner/_work/ixia_c_operator
       
       - name: Checkout
         uses: actions/checkout@v2
