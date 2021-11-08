@@ -79,7 +79,7 @@ get_go_deps() {
     go mod download
 }
 
-get_new_version() {
+get_version() {
     version=$(head ./version | cut -d' ' -f1)
     echo ${version}
 }
@@ -87,11 +87,6 @@ get_new_version() {
 echo_version() {
     version=$(head ./version | cut -d' ' -f1)
     echo "gRPC version : ${version}"
-}
-
-echo_version() {
-    get_new_version
-    echo "${BUILD_VERSION}-${BUILD_REVISION}"
 }
 
 get_local_build() {
@@ -103,7 +98,7 @@ get_local_build() {
 get_docker_build() {
     # Generating docker build using Makefile
     echo "Generating docker build ..."
-    export VERSION=$(echo_version)
+    export VERSION=$(get_version)
     export IMAGE_TAG_BASE=${IXIA_C_OPERATOR_IMAGE}
     make docker-build
     docker rmi -f $(docker images | grep '<none>') 2> /dev/null || true
@@ -112,7 +107,7 @@ get_docker_build() {
 gen_ixia_c_op_dep_yaml() {
     # Generating ixia-c-operator deployment yaml using Makefile
     echo "Generating ixia-c-operator deployment yaml ..."
-    export VERSION=$(echo_version)
+    export VERSION=$(get_version)
     export IMAGE_TAG_BASE=${IXIA_C_OPERATOR_IMAGE}
     make yaml
 }
@@ -181,7 +176,7 @@ cicd_publish_to_generic_repo() {
 gen_operator_artifacts() {
     echo "Generating ixia-c-operator offline artifacts ..."
     art=${1}
-    version=$(echo_version)
+    version=$(get_version)
     rm -rf ${art}/*.yaml
     rm -rf ${art}/*.tar.gz
     mv ./ixiatg-operator.yaml ${art}/
@@ -421,7 +416,7 @@ cicd_build() {
     && gen_ixia_c_op_dep_yaml \
     && get_docker_build \
     && gen_operator_artifacts ${art}
-    version=$(echo_version)
+    version=$(get_version)
     echo "Build Version: $version"
     echo "Files in ./art: $(ls -lht ${art})"
 }
