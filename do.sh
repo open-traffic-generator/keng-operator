@@ -38,6 +38,9 @@ APPROX_SANITY_TIME=1200
 
 TESTBED_CICD_DIR=operator_cicd
 
+ARTIFACTORY_DOCKER_REPO=docker-local-athena.artifactory.it.keysight.com
+EXPECTED_SANITY_PASS_RATE=100
+
 # get installers based on host architecture
 if [ "$(arch)" = "aarch64" ] || [ "$(arch)" = "arm64" ]
 then
@@ -439,8 +442,8 @@ cicd () {
     echo "Build Version: $version"
     echo "Files in ./art: $(ls -lht ${art})"
 
-    # cicd_gen_local_ixia_c_artifacts \
-    # && cicd_gen_tests_artifacts
+    cicd_gen_local_ixia_c_artifacts \
+    && cicd_gen_tests_artifacts
 
     # # pipeline wait for testbed to be unlocked for sanity
     # cicd_wait_for_testbed_to_unlock \
