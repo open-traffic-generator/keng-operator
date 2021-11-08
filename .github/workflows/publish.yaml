@@ -29,6 +29,7 @@ jobs:
 
       
       - name: Cleaning-Up Testbed
+        if: always()
         run: |
           sudo chmod u+x ./do.sh
           sudo TESTBED=${{ secrets.TESTBED }} TESTBED_PASSWORD=${{ secrets.TESTBED_PASSWORD }} TESTBED_USERNAME=${{ secrets.TESTBED_USERNAME }} ./do.sh unlock
