@@ -9,6 +9,10 @@ jobs:
       max-parallel: 1
 
     steps:
+
+      - name: Give Permission
+        run: |
+          sudo chown -R $USER:$USER /home/github/actions-runner/_work/{ixia_c_operator}
       
       - name: Checkout
         uses: actions/checkout@v2
