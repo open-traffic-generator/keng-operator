@@ -310,7 +310,7 @@ def ixia_c_services_ok(namespace, exp_services=[]):
     wait_for(
         lambda: svcs_count_ok(exp_svc_count, namespace),
         'services count to be as expected',
-        timeout_seconds=30
+        timeout_seconds=120
     )
 
     print("[Namespace:{}]Verifying individual services in KNE topology".format(
