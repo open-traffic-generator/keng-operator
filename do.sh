@@ -431,7 +431,7 @@ cicd () {
     art=./art
     mkdir -p ${art}
 
-    cicd_install_deps \
+    install_deps \
     && gen_ixia_c_op_dep_yaml \
     && get_docker_build \
     && gen_operator_artifacts ${art}
@@ -439,18 +439,18 @@ cicd () {
     echo "Build Version: $version"
     echo "Files in ./art: $(ls -lht ${art})"
 
-    cicd_gen_local_ixia_c_artifacts \
-    && cicd_gen_tests_artifacts
+    # cicd_gen_local_ixia_c_artifacts \
+    # && cicd_gen_tests_artifacts
 
-    # pipeline wait for testbed to be unlocked for sanity
-    cicd_wait_for_testbed_to_unlock \
-    && cicd_run_sanity ${art} ${version}
+    # # pipeline wait for testbed to be unlocked for sanity
+    # cicd_wait_for_testbed_to_unlock \
+    # && cicd_run_sanity ${art} ${version}
 
-    if [ ${CI_COMMIT_REF_NAME} = "main" ]
-    then 
-        cicd_publish_to_docker_repo ${version}
-        cicd_publish_to_generic_repo ${art} ${version}
-    fi
+    # if [ ${CI_COMMIT_REF_NAME} = "main" ]
+    # then 
+    #     cicd_publish_to_docker_repo ${version}
+    #     cicd_publish_to_generic_repo ${art} ${version}
+    # fi
     docker rmi -f ${IXIA_C_OPERATOR_IMAGE}:${version} 2> /dev/null || true
 }
 
