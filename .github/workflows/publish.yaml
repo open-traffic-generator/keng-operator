@@ -1,0 +1,28 @@
+name: Build
+
+on: [push, pull_request, workflow_dispatch, repository_dispatch]
+
+jobs:
+  cicd:
+    runs-on: [self-hosted, Linux, Ubuntu, X64, Operator]
+    strategy:
+      max-parallel: 1
+
+    steps:
+      - name: Setup Docker
+        uses: docker-practice/actions-setup-docker@master
+      
+      - name: Checkout
+        uses: actions/checkout@v2
+      
+      - name: Building Docker Image
+        run: |
+          sudo chmod u+x ./do.sh
+          sudo ./do.sh cicd
+      # - name: Publishing & Verifying Docker Image
+      #   env:
+      #     DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
+      #     DOCKER_HUB_ACCESS_TOKEN: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+      #   run: |
+      #     sudo chmod u+x ./docker-publish.sh
+      #     sudo ./docker-publish.sh publish ${DOCKER_HUB_USERNAME} ${DOCKER_HUB_ACCESS_TOKEN}
