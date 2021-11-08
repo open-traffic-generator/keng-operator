@@ -39,7 +39,8 @@ APPROX_SANITY_TIME=1200
 TESTBED_CICD_DIR=operator_cicd
 
 ARTIFACTORY_DOCKER_REPO=docker-local-athena.artifactory.it.keysight.com
-EXPECTED_SANITY_PASS_RATE=100
+
+art=./art
 
 # get installers based on host architecture
 if [ "$(arch)" = "aarch64" ] || [ "$(arch)" = "arm64" ]
@@ -79,20 +80,13 @@ get_go_deps() {
 }
 
 get_new_version() {
-    # output of git describe
-    # tag1-1-gb772e8b
-    # ^    ^  ^
-    # |    |  |
-    # |    |  git hash of the commit
-    # |    |
-    # |   number of commits after the tag
-    # |
-    # |
-    # Most recent tag
-    version=$(git describe --tags 2> /dev/null || echo v0.0.1-1-$(git rev-parse --short HEAD))
-    BUILD_VERSION=$(echo $version | cut -d- -f1 | cut -dv -f2)
-    BUILD_REVISION=$(echo $version | cut -d- -f2)
-    BUILD_COMMIT_HASH=$(echo $version | cut -d- -f3 | sed -e "s/^g//g")
+    version=$(head ./version | cut -d' ' -f1)
+    echo ${version}
+}
+
+echo_version() {
+    version=$(head ./version | cut -d' ' -f1)
+    echo "gRPC version : ${version}"
 }
 
 echo_version() {
@@ -123,11 +117,6 @@ gen_ixia_c_op_dep_yaml() {
     make yaml
 }
 
-cicd_is_dev_branch() {
-    echo "Current ref: ${CI_COMMIT_REF_NAME}"
-    echo "${CI_COMMIT_REF_NAME}" | grep --color=no -E "^dev-"
-}
-
 cicd_publishing_docker_images() {
     for var in "$@"
     do
@@ -142,8 +131,7 @@ cicd_publishing_docker_images() {
 
 cicd_publish_to_docker_repo() {
     version=${1}
-    # don't post images when on dev-* branch
-    cicd_is_dev_branch && return 0
+
     echo "Publishing ixia-c-operator images to artifactory docker repo ..."
     op="${ARTIFACTORY_DOCKER_REPO}/${IXIA_C_OPERATOR_IMAGE}:${version}"
     op_latest="${ARTIFACTORY_DOCKER_REPO}/${IXIA_C_OPERATOR_IMAGE}:latest"
@@ -179,9 +167,6 @@ cicd_publish_to_generic_repo() {
     art=${1}
     version=${2}
     targetfolder="external"
-
-    # don't post images when on dev-* branch
-    cicd_is_dev_branch && return 0;
 
     echo "Publishing ixia-c-operator artifacts to generic repo ..."
     target="https://artifactory.it.keysight.com/artifactory/generic-local-athena/${targetfolder}/operator/${version}"
@@ -411,8 +396,8 @@ cicd_gen_tests_artifacts() {
     echo "Generating Ixia-C-Operator test artifacts ..."
     tests_art=./tests_art
     mkdir -p ${tests_art}
-    tar -zcvf ${tests_art}/operator-tests.tar.gz ./operator-tests
-    cp ./operator-tests/helper/* ${tests_art}/
+    tar -zcvf ${tests_art}/operator-tests.tar.gz ./ixia-c-operator-tests
+    cp ./ixia-c-operator-tests/helper/* ${tests_art}/
 
     cat ${tests_art}/template-ixia-configmap.yaml | \
         sed "s/IXIA_C_CONTROLLER_VERSION/${IXIA_C_CONTROLLER}/g" | \
@@ -430,10 +415,8 @@ cicd_gen_tests_artifacts() {
     echo "Files in ./tests_art: $(ls -lht ${tests_art})"
 }
 
-cicd () {
-    art=./art
+cicd_build() {
     mkdir -p ${art}
-
     install_deps \
     && gen_ixia_c_op_dep_yaml \
     && get_docker_build \
@@ -441,19 +424,20 @@ cicd () {
     version=$(echo_version)
     echo "Build Version: $version"
     echo "Files in ./art: $(ls -lht ${art})"
+}
 
-    cicd_gen_local_ixia_c_artifacts \
-    && cicd_gen_tests_artifacts
+cicd_test() {
+    cicd_wait_for_testbed_to_unlock \
+    && cicd_run_sanity ${art} ${version}
 
-    # # pipeline wait for testbed to be unlocked for sanity
-    # cicd_wait_for_testbed_to_unlock \
-    # && cicd_run_sanity ${art} ${version}
+    BRANCH=$(git rev-parse --abbrev-ref HEAD)
 
-    # if [ ${CI_COMMIT_REF_NAME} = "main" ]
-    # then 
-    #     cicd_publish_to_docker_repo ${version}
-    #     cicd_publish_to_generic_repo ${art} ${version}
-    # fi
+    if [ ${BRANCH} = "main" ]
+    then 
+        cicd_publish_to_docker_repo ${version}
+        cicd_publish_to_generic_repo ${art} ${version}
+    fi
+
     docker rmi -f ${IXIA_C_OPERATOR_IMAGE}:${version} 2> /dev/null || true
 }
 
@@ -503,8 +487,11 @@ case $1 in
     yaml   )
         gen_ixia_c_op_dep_yaml
         ;;
-    cicd   )
-        cicd
+    cicd_build   )
+        cicd_build
+        ;;
+    cicd_test   )
+        cicd_test
         ;;
     version   )
         echo_version

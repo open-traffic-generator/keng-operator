@@ -17,14 +17,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
       
-      - name: Building Docker Image
+      - name: Building Artifacts
         run: |
           sudo chmod u+x ./do.sh
-          sudo ./do.sh cicd
-      # - name: Publishing & Verifying Docker Image
-      #   env:
-      #     DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
-      #     DOCKER_HUB_ACCESS_TOKEN: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
-      #   run: |
-      #     sudo chmod u+x ./docker-publish.sh
-      #     sudo ./docker-publish.sh publish ${DOCKER_HUB_USERNAME} ${DOCKER_HUB_ACCESS_TOKEN}
+          sudo ./do.sh cicd_build
+
+      - name: Running Sanity & Publishing Artifacts
+        run: |
+          sudo chmod u+x ./do.sh
+          sudo ARTIFACTORY_KEY=${{ secrets.ARTIFACTORY_KEY }} ARTIFACTORY_USER=${{ secrets.ARTIFACTORY_USER }} EXPECTED_SANITY_PASS_RATE=${{ secrets.EXPECTED_SANITY_PASS_RATE }} TESTBED=${{ secrets.TESTBED }} TESTBED_PASSWORD=${{ secrets.TESTBED_PASSWORD }} TESTBED_USERNAME=${{ secrets.TESTBED_USERNAME }} ./do.sh cicd_test
+
+      
+      - name: Cleaning-Up Testbed
+        run: |
+          sudo chmod u+x ./do.sh
+          sudo TESTBED=${{ secrets.TESTBED }} TESTBED_PASSWORD=${{ secrets.TESTBED_PASSWORD }} TESTBED_USERNAME=${{ secrets.TESTBED_USERNAME }} ./do.sh unlock
