@@ -15,8 +15,8 @@ jobs:
       
       - name: Building Docker Image
         run: |
-          chmod u+x ./do.sh
-          ./do.sh cicd
+          sudo chmod u+x ./do.sh
+          sudo ./do.sh cicd
       # - name: Publishing & Verifying Docker Image
       #   env:
       #     DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
