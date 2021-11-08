@@ -349,7 +349,8 @@ cicd_check_sanity_status() {
         SANITY_STATUS=PASS
     fi
     echo "Sanity expected pass rate : ${EXPECTED_SANITY_PASS_RATE}"
-    if [ ${SANITY_STATUS} == PASS ]
+    echo "Sanity Status : ${SANITY_STATUS}"
+    if [ ${SANITY_STATUS} = PASS ]
     then
         echo "sanity : pass"
     else 
