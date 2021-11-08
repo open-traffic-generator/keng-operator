@@ -58,7 +58,7 @@ install_deps() {
     echo "Installing Dependencies ..."
     apt-get update \
 	&& apt-get -y install --no-install-recommends apt-utils dialog 2>&1 \
-    && apt-get -y install curl git ssh vim unzip tar \
+    && apt-get -y install curl git openssh vim unzip tar make bash wget sshpass \
     && get_go \
     && get_go_deps
 }
