@@ -120,6 +120,7 @@ cicd_publish_artifacts() {
     else
         echo "${img} does not exist..."
         cicd_push_dockerhub_image ${img}
+        cicd_verify_dockerhub_images ${img}
         cicd_publish_to_docker_repo ${version}
         cicd_publish_to_generic_repo ${art} ${version}
     fi
@@ -148,11 +149,11 @@ cicd_publish_to_docker_repo() {
 
     docker rmi -f $op $op_latest 2> /dev/null || true
     echo "Created docker images has been deleted from runner"
-    cicd_verify_dockerhub_images ${op} ${op_latest}
+    cicd_verify_docker_repo_images ${op} ${op_latest}
 }
 
 
-cicd_verify_dockerhub_images() {
+cicd_verify_docker_repo_images() {
     echo "Verfying posted images in ${ARTIFACTORY_DOCKER_REPO}"
     for var in "$@"
     do
@@ -453,7 +454,7 @@ cicd_push_dockerhub_image() {
     && docker rmi "${DOCKERHUB_REPO}/${img}" > /dev/null 2>&1 || true
 }
 
-cicd_verify_dockerhub_image() {
+cicd_verify_dockerhub_images() {
     for var in "$@"
     do
         img=${var}
