@@ -112,6 +112,19 @@ gen_ixia_c_op_dep_yaml() {
     make yaml
 }
 
+cicd_publish_artifacts() {
+    version=${1}
+    img="${IXIA_C_OPERATOR_IMAGE}:${version}"
+    if cicd_dockerhub_image_exists ${img}; then
+        echo "${img} already exists..."
+    else
+        echo "${img} does not exist..."
+        cicd_push_dockerhub_image ${img}
+        cicd_publish_to_docker_repo ${version}
+        cicd_publish_to_generic_repo ${art} ${version}
+    fi
+}
+
 cicd_publishing_docker_images() {
     for var in "$@"
     do
@@ -125,10 +138,9 @@ cicd_publishing_docker_images() {
 }
 
 cicd_publish_to_docker_repo() {
-    version=${1}
-
+    img=${1}
     echo "Publishing ixia-c-operator images to artifactory docker repo ..."
-    op="${ARTIFACTORY_DOCKER_REPO}/${IXIA_C_OPERATOR_IMAGE}:${version}"
+    op="${ARTIFACTORY_DOCKER_REPO}/${img}"
     op_latest="${ARTIFACTORY_DOCKER_REPO}/${IXIA_C_OPERATOR_IMAGE}:latest"
     docker tag ${IXIA_C_OPERATOR_IMAGE}:${version} ${op} \
     && docker tag ${op} ${op_latest} \
@@ -422,6 +434,43 @@ cicd_build() {
     echo "Files in ./art: $(ls -lht ${art})"
 }
 
+cicd_dockerhub_image_exists() {
+    img=${1}
+    if DOCKER_CLI_EXPERIMENTAL=enabled docker manifest inspect ${DOCKERHUB_REPO}/${img} >/dev/null; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+cicd_push_dockerhub_image() {
+    img=${1}
+    docker tag ${img} ${DOCKERHUB_REPO}/${img}
+    docker login -p ${DOCKERHUB_KEY} -u ${DOCKERHUB_USER} \
+    && docker push "${DOCKERHUB_REPO}/${img}" \
+    && docker logout ${DOCKERHUB_USER} \
+    && echo "${img} pushed in Docker Hub" \
+    && docker rmi "${DOCKERHUB_REPO}/${img}" > /dev/null 2>&1 || true
+}
+
+cicd_verify_dockerhub_image() {
+    for var in "$@"
+    do
+        img=${var}
+        dockerhub_image=${DOCKERHUB_REPO}/${img}
+        echo "pulling ${dockerhub_image} from Docker Hub"
+        docker pull $dockerhub_image
+        if docker image inspect ${dockerhub_image} >/dev/null 2>&1; then
+            echo "${dockerhub_image} pulled successfully from Docker Hub"
+            docker rmi $dockerhub_image > /dev/null 2>&1 || true
+        else
+            echo "${dockerhub_image} not found locally!!!"
+            docker rmi $dockerhub_image > /dev/null 2>&1 || true
+            exit 1
+        fi
+    done
+}
+
 cicd_test() {
 
     cicd_gen_local_ixia_c_artifacts \
@@ -435,8 +484,7 @@ cicd_test() {
 
     if [ ${BRANCH} = "main" ]
     then 
-        cicd_publish_to_docker_repo ${version}
-        cicd_publish_to_generic_repo ${art} ${version}
+        cicd_publish_artifacts ${version}
     fi
 
     docker rmi -f ${IXIA_C_OPERATOR_IMAGE}:${version} 2> /dev/null || true
