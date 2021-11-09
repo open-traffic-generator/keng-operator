@@ -95,7 +95,7 @@ def create_kne_config(config_name, namespace):
     wait_for(
         lambda: topology_deleted(namespace),
         'ensured topology does not exists',
-        timeout_seconds=30
+        timeout_seconds=120
     )
     cmd = "docker exec -t {} ./kne_cli create ./{}".format(
         KIND_SINGLE_NODE_NAME,
@@ -310,7 +310,7 @@ def ixia_c_services_ok(namespace, exp_services=[]):
     wait_for(
         lambda: svcs_count_ok(exp_svc_count, namespace),
         'services count to be as expected',
-        timeout_seconds=120
+        timeout_seconds=300
     )
 
     print("[Namespace:{}]Verifying individual services in KNE topology".format(
