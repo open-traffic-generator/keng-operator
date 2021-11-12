@@ -34,7 +34,7 @@ jobs:
 
       - name: Print Branch
         run: |
-          echo ${steps.get_branch.outputs.branch}
+          echo ${{ steps.get_branch.outputs.branch }}
 
       - name: Get Version
         id: get_version
