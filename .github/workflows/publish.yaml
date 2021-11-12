@@ -17,15 +17,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
       
-      - name: Building Artifacts
-        run: |
-          sudo chmod u+x ./do.sh
-          sudo ./do.sh cicd_build
+      # - name: Building Artifacts
+      #   run: |
+      #     sudo chmod u+x ./do.sh
+      #     sudo ./do.sh cicd_build
 
-      - name: Running Sanity
-        run: |
-          sudo chmod u+x ./do.sh
-          sudo EXPECTED_SANITY_PASS_RATE=${{ secrets.EXPECTED_SANITY_PASS_RATE }} TESTBED=${{ secrets.TESTBED }} TESTBED_PASSWORD=${{ secrets.TESTBED_PASSWORD }} TESTBED_USERNAME=${{ secrets.TESTBED_USERNAME }} ./do.sh cicd_test
+      # - name: Running Sanity
+      #   run: |
+      #     sudo chmod u+x ./do.sh
+      #     sudo EXPECTED_SANITY_PASS_RATE=${{ secrets.EXPECTED_SANITY_PASS_RATE }} TESTBED=${{ secrets.TESTBED }} TESTBED_PASSWORD=${{ secrets.TESTBED_PASSWORD }} TESTBED_USERNAME=${{ secrets.TESTBED_USERNAME }} ./do.sh cicd_test
       
       - name: Get Branch
         id: get_branch
@@ -45,22 +45,22 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Publishing Artifacts
-        if: steps.check_tag.outputs.exists == 'false' && steps.get_branch.outputs.branch == 'main'
-        run: |
-          sudo chmod u+x ./do.sh
-          sudo DOCKERHUB_KEY=${{ secrets.DOCKERHUB_KEY }} DOCKERHUB_REPO=${{ secrets.DOCKERHUB_REPO }} DOCKERHUB_USER=${{ secrets.DOCKERHUB_USER }} ./do.sh cicd_publish
+      # - name: Publishing Artifacts
+      #   if: steps.check_tag.outputs.exists == 'false' && steps.get_branch.outputs.branch == 'main'
+      #   run: |
+      #     sudo chmod u+x ./do.sh
+      #     sudo DOCKERHUB_KEY=${{ secrets.DOCKERHUB_KEY }} DOCKERHUB_REPO=${{ secrets.DOCKERHUB_REPO }} DOCKERHUB_USER=${{ secrets.DOCKERHUB_USER }} ./do.sh cicd_publish
       
       - name: Create Release
         if: steps.check_tag.outputs.exists == 'false' && steps.get_branch.outputs.branch == 'main'
         uses: ncipollo/release-action@v1
         with:
-          artifacts: "release/*"
+          artifacts: "ixia.yaml"
           tag: ${{ steps.get_version.outputs.version }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Cleaning-Up Testbed
-        if: always()
-        run: |
-          sudo chmod u+x ./do.sh
-          sudo TESTBED=${{ secrets.TESTBED }} TESTBED_PASSWORD=${{ secrets.TESTBED_PASSWORD }} TESTBED_USERNAME=${{ secrets.TESTBED_USERNAME }} ./do.sh unlock
+      # - name: Cleaning-Up Testbed
+      #   if: always()
+      #   run: |
+      #     sudo chmod u+x ./do.sh
+      #     sudo TESTBED=${{ secrets.TESTBED }} TESTBED_PASSWORD=${{ secrets.TESTBED_PASSWORD }} TESTBED_USERNAME=${{ secrets.TESTBED_USERNAME }} ./do.sh unlock
