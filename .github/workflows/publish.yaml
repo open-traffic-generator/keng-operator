@@ -25,7 +25,7 @@ jobs:
       - name: Running Sanity & Publishing Artifacts
         run: |
           sudo chmod u+x ./do.sh
-          sudo ARTIFACTORY_KEY=${{ secrets.ARTIFACTORY_KEY }} ARTIFACTORY_USER=${{ secrets.ARTIFACTORY_USER }} EXPECTED_SANITY_PASS_RATE=${{ secrets.EXPECTED_SANITY_PASS_RATE }} TESTBED=${{ secrets.TESTBED }} TESTBED_PASSWORD=${{ secrets.TESTBED_PASSWORD }} TESTBED_USERNAME=${{ secrets.TESTBED_USERNAME }} DOCKERHUB_KEY=${{ secrets.DOCKERHUB_KEY }} DOCKERHUB_REPO=${{ secrets.DOCKERHUB_REPO }} DOCKERHUB_USER=${{ secrets.DOCKERHUB_USER }} ./do.sh cicd_test
+          sudo EXPECTED_SANITY_PASS_RATE=${{ secrets.EXPECTED_SANITY_PASS_RATE }} TESTBED=${{ secrets.TESTBED }} TESTBED_PASSWORD=${{ secrets.TESTBED_PASSWORD }} TESTBED_USERNAME=${{ secrets.TESTBED_USERNAME }} DOCKERHUB_KEY=${{ secrets.DOCKERHUB_KEY }} DOCKERHUB_REPO=${{ secrets.DOCKERHUB_REPO }} DOCKERHUB_USER=${{ secrets.DOCKERHUB_USER }} ./do.sh cicd_test
 
       
       - name: Cleaning-Up Testbed

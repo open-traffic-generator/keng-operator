@@ -39,7 +39,6 @@ APPROX_SANITY_TIME=1200
 TESTBED_CICD_DIR=operator_cicd
 
 ARTIFACTORY_DOCKER_REPO=docker-local-athena.artifactory.it.keysight.com
-
 art=./art
 
 # get installers based on host architecture
@@ -121,69 +120,7 @@ cicd_publish_artifacts() {
         echo "${img} does not exist..."
         cicd_push_dockerhub_image ${img}
         cicd_verify_dockerhub_images ${img}
-        cicd_publish_to_docker_repo ${version}
-        cicd_publish_to_generic_repo ${art} ${version}
     fi
-}
-
-cicd_publishing_docker_images() {
-    for var in "$@"
-    do
-        image=${var}
-        echo "Publishing ${image}..."
-        docker login -p ${ARTIFACTORY_KEY} -u ${ARTIFACTORY_USER} ${ARTIFACTORY_DOCKER_REPO} \
-        && docker push ${image} \
-        && docker logout ${ARTIFACTORY_DOCKER_REPO}
-        echo "${image} Published"
-    done
-}
-
-cicd_publish_to_docker_repo() {
-    img=${1}
-    echo "Publishing ixia-c-operator images to artifactory docker repo ..."
-    op="${ARTIFACTORY_DOCKER_REPO}/${img}"
-    op_latest="${ARTIFACTORY_DOCKER_REPO}/${IXIA_C_OPERATOR_IMAGE}:latest"
-    docker tag ${IXIA_C_OPERATOR_IMAGE}:${version} ${op} \
-    && docker tag ${op} ${op_latest} \
-    && cicd_publishing_docker_images ${op} ${op_latest}
-
-    docker rmi -f $op $op_latest 2> /dev/null || true
-    echo "Created docker images has been deleted from runner"
-    cicd_verify_docker_repo_images ${op} ${op_latest}
-}
-
-
-cicd_verify_docker_repo_images() {
-    echo "Verfying posted images in ${ARTIFACTORY_DOCKER_REPO}"
-    for var in "$@"
-    do
-        image=${var}
-        echo "pulling ${image} from ${ARTIFACTORY_DOCKER_REPO}"
-        docker pull ${image}
-        if docker image inspect ${image} >/dev/null 2>&1; then
-            echo "${image} pulled successfully from ${ARTIFACTORY_DOCKER_REPO}"
-            docker rmi -f $image 2> /dev/null 2> /dev/null || true
-        else
-            echo "${image} not found locally!!!"
-            docker rmi -f $image 2> /dev/null 2> /dev/null || true
-            exit 1
-        fi
-    done
-}
-
-cicd_publish_to_generic_repo() {
-    art=${1}
-    version=${2}
-    targetfolder="external"
-
-    echo "Publishing ixia-c-operator artifacts to generic repo ..."
-    target="https://artifactory.it.keysight.com/artifactory/generic-local-athena/${targetfolder}/operator/${version}"
-   
-    for filename in ${art}/*
-    do
-        # return immediately curl fails
-        curl -H "X-JFrog-Art-Api:${ARTIFACTORY_KEY}" -T ${filename} "${target}/$(basename ${filename})" || return 1
-    done
 }
 
 gen_operator_artifacts() {
