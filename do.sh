@@ -40,6 +40,7 @@ TESTBED_CICD_DIR=operator_cicd
 
 ARTIFACTORY_DOCKER_REPO=docker-local-athena.artifactory.it.keysight.com
 art=./art
+release=./release
 
 # get installers based on host architecture
 if [ "$(arch)" = "aarch64" ] || [ "$(arch)" = "arm64" ]
@@ -105,14 +106,19 @@ get_docker_build() {
 
 gen_ixia_c_op_dep_yaml() {
     # Generating ixia-c-operator deployment yaml using Makefile
+    img=${1}
     echo "Generating ixia-c-operator deployment yaml ..."
     export VERSION=$(get_version)
-    export IMAGE_TAG_BASE=${IXIA_C_OPERATOR_IMAGE}
+    export IMAGE_TAG_BASE=${img}
     make yaml
 }
 
-cicd_publish_artifacts() {
-    version=${1}
+get_branch() {
+    echo $(git rev-parse --abbrev-ref HEAD)
+}
+
+cicd_publish() {
+    version=$(get_version)
     img="${IXIA_C_OPERATOR_IMAGE}:${version}"
     if cicd_dockerhub_image_exists ${img}; then
         echo "${img} already exists..."
@@ -120,7 +126,17 @@ cicd_publish_artifacts() {
         echo "${img} does not exist..."
         cicd_push_dockerhub_image ${img}
         cicd_verify_dockerhub_images ${img}
+        gen_release_art
     fi
+}
+
+cicd_gen_release_art() {
+    mkdir -p ${release}
+    rm -rf ./ixiatg-operator.yaml
+    rm -rf ${release}/*.yaml
+    gen_ixia_c_op_dep_yaml "${DOCKERHUB_REPO}/${IXIA_C_OPERATOR_IMAGE}"
+    mv ./ixiatg-operator.yaml ${release}/
+     echo "Files in ./release: $(ls -lht ${release})"
 }
 
 gen_operator_artifacts() {
@@ -364,7 +380,7 @@ cicd_gen_tests_artifacts() {
 cicd_build() {
     mkdir -p ${art}
     install_deps \
-    && gen_ixia_c_op_dep_yaml \
+    && gen_ixia_c_op_dep_yaml ${IXIA_C_OPERATOR_IMAGE} \
     && get_docker_build \
     && gen_operator_artifacts ${art}
     version=$(get_version)
@@ -410,22 +426,12 @@ cicd_verify_dockerhub_images() {
 }
 
 cicd_test() {
-
     cicd_gen_local_ixia_c_artifacts \
     && cicd_gen_tests_artifacts
 
     version=$(get_version)
     cicd_wait_for_testbed_to_unlock \
     && cicd_run_sanity ${art} ${version}
-
-    BRANCH=$(git rev-parse --abbrev-ref HEAD)
-
-    if [ ${BRANCH} = "main" ]
-    then 
-        cicd_publish_artifacts ${version}
-    fi
-
-    docker rmi -f ${IXIA_C_OPERATOR_IMAGE}:${version} 2> /dev/null || true
 }
 
 
@@ -456,6 +462,7 @@ remove_testbed_lock_status() {
 
 unlock_testbed(){
     echo "unlocking testbed..."
+    docker rmi -f ${IXIA_C_OPERATOR_IMAGE}:${version} 2> /dev/null || true
     remove_cicd_folder_from_testbed
     remove_testbed_lock_status
     echo "testbed unlocked"
@@ -472,13 +479,16 @@ case $1 in
         get_docker_build
         ;;
     yaml   )
-        gen_ixia_c_op_dep_yaml
+        gen_ixia_c_op_dep_yaml ${IXIA_C_OPERATOR_IMAGE}
         ;;
     cicd_build   )
         cicd_build
         ;;
     cicd_test   )
         cicd_test
+        ;;
+    cicd_publish    )
+        cicd_publish
         ;;
     version   )
         echo_version
@@ -487,6 +497,6 @@ case $1 in
         unlock_testbed
         ;;
 	*		)
-        $1 || echo "usage: $0 [deps|local|docker|yaml|cicd|version]"
+        $1 || echo "usage: $0 [deps|local|docker|yaml|version]"
 		;;
 esac
