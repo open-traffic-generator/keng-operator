@@ -52,7 +52,7 @@ jobs:
       #     sudo DOCKERHUB_KEY=${{ secrets.DOCKERHUB_KEY }} DOCKERHUB_REPO=${{ secrets.DOCKERHUB_REPO }} DOCKERHUB_USER=${{ secrets.DOCKERHUB_USER }} ./do.sh cicd_publish
       
       - name: Create Release
-        if: steps.check_tag.outputs.exists == 'false' && steps.get_branch.outputs.branch == 'main'
+        if: steps.check_tag.outputs.exists == 'false' && steps.get_branch.outputs.branch != 'main'
         uses: ncipollo/release-action@v1
         with:
           artifacts: "ixia.yaml"
