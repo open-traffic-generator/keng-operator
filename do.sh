@@ -7,10 +7,6 @@ GO_VERSION=1.16.5
 # Avoid warnings for non-interactive apt-get install
 export DEBIAN_FRONTEND=noninteractive
 
-# these will be filled by get_version()
-BUILD_VERSION=""
-BUILD_REVISION=""
-BUILD_COMMIT_HASH=""
 
 IXIA_C_OPERATOR_IMAGE=ixia-c-operator
 GO_TARGZ=""
@@ -111,10 +107,6 @@ gen_ixia_c_op_dep_yaml() {
     export VERSION=$(get_version)
     export IMAGE_TAG_BASE=${img}
     make yaml
-}
-
-get_branch() {
-    echo $(git rev-parse --abbrev-ref HEAD)
 }
 
 cicd_publish() {
