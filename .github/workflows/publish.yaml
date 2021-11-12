@@ -32,10 +32,18 @@ jobs:
         run: |
           echo "::set-output name=branch::$(./do.sh get_branch)"
 
+      - name: Print Branch
+        run: |
+          echo ${steps.get_branch.outputs.branch}
+
       - name: Get Version
         id: get_version
         run: |
           echo "::set-output name=version::v$(./do.sh get_version)"
+      
+      - name: Print Version
+        run: |
+          echo ${{ steps.get_version.outputs.version }}
 
       - name: Check tag for current version
         uses: mukunku/tag-exists-action@v1.0.0
@@ -44,6 +52,8 @@ jobs:
           tag: ${{ steps.get_version.outputs.version }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      
 
       # - name: Publishing Artifacts
       #   if: steps.check_tag.outputs.exists == 'false' && steps.get_branch.outputs.branch == 'main'
