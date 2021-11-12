@@ -113,10 +113,6 @@ gen_ixia_c_op_dep_yaml() {
     make yaml
 }
 
-get_branch() {
-    echo $(git rev-parse --abbrev-ref HEAD)
-}
-
 cicd_publish() {
     version=$(get_version)
     img="${IXIA_C_OPERATOR_IMAGE}:${version}"
