@@ -126,7 +126,7 @@ type ixiaConfigMap struct {
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
+// Modify the Reconcile function to compare the state specified by
 // the IxiaTG object against the actual cluster state, and then
 // perform operations to make the cluster state reflect the state specified by
 // the user.
@@ -136,11 +136,10 @@ type ixiaConfigMap struct {
 func (r *IxiaTGReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = r.Log.WithValues("ixiatg", req.NamespacedName)
 
-	// your logic here
 	ixia := &networkv1alpha1.IxiaTG{}
 	err := r.Get(ctx, req.NamespacedName, ixia)
 
-	log.Infof("INSIDE Reconcile: %v, %s", ixia.Name, ixia.Namespace)
+	log.Infof("Reconcile: %v, %s", ixia.Name, ixia.Namespace)
 
 	if err != nil {
 		if errapi.IsNotFound(err) {
@@ -321,7 +320,6 @@ func (r *IxiaTGReconciler) getRelInfo(ctx context.Context, release string) error
 			log.Infof("Failed to read ConfigMap - %v", err)
 		} else {
 			confData := cfgData.Data["versions"]
-			//log.Infof("READ DATA: %v", confData)
 			data = []byte(confData)
 		}
 	}
@@ -484,7 +482,6 @@ func (r *IxiaTGReconciler) deployController(ctx context.Context, ixia *networkv1
 	}
 	for _, p := range podList.Items {
 		if p.ObjectMeta.Name == CONTROLLER_NAME {
-			//scontrollerVersion := ""
 			log.Infof("Controller already deployed for %s", ixia.Name)
 			for _, c := range p.Spec.Containers {
 				if c.Name == CONTROLLER_NAME {
@@ -499,16 +496,6 @@ func (r *IxiaTGReconciler) deployController(ctx context.Context, ixia *networkv1
 			}
 		}
 	}
-
-	/* if len(componentDep) == 0 {
-		// This is also when we load the build it release info file
-		data, err := ioutil.ReadFile("releases.json")
-		if err != nil {
-			log.Infof("Failed to read the release info file: %v", err)
-		} else {
-			r.loadRelInfo(depVersion, &data, true)
-		}
-	} */
 
 	// Deploy controller and services
 	imagePullSecrets := getImgPullSctSecret(secret)
@@ -706,7 +693,6 @@ func (r *IxiaTGReconciler) containersForController(ixia *networkv1alpha1.IxiaTG,
 func (r *IxiaTGReconciler) containersForIxia(ixia *networkv1alpha1.IxiaTG) []corev1.Container {
 	log.Infof("Inside containersForIxia: %v", ixia.Spec.Config)
 
-	//conImage := "gcr.io/kt-nts-athena-dev/athena/traffic-engine:1.2.0.8"
 	conEnvs := getDefaultEnvVar()
 	conSecurityCtx := getDefaultSecurityContext()
 	var containers []corev1.Container
@@ -886,7 +872,6 @@ func createSecret(secret *corev1.Secret, name string, namespace string) (*corev1
 
 func getImgPullSctSecret(secret *corev1.Secret) []corev1.LocalObjectReference {
 	var ips []corev1.LocalObjectReference
-	//ips = append(ips, corev1.LocalObjectReference{Name: string(secret.Data[".dockerconfigjson"][:])})
 	ips = append(ips, corev1.LocalObjectReference{Name: string(SECRET_NAME)})
 	return ips
 }
