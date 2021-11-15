@@ -118,8 +118,8 @@ cicd_publish() {
         echo "${img} does not exist..."
         cicd_push_dockerhub_image ${img}
         cicd_verify_dockerhub_images ${img}
-        gen_release_art
     fi
+    cicd_gen_release_art
 }
 
 cicd_gen_release_art() {
