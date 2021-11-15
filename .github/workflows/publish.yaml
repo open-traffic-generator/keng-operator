@@ -22,12 +22,43 @@ jobs:
           sudo chmod u+x ./do.sh
           sudo ./do.sh cicd_build
 
-      - name: Running Sanity & Publishing Artifacts
+      - name: Running Sanity
         run: |
           sudo chmod u+x ./do.sh
-          sudo ARTIFACTORY_KEY=${{ secrets.ARTIFACTORY_KEY }} ARTIFACTORY_USER=${{ secrets.ARTIFACTORY_USER }} EXPECTED_SANITY_PASS_RATE=${{ secrets.EXPECTED_SANITY_PASS_RATE }} TESTBED=${{ secrets.TESTBED }} TESTBED_PASSWORD=${{ secrets.TESTBED_PASSWORD }} TESTBED_USERNAME=${{ secrets.TESTBED_USERNAME }} DOCKERHUB_KEY=${{ secrets.DOCKERHUB_KEY }} DOCKERHUB_REPO=${{ secrets.DOCKERHUB_REPO }} DOCKERHUB_USER=${{ secrets.DOCKERHUB_USER }} ./do.sh cicd_test
-
+          sudo EXPECTED_SANITY_PASS_RATE=${{ secrets.EXPECTED_SANITY_PASS_RATE }} TESTBED=${{ secrets.TESTBED }} TESTBED_PASSWORD=${{ secrets.TESTBED_PASSWORD }} TESTBED_USERNAME=${{ secrets.TESTBED_USERNAME }} ./do.sh cicd_test
       
+      - name: Get Branch
+        id: get_branch
+        run: |
+          echo "::set-output name=branch::$(git rev-parse --abbrev-ref HEAD)"
+
+      - name: Get Version
+        id: get_version
+        run: |
+          echo "::set-output name=version::v$(head ./version | cut -d' ' -f1)"
+
+      - name: Check tag for current version
+        uses: mukunku/tag-exists-action@v1.0.0
+        id: check_tag
+        with:
+          tag: ${{ steps.get_version.outputs.version }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publishing Artifacts
+        if: steps.check_tag.outputs.exists == 'false' && steps.get_branch.outputs.branch == 'main'
+        run: |
+          sudo chmod u+x ./do.sh
+          sudo DOCKERHUB_KEY=${{ secrets.DOCKERHUB_KEY }} DOCKERHUB_REPO=${{ secrets.DOCKERHUB_REPO }} DOCKERHUB_USER=${{ secrets.DOCKERHUB_USER }} ./do.sh cicd_publish
+      
+      - name: Create Release
+        if: steps.check_tag.outputs.exists == 'false' && steps.get_branch.outputs.branch == 'main'
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: "release/*"
+          tag: ${{ steps.get_version.outputs.version }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Cleaning-Up Testbed
         if: always()
         run: |
