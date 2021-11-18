@@ -11,13 +11,13 @@ export DEBIAN_FRONTEND=noninteractive
 IXIA_C_OPERATOR_IMAGE=ixia-c-operator
 GO_TARGZ=""
 
-IXIA_C_CONTROLLER=0.0.1-2367
-IXIA_C_PROTOCOL_ENGINE=1.00.0.96
+IXIA_C_CONTROLLER=0.0.1-2399
+IXIA_C_PROTOCOL_ENGINE=1.00.0.111
 IXIA_C_TRAFFIC_ENGINE=1.4.0.15
-IXIA_C_GRPC_SERVER=0.6.11
-IXIA_C_GNMI_SERVER=0.6.11
+IXIA_C_GRPC_SERVER=0.6.15
+IXIA_C_GNMI_SERVER=0.6.14
 ARISTA_CEOS_VERSION=4.26.1F
-IXIA_C_TEST_CLIENT=0.0.1-934
+IXIA_C_TEST_CLIENT=0.0.1-963
 
 GCP_DOCKER_REPO=us-central1-docker.pkg.dev/kt-nts-athena-dev/keysight
 
@@ -166,13 +166,13 @@ cicd_gen_local_ixia_c_artifacts() {
     && docker save ${GCP_DOCKER_REPO}/ixia-c-protocol-engine:${IXIA_C_PROTOCOL_ENGINE} | gzip > ${ixia_c_art}/ixia-c-protocol-engine.tar.gz
 
     echo "Downloading ixia-c-grpc-server:${IXIA_C_GRPC_SERVER}"
-    docker pull otgservices/otg-grpc-server:${IXIA_C_GRPC_SERVER} \
-    && docker tag otgservices/otg-grpc-server:${IXIA_C_GRPC_SERVER} ${GCP_DOCKER_REPO}/ixia-c-grpc-server:${IXIA_C_GRPC_SERVER} \
+    docker pull ixiacom/ixia-c-grpc-server:${IXIA_C_GRPC_SERVER} \
+    && docker tag ixiacom/ixia-c-grpc-server:${IXIA_C_GRPC_SERVER} ${GCP_DOCKER_REPO}/ixia-c-grpc-server:${IXIA_C_GRPC_SERVER} \
     && docker save ${GCP_DOCKER_REPO}/ixia-c-grpc-server:${IXIA_C_GRPC_SERVER} | gzip > ${ixia_c_art}/ixia-c-grpc-server.tar.gz
 
     echo "Downloading ixia-c-gnmi-server:${IXIA_C_GNMI_SERVER}"
-    docker pull otgservices/otg-gnmi-server:${IXIA_C_GNMI_SERVER} \
-    && docker tag otgservices/otg-gnmi-server:${IXIA_C_GNMI_SERVER} ${GCP_DOCKER_REPO}/ixia-c-gnmi-server:${IXIA_C_GNMI_SERVER} \
+    docker pull ixiacom/ixia-c-gnmi-server:${IXIA_C_GNMI_SERVER} \
+    && docker tag ixiacom/ixia-c-gnmi-server:${IXIA_C_GNMI_SERVER} ${GCP_DOCKER_REPO}/ixia-c-gnmi-server:${IXIA_C_GNMI_SERVER} \
     && docker save ${GCP_DOCKER_REPO}/ixia-c-gnmi-server:${IXIA_C_GNMI_SERVER} | gzip > ${ixia_c_art}/ixia-c-gnmi-server.tar.gz
 
     echo "Downloading arista-ceos:${ARISTA_CEOS_VERSION}"
