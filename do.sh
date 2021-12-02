@@ -151,8 +151,10 @@ cicd_gen_local_ixia_c_artifacts() {
     && docker save ${GCP_DOCKER_REPO}/ixia-c-controller:${IXIA_C_CONTROLLER} | gzip > ${ixia_c_art}/ixia-c-controller.tar.gz
 
     echo "Downloading ixia-c-test-client:${IXIA_C_TEST_CLIENT}"
-    docker pull ${ARTIFACTORY_DOCKER_REPO}/ixia-c-test-client:${IXIA_C_TEST_CLIENT} \
-    && docker tag ${ARTIFACTORY_DOCKER_REPO}/ixia-c-test-client:${IXIA_C_TEST_CLIENT} ${GCP_DOCKER_REPO}/ixia-c-test-client:${IXIA_C_TEST_CLIENT} \
+    curl -kLO "https://artifactory.it.keysight.com/artifactory/generic-local-athena/builds/${IXIA_C_CONTROLLER}/ixia-c-test-client.tar.gz" \
+    && docker load -i ixia-c-test-client.tar.gz \
+    && rm -rf ixia-c-test-client.tar.gz \
+    && docker tag ixia-c-test-client:${IXIA_C_TEST_CLIENT} ${GCP_DOCKER_REPO}/ixia-c-test-client:${IXIA_C_TEST_CLIENT} \
     && docker save ${GCP_DOCKER_REPO}/ixia-c-test-client:${IXIA_C_TEST_CLIENT} | gzip > ${ixia_c_art}/ixia-c-test-client.tar.gz
 
     echo "Downloading ixia-c-traffic-engine:${IXIA_C_TRAFFIC_ENGINE}"

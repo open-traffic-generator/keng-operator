@@ -88,7 +88,7 @@ def test_rest_double_namespace(ixia_c_release):
         utils.ixia_c_e2e_test_ok(
             namespace2,
             'TestEbgpv4Routes',
-            'arista'
+            'sanity'
         )
 
         print("[Namespace:{}]Deleting KNE topology".format(

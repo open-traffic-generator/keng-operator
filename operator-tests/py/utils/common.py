@@ -446,7 +446,7 @@ def copy_opts_to_testclient():
     else:
         print("opts.json copied to ixia-c-test-client")
 
-def run_e2e_test_from_client(report, testcase=None, tags="arista"):
+def run_e2e_test_from_client(report, testcase=None, tags="sanity"):
     print("Running e2e test case ...")
     if os.path.exists(report):
         os.remove(report)
@@ -486,7 +486,7 @@ def check_e2e_test_status(report):
     return False
 
 
-def ixia_c_e2e_test_ok(namespace, testcase=None, tags="arista"):
+def ixia_c_e2e_test_ok(namespace, testcase=None, tags="sanity"):
     print("[Namespace: {}]Generating local opts.json from template".format(
         namespace
     ))
