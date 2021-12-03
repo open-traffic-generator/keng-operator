@@ -224,7 +224,7 @@ cicd_gen_local_ixia_c_artifacts() {
 
 cicd_exec_on_testbed() {
     cmd=${1}
-    ssh -o StrictHostKeyChecking=no  ${TESTBED_USERNAME}@${TESTBED} "${cmd}"
+    ssh -i ~/.ssh/id_rsa.pub -o StrictHostKeyChecking=no  ${TESTBED_USERNAME}@${TESTBED} "${cmd}"
 }
 
 cicd_create_lock_status_file() {
@@ -292,7 +292,7 @@ cicd_copy_file_to_testbed() {
     for var in "$@"
     do
         echo "pushing ${var} to testbed"
-        scp -o StrictHostKeyChecking=no ${var} ${TESTBED_USERNAME}@${TESTBED}:./${TESTBED_CICD_DIR}/
+        scp -i ~/.ssh/id_rsa.pub -o StrictHostKeyChecking=no ${var} ${TESTBED_USERNAME}@${TESTBED}:./${TESTBED_CICD_DIR}/
         echo "${var} pushed to testbed"
     done
 }
@@ -316,7 +316,7 @@ cicd_copy_results_from_testbed() {
     for var in "$@"
     do
         echo "pulling ${var} from testbed"
-        scp -o StrictHostKeyChecking=no -r ${TESTBED_USERNAME}@${TESTBED}:/home/${TESTBED_USERNAME}/${TESTBED_CICD_DIR}/${var} ${SANITY_REPORTS}/
+        scp -i ~/.ssh/id_rsa.pub -o StrictHostKeyChecking=no -r ${TESTBED_USERNAME}@${TESTBED}:/home/${TESTBED_USERNAME}/${TESTBED_CICD_DIR}/${var} ${SANITY_REPORTS}/
         echo "${var} pulled from testbed"
     done
 }
@@ -457,12 +457,12 @@ cicd_verify_dockerhub_images() {
 }
 
 cicd_test() {
-    cicd_gen_local_ixia_c_artifacts \
-    && cicd_gen_tests_artifacts
+    # cicd_gen_local_ixia_c_artifacts \
+    # && cicd_gen_tests_artifacts
 
     version=$(get_version)
-    cicd_wait_for_testbed_to_unlock \
-    && cicd_run_sanity ${art} ${version}
+    cicd_wait_for_testbed_to_unlock
+    # && cicd_run_sanity ${art} ${version}
 }
 
 
