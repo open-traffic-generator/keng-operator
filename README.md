@@ -54,7 +54,7 @@ Please make sure that the setup meets [Deployment Prerequisites](#deployment-pre
 - **Clone this project**
 
   ```sh
-  https://github.com/open-traffic-generator/ixia-c-operator.git
+  git clone https://github.com/open-traffic-generator/ixia-c-operator.git
   cd ixia-c-operator/
   ```
 
