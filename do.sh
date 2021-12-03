@@ -12,12 +12,12 @@ IXIA_C_OPERATOR_IMAGE=ixia-c-operator
 GO_TARGZ=""
 
 IXIA_C_CONTROLLER=0.0.1-2446
-IXIA_C_PROTOCOL_ENGINE=1.00.0.115
-IXIA_C_TRAFFIC_ENGINE=1.4.0.15
-IXIA_C_GRPC_SERVER=0.6.17
-IXIA_C_GNMI_SERVER=0.6.18
+IXIA_C_PROTOCOL_ENGINE=""
+IXIA_C_TRAFFIC_ENGINE=""
+IXIA_C_GRPC_SERVER=""
+IXIA_C_GNMI_SERVER=""
 ARISTA_CEOS_VERSION=4.26.1F
-IXIA_C_TEST_CLIENT=0.0.1-1057
+IXIA_C_TEST_CLIENT=""
 
 GCP_DOCKER_REPO=us-central1-docker.pkg.dev/kt-nts-athena-dev/keysight
 
@@ -34,7 +34,6 @@ APPROX_SANITY_TIME=1200
 
 TESTBED_CICD_DIR=operator_cicd
 
-ARTIFACTORY_DOCKER_REPO=docker-local-athena.artifactory.it.keysight.com
 art=./art
 release=./release
 
@@ -141,45 +140,83 @@ gen_operator_artifacts() {
     docker save ${IXIA_C_OPERATOR_IMAGE}:${version} | gzip > ${art}/ixia-c-operator.tar.gz
 }
 
+cicd_get_versions_yaml() {
+    echo "Downloading versions.yaml for Ixia-C ${IXIA_C_CONTROLLER}..."
+    curl -kLO "https://${IXIA_C_ARTIFACTORY}/builds/${IXIA_C_CONTROLLER}/versions.yaml"
+}
+
+cicd_get_component_versions() {
+    cicd_get_versions_yaml
+    echo "Getting Coponents versions from versions.yaml..."
+    cat versions.yaml
+    echo ""
+    IXIA_C_PROTOCOL_ENGINE=$(cat versions.yaml | grep "ixia-c-protocol-engine: " | sed -n 's/^\ixia-c-protocol-engine: //p' | tr -d '[:space:]')
+    echo "Ixia-C protocol engine version : ${IXIA_C_PROTOCOL_ENGINE}"
+    IXIA_C_TRAFFIC_ENGINE=$(cat versions.yaml | grep "ixia-c-traffic-engine: " | sed -n 's/^\ixia-c-traffic-engine: //p' | tr -d '[:space:]')
+    echo "Ixia-C traffic engine version : ${IXIA_C_TRAFFIC_ENGINE}"
+    IXIA_C_GRPC_SERVER=$(cat versions.yaml | grep "ixia-c-grpc-server: " | sed -n 's/^\ixia-c-grpc-server: //p' | tr -d '[:space:]')
+    echo "Ixia-C gRPC server version : ${IXIA_C_GRPC_SERVER}"
+    IXIA_C_GNMI_SERVER=$(cat versions.yaml | grep "ixia-c-gnmi-server: " | sed -n 's/^\ixia-c-gnmi-server: //p' | tr -d '[:space:]')
+    echo "Ixia-C gnmi server version : ${IXIA_C_GNMI_SERVER}"
+    echo "Arista ceos version : ${ARISTA_CEOS_VERSION}"
+    rm -rf versions.yaml
+}
+
 cicd_gen_local_ixia_c_artifacts() {
     ixia_c_art=./ixia_c_art
     mkdir -p ${ixia_c_art}
 
+    cicd_get_component_versions
+
     echo "Downloading ixia-c-controller:${IXIA_C_CONTROLLER}"
-    docker pull ${ARTIFACTORY_DOCKER_REPO}/controller:${IXIA_C_CONTROLLER} \
-    && docker tag ${ARTIFACTORY_DOCKER_REPO}/controller:${IXIA_C_CONTROLLER} ${GCP_DOCKER_REPO}/ixia-c-controller:${IXIA_C_CONTROLLER} \
+    docker rmi -f $(docker images | grep 'ixia-c-controller') 2> /dev/null || true
+    curl -kLO "https://${IXIA_C_ARTIFACTORY}/builds/${IXIA_C_CONTROLLER}/ixia-c-controller.tar.gz" \
+    && docker load -i ixia-c-controller.tar.gz \
+    && rm -rf ixia-c-controller.tar.gz \
+    && docker tag ixia-c-controller:${IXIA_C_CONTROLLER} ${GCP_DOCKER_REPO}/ixia-c-controller:${IXIA_C_CONTROLLER} \
     && docker save ${GCP_DOCKER_REPO}/ixia-c-controller:${IXIA_C_CONTROLLER} | gzip > ${ixia_c_art}/ixia-c-controller.tar.gz
 
-    echo "Downloading ixia-c-test-client:${IXIA_C_TEST_CLIENT}"
-    curl -kLO "https://artifactory.it.keysight.com/artifactory/generic-local-athena/builds/${IXIA_C_CONTROLLER}/ixia-c-test-client.tar.gz" \
+    echo "Downloading ixia-c-test-client"
+    docker rmi -f $(docker images | grep 'ixia-c-test-client') 2> /dev/null || true
+    curl -kLO "https://${IXIA_C_ARTIFACTORY}/builds/${IXIA_C_CONTROLLER}/ixia-c-test-client.tar.gz" \
     && docker load -i ixia-c-test-client.tar.gz \
-    && rm -rf ixia-c-test-client.tar.gz \
-    && docker tag ixia-c-test-client:${IXIA_C_TEST_CLIENT} ${GCP_DOCKER_REPO}/ixia-c-test-client:${IXIA_C_TEST_CLIENT} \
+    && rm -rf ixia-c-test-client.tar.gz
+    IXIA_C_TEST_CLIENT=$(docker images "ixia-c-test-client:*" --format '{{.Tag}}')
+    echo "ixia-c-test-client version is ${IXIA_C_TEST_CLIENT}"
+    docker tag ixia-c-test-client:${IXIA_C_TEST_CLIENT} ${GCP_DOCKER_REPO}/ixia-c-test-client:${IXIA_C_TEST_CLIENT} \
     && docker save ${GCP_DOCKER_REPO}/ixia-c-test-client:${IXIA_C_TEST_CLIENT} | gzip > ${ixia_c_art}/ixia-c-test-client.tar.gz
 
     echo "Downloading ixia-c-traffic-engine:${IXIA_C_TRAFFIC_ENGINE}"
-    docker pull docker-local-ixvm-lbj.artifactorylbj.it.keysight.com/athena-traffic-engine:${IXIA_C_TRAFFIC_ENGINE} \
-    && docker tag docker-local-ixvm-lbj.artifactorylbj.it.keysight.com/athena-traffic-engine:${IXIA_C_TRAFFIC_ENGINE} ${GCP_DOCKER_REPO}/ixia-c-traffic-engine:${IXIA_C_TRAFFIC_ENGINE} \
+    docker rmi -f $(docker images | grep 'ixia-c-traffic-engine') 2> /dev/null || true
+    curl -kLO "https://${IXIA_C_ARTIFACTORY}/builds/${IXIA_C_CONTROLLER}/ixia-c-traffic-engine.tar.gz" \
+    && docker load -i ixia-c-traffic-engine.tar.gz \
+    && rm -rf ixia-c-traffic-engine.tar.gz \
+    && docker tag ixia-c-traffic-engine:${IXIA_C_TRAFFIC_ENGINE} ${GCP_DOCKER_REPO}/ixia-c-traffic-engine:${IXIA_C_TRAFFIC_ENGINE} \
     && docker save ${GCP_DOCKER_REPO}/ixia-c-traffic-engine:${IXIA_C_TRAFFIC_ENGINE} | gzip > ${ixia_c_art}/ixia-c-traffic-engine.tar.gz
 
     echo "Downloading ixia-c-protocol-engine:${IXIA_C_PROTOCOL_ENGINE}"
-    docker pull docker-local-nas.artifactorylbj.it.keysight.com/packages_rustic/l23_protocols:${IXIA_C_PROTOCOL_ENGINE} \
-    && docker tag docker-local-nas.artifactorylbj.it.keysight.com/packages_rustic/l23_protocols:${IXIA_C_PROTOCOL_ENGINE} ${GCP_DOCKER_REPO}/ixia-c-protocol-engine:${IXIA_C_PROTOCOL_ENGINE} \
+    docker rmi -f $(docker images | grep 'ixia-c-protocol-engine') 2> /dev/null || true
+    curl -kLO "https://${IXIA_C_ARTIFACTORY}/builds/${IXIA_C_CONTROLLER}/ixia-c-protocol-engine.tar.gz" \
+    && docker load -i ixia-c-protocol-engine.tar.gz \
+    && rm -rf ixia-c-protocol-engine.tar.gz \
+    && docker tag ixia-c-protocol-engine:${IXIA_C_PROTOCOL_ENGINE} ${GCP_DOCKER_REPO}/ixia-c-protocol-engine:${IXIA_C_PROTOCOL_ENGINE} \
     && docker save ${GCP_DOCKER_REPO}/ixia-c-protocol-engine:${IXIA_C_PROTOCOL_ENGINE} | gzip > ${ixia_c_art}/ixia-c-protocol-engine.tar.gz
 
     echo "Downloading ixia-c-grpc-server:${IXIA_C_GRPC_SERVER}"
+    docker rmi -f $(docker images | grep 'ixiacom/ixia-c-grpc-server') 2> /dev/null || true
     docker pull ixiacom/ixia-c-grpc-server:${IXIA_C_GRPC_SERVER} \
     && docker tag ixiacom/ixia-c-grpc-server:${IXIA_C_GRPC_SERVER} ${GCP_DOCKER_REPO}/ixia-c-grpc-server:${IXIA_C_GRPC_SERVER} \
     && docker save ${GCP_DOCKER_REPO}/ixia-c-grpc-server:${IXIA_C_GRPC_SERVER} | gzip > ${ixia_c_art}/ixia-c-grpc-server.tar.gz
 
     echo "Downloading ixia-c-gnmi-server:${IXIA_C_GNMI_SERVER}"
+    docker rmi -f $(docker images | grep 'ixiacom/ixia-c-gnmi-server') 2> /dev/null || true
     docker pull ixiacom/ixia-c-gnmi-server:${IXIA_C_GNMI_SERVER} \
     && docker tag ixiacom/ixia-c-gnmi-server:${IXIA_C_GNMI_SERVER} ${GCP_DOCKER_REPO}/ixia-c-gnmi-server:${IXIA_C_GNMI_SERVER} \
     && docker save ${GCP_DOCKER_REPO}/ixia-c-gnmi-server:${IXIA_C_GNMI_SERVER} | gzip > ${ixia_c_art}/ixia-c-gnmi-server.tar.gz
 
     echo "Downloading arista-ceos:${ARISTA_CEOS_VERSION}"
     cd ${ixia_c_art}
-    curl -kLO "https://artifactory.it.keysight.com/artifactory/generic-local-athena/external/ceos/${ARISTA_CEOS_VERSION}/cEOS64-lab-${ARISTA_CEOS_VERSION}.tar"
+    curl -kLO "https://${IXIA_C_ARTIFACTORY}/external/ceos/${ARISTA_CEOS_VERSION}/cEOS64-lab-${ARISTA_CEOS_VERSION}.tar"
     cd ..
 
     echo "Files in ./ixia_c_art: $(ls -lht ${ixia_c_art})"
@@ -187,7 +224,7 @@ cicd_gen_local_ixia_c_artifacts() {
 
 cicd_exec_on_testbed() {
     cmd=${1}
-    sshpass -p ${TESTBED_PASSWORD} ssh -o StrictHostKeyChecking=no  ${TESTBED_USERNAME}@${TESTBED} "${cmd}"
+    ssh -o StrictHostKeyChecking=no  ${TESTBED_USERNAME}@${TESTBED} "${cmd}"
 }
 
 cicd_create_lock_status_file() {
@@ -255,7 +292,7 @@ cicd_copy_file_to_testbed() {
     for var in "$@"
     do
         echo "pushing ${var} to testbed"
-        sshpass -p ${TESTBED_PASSWORD} scp -o StrictHostKeyChecking=no ${var} ${TESTBED_USERNAME}@${TESTBED}:./${TESTBED_CICD_DIR}/
+        scp -o StrictHostKeyChecking=no ${var} ${TESTBED_USERNAME}@${TESTBED}:./${TESTBED_CICD_DIR}/
         echo "${var} pushed to testbed"
     done
 }
@@ -271,7 +308,7 @@ cicd_run_sanity_in_testbed() {
     version=${1}
     echo "sanity run in testbed: starting"
     sanity_run_cmd="python3 operator_cicd.py --test -build ${version} -mark sanity -ixia_c_release ${IXIA_C_CONTROLLER}"
-    cicd_exec_on_testbed "cd ./${TESTBED_CICD_DIR} && sudo -S <<< ${TESTBED_PASSWORD} ${sanity_run_cmd}"
+    cicd_exec_on_testbed "cd ./${TESTBED_CICD_DIR} && sudo ${sanity_run_cmd}"
     echo "sanity run in testbed: done"
 }
 
@@ -279,7 +316,7 @@ cicd_copy_results_from_testbed() {
     for var in "$@"
     do
         echo "pulling ${var} from testbed"
-        sshpass -p ${TESTBED_PASSWORD} scp -o StrictHostKeyChecking=no -r ${TESTBED_USERNAME}@${TESTBED}:/home/${TESTBED_USERNAME}/${TESTBED_CICD_DIR}/${var} ${SANITY_REPORTS}/
+        scp -o StrictHostKeyChecking=no -r ${TESTBED_USERNAME}@${TESTBED}:/home/${TESTBED_USERNAME}/${TESTBED_CICD_DIR}/${var} ${SANITY_REPORTS}/
         echo "${var} pulled from testbed"
     done
 }
@@ -292,8 +329,8 @@ cicd_pull_results_from_testbed() {
 
 cicd_cleanup_in_testbed() {
     echo "clean up in testbed: starting"
-    cicd_exec_on_testbed "cd ${TESTBED_CICD_DIR} && sudo -S <<< ${TESTBED_PASSWORD} python3 operator_cicd.py --clean"
-    cicd_exec_on_testbed "cd ${TESTBED_CICD_DIR} && sudo -S <<< ${TESTBED_PASSWORD} rm operator_cicd.py"
+    cicd_exec_on_testbed "cd ${TESTBED_CICD_DIR} && sudo python3 operator_cicd.py --clean"
+    cicd_exec_on_testbed "cd ${TESTBED_CICD_DIR} && sudo rm operator_cicd.py"
     echo "clean up in testbed: done"
 }
 
@@ -436,7 +473,7 @@ remove_cicd_folder_from_testbed(){
         status=$(cicd_exec_on_testbed "ls -d ${TESTBED_CICD_DIR} 2> /dev/null")
         if  [ ${status} ]
         then
-            cicd_exec_on_testbed "sudo -S <<< ${TESTBED_PASSWORD} rm -rf ${TESTBED_CICD_DIR}" 
+            cicd_exec_on_testbed "sudo rm -rf ${TESTBED_CICD_DIR}" 
             echo "${TESTBED_CICD_DIR}: deleted from testbed"
         else
             echo "${TESTBED_CICD_DIR}: not found in testbed"
