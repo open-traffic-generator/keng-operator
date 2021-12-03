@@ -461,7 +461,7 @@ cicd_test() {
     && cicd_gen_tests_artifacts
 
     version=$(get_version)
-    cicd_wait_for_testbed_to_unlock
+    cicd_wait_for_testbed_to_unlock \
     && cicd_run_sanity ${art} ${version}
 }
 
