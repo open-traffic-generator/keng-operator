@@ -150,7 +150,7 @@ cicd_get_component_versions() {
     echo "Getting Coponents versions from versions.yaml..."
     cat versions.yaml
     echo ""
-    IXIA_C_PROTOCOL_ENGINE=$(cat versions.yaml | grep "ixia-c-protocol-engine: " | sed -n 's/^\ixia-c-protocol-engine: //p' | tr -d '[:space:]')
+    IXIA_C_PROTOCOL_ENGINE=$(cat versions.yaml | grep "ixia-c-protocol-engie: " | sed -n 's/^\ixia-c-protocol-engie: //p' | tr -d '[:space:]')
     echo "Ixia-C protocol engine version : ${IXIA_C_PROTOCOL_ENGINE}"
     IXIA_C_TRAFFIC_ENGINE=$(cat versions.yaml | grep "ixia-c-traffic-engine: " | sed -n 's/^\ixia-c-traffic-engine: //p' | tr -d '[:space:]')
     echo "Ixia-C traffic engine version : ${IXIA_C_TRAFFIC_ENGINE}"
@@ -371,7 +371,7 @@ cicd_run_sanity() {
 cicd_install_deps() {
     echo "Installing CICD deps"
     apk update \
-    && apk add curl git openssh vim unzip tar make bash wget sshpass \
+    && apk add curl git openssh vim unzip tar make bash wget sshpass ssh-askpass \
     && apk add --no-cache libc6-compat \
     && apk add build-base
 
