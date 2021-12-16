@@ -451,7 +451,7 @@ def run_e2e_test_from_client(report, testcase=None, tags="sanity"):
     if os.path.exists(report):
         os.remove(report)
 
-    test_run_cmd = "go test -tags={} -v".format(
+    test_run_cmd = "go test -timeout 24h -tags={} -v".format(
         tags
     )
     if testcase:

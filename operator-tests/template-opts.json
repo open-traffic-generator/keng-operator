@@ -14,6 +14,7 @@
     "http_transport": false,
     "debug": false,
     "clear_screen_on_stats": true,
-    "test_iterations": 10,
-    "stat_fetch_using_gnmi": true
+    "test_iterations": 100,
+    "stat_fetch_using_gnmi": true,
+    "user_local_kubeconfig": false
 }
