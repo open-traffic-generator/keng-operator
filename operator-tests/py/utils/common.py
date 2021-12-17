@@ -461,7 +461,7 @@ def run_e2e_test_from_client(report, testcase=None, tags="sanity"):
     cp_cmd = 'docker exec -t '+ KIND_SINGLE_NODE_NAME +' kubectl exec -t ixia-c-test-client -- bash -c "cd go/tests; '+ test_run_cmd + '" | tee '+ report
     out = exec_shell(cp_cmd, True, False)
 
-def check_e2e_test_status(report):
+def check_e2e_test_status(report, expected_pass_rate=100):
     print("Checking e2e test status ...")
     cmd = "cat {} | grep -c '=== RUN'".format(
         report
@@ -474,19 +474,27 @@ def check_e2e_test_status(report):
     )
     out = exec_shell(cmd,True, False)
     pass_count = int(out)
+
     print('Total Count : {} - Pass Count: {}'.format(
         total_count,
         pass_count
     ))
+    
+    pass_rate = (pass_count // total_count) * 100
+
+    print('Actual Pass Rate : {} - Expected: {}'.format(
+        pass_rate,
+        expected_pass_rate
+    ))
 
     if os.path.exists(report):
         os.remove(report)
-    if total_count != 0 and total_count == pass_count:
+    if total_count != 0 and pass_rate >= expected_pass_rate:
         return True
     return False
 
 
-def ixia_c_e2e_test_ok(namespace, testcase=None, tags="sanity"):
+def ixia_c_e2e_test_ok(namespace, testcase=None, tags="sanity", expected_pass_rate=100):
     print("[Namespace: {}]Generating local opts.json from template".format(
         namespace
     ))
@@ -508,7 +516,7 @@ def ixia_c_e2e_test_ok(namespace, testcase=None, tags="sanity"):
     print("[Namespace: {}]Analyzing E2E test results".format(
         namespace
     ))
-    assert check_e2e_test_status(test_report), "E2E test case failed!!!"
+    assert check_e2e_test_status(test_report, expected_pass_rate), "E2E test case failed!!!"
 
     print("[Namespace: {}]Deleting local opts.json".format(
         namespace

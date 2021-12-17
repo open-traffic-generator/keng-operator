@@ -62,7 +62,7 @@ def test_rest_single_namespace(ixia_c_release):
         print("[Namespace:{}]Checking E2E tests running fine or not ...".format(
             namespace1
         ))
-        utils.ixia_c_e2e_test_ok(namespace1)
+        utils.ixia_c_e2e_test_ok(namespace1, None, 'sanity', 95)
 
         print("[Namespace:{}]Deleting KNE topology".format(
             namespace1
