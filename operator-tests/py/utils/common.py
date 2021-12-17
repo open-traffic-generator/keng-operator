@@ -480,7 +480,7 @@ def check_e2e_test_status(report, expected_pass_rate=100):
         pass_count
     ))
     
-    pass_rate = (pass_count // total_count) * 100
+    pass_rate = (pass_count / total_count) * 100
 
     print('Actual Pass Rate : {} - Expected: {}'.format(
         pass_rate,
