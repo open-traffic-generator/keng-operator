@@ -773,6 +773,7 @@ func updateEnvData(recvEnv map[string]string, conEnvs []corev1.EnvVar) []corev1.
 func getDefaultEnvVar() []corev1.EnvVar {
 	kv := map[string]string{
 		"OPT_LISTEN_PORT":  "5555",
+		"ARG_CORE_LIST":    "2 3 4",
 		"ARG_IFACE_LIST":   "virtual@af_packet,eth1",
 		"OPT_NO_HUGEPAGES": "Yes",
 	}
