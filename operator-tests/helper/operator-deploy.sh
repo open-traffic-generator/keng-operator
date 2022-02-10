@@ -5,7 +5,7 @@ export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin
 set -e
 ARGS="${@}"
 
-KNE_COMMIT=71eae84
+KNE_COMMIT=78a1b7e
 ARISTA_CEOS_VERSION=4.26.1F
 
 KIND_SINGLE_NODE_NAME="kind-control-plane"
