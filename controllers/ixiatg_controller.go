@@ -82,9 +82,12 @@ type IxiaTGReconciler struct {
 }
 
 type componentRel struct {
-	Name string `json:"name"`
-	Path string `json:"path"`
-	Tag  string `json:"tag"`
+	Args    []string               `json:"args"`
+	Command []string               `json:"command"`
+	Env     map[string]interface{} `json:"env"`
+	Name    string                 `json:"name"`
+	Path    string                 `json:"path"`
+	Tag     string                 `json:"tag"`
 }
 
 type Node struct {
@@ -368,6 +371,8 @@ func (r *IxiaTGReconciler) loadRelInfo(release string, relData *[]byte, list boo
 				fallthrough
 			case "grpc-server":
 				topoEntry.Controller.Containers[image.Name] = image
+			case "init-container":
+				fallthrough
 			case "traffic-engine":
 				fallthrough
 			case "protocol-engine":
@@ -386,11 +391,13 @@ func (r *IxiaTGReconciler) loadRelInfo(release string, relData *[]byte, list boo
 		log.Infof("Found version info for %s through %s", relEntry.Release, source)
 		log.Infof("Mapped controller components:")
 		for _, val := range topoEntry.Controller.Containers {
-			log.Infof("Name: %s, Image %s:%s", val.Name, val.Path, val.Tag)
+			log.Infof("Name: %s, Image %s:%s, Args: %s, Command: %s, Env: %s",
+				val.Name, val.Path, val.Tag, val.Args, val.Command, val.Env)
 		}
 		log.Infof("Mapped ixiatg node components:")
 		for _, val := range topoEntry.Ixia.Containers {
-			log.Infof("Name: %s, Image %s:%s", val.Name, val.Path, val.Tag)
+			log.Infof("Name: %s, Image %s:%s, Args: %s, Command: %s, Env: %s",
+				val.Name, val.Path, val.Tag, val.Args, val.Command, val.Env)
 		}
 	}
 
@@ -539,6 +546,28 @@ func (r *IxiaTGReconciler) deployController(ctx context.Context, ixia *networkv1
 }
 
 func (r *IxiaTGReconciler) podForIxia(ixia *networkv1alpha1.IxiaTG, secret *corev1.Secret) (*corev1.Pod, error) {
+	versionToDeploy := latestVersion
+	if ixia.Spec.Version != "" && ixia.Spec.Version != DEFAULT_VERSION {
+		versionToDeploy = ixia.Spec.Version
+	}
+	contPodMap := componentDep[versionToDeploy].Ixia.Containers
+	args := []string{"2", "10"}
+	defInitCont := corev1.Container{
+		Name:            "init-container",
+		Image:           "networkop/init-wait:latest",
+		Args:            args,
+		ImagePullPolicy: "IfNotPresent",
+	}
+	if pubRel, ok := contPodMap["init-container"]; ok {
+		if len(pubRel.Path) > 0 {
+			args = []string{}
+			defInitCont.Image = pubRel.Path + ":" + pubRel.Tag
+			log.Infof("Adding init container image: %s", defInitCont.Image)
+		}
+		log.Infof("Updating init container image: %s", defInitCont.Image)
+		command := []string{}
+		defInitCont = updateControllerContainer(defInitCont, pubRel, args, command)
+	}
 	imagePullSecrets := getImgPullSctSecret(secret)
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -550,15 +579,7 @@ func (r *IxiaTGReconciler) podForIxia(ixia *networkv1alpha1.IxiaTG, secret *core
 			},
 		},
 		Spec: corev1.PodSpec{
-			InitContainers: []corev1.Container{{
-				Name:  "init-container",
-				Image: "networkop/init-wait:latest",
-				Args: []string{
-					"2",
-					"10",
-				},
-				ImagePullPolicy: "IfNotPresent",
-			}},
+			InitContainers:                []corev1.Container{defInitCont},
 			Containers:                    r.containersForIxia(ixia),
 			ImagePullSecrets:              imagePullSecrets,
 			TerminationGracePeriodSeconds: pointer.Int64(5),
@@ -621,6 +642,29 @@ func (r *IxiaTGReconciler) getControllerService(ixia *networkv1alpha1.IxiaTG) []
 	return services
 }
 
+func updateControllerContainer(cont corev1.Container, pubRel componentRel, args []string, cmd []string) corev1.Container {
+	cfgMapEnv := make(map[string]string)
+	for ek, ev := range pubRel.Env {
+		cfgMapEnv[ek] = ev.(string)
+	}
+	conEnv := getEnvData(nil, cfgMapEnv, nil)
+	conArgs := getArgsData(args, pubRel.Args, nil)
+	if len(pubRel.Command) > 0 {
+		cmd = pubRel.Command
+	}
+
+	if len(conArgs) > 0 {
+		cont.Args = conArgs
+	}
+	if len(cmd) > 0 {
+		cont.Command = cmd
+	}
+	if len(conEnv) > 0 {
+		cont.Env = conEnv
+	}
+	return cont
+}
+
 func (r *IxiaTGReconciler) containersForController(ixia *networkv1alpha1.IxiaTG, release string) ([]corev1.Container, error) {
 	log.Infof("Inside containersForController: %s", ixia.Name)
 	contPodMap := componentDep[release].Controller.Containers
@@ -633,13 +677,14 @@ func (r *IxiaTGReconciler) containersForController(ixia *networkv1alpha1.IxiaTG,
 		name := CONTROLLER_NAME
 		image := pubRel.Path + ":" + pubRel.Tag
 		args := []string{"--accept-eula", "--debug"}
+		command := []string{}
 		log.Infof("Adding Pod: %s, Container: %s, Image: %s", CONTROLLER_NAME, name, image)
-		containers = append(containers, corev1.Container{
+		container := updateControllerContainer(corev1.Container{
 			Name:            name,
 			Image:           image,
-			Args:            args,
 			ImagePullPolicy: "IfNotPresent",
-		})
+		}, pubRel, args, command)
+		containers = append(containers, container)
 	} else {
 		return nil, errors.New(fmt.Sprintf("Controller image data not found for release %s", release))
 	}
@@ -650,17 +695,18 @@ func (r *IxiaTGReconciler) containersForController(ixia *networkv1alpha1.IxiaTG,
 
 		name := "grpc"
 		image := pubRel.Path + ":" + pubRel.Tag
+		args := []string{}
 		command := []string{"python3", "-m", "grpc_server", "--app-mode", "athena", "--target-host", CONTROLLER_SERVICE, "--target-port", "443", "--log-stdout", "--log-debug"}
 		var ports []corev1.ContainerPort
 		ports = append(ports, corev1.ContainerPort{Name: "grpc", ContainerPort: 40051, Protocol: "TCP"})
 		log.Infof("Adding Pod: %s, Container: %s, Image: %s", CONTROLLER_NAME, name, image)
-		containers = append(containers, corev1.Container{
+		container := updateControllerContainer(corev1.Container{
 			Name:            name,
 			Image:           image,
-			Command:         command,
 			Ports:           ports,
 			ImagePullPolicy: "IfNotPresent",
-		})
+		}, pubRel, args, command)
+		containers = append(containers, container)
 	} else {
 		return nil, errors.New(fmt.Sprintf("gRPC image data not found for release %s", release))
 	}
@@ -671,17 +717,18 @@ func (r *IxiaTGReconciler) containersForController(ixia *networkv1alpha1.IxiaTG,
 
 		name := "gnmi"
 		image := pubRel.Path + ":" + pubRel.Tag
+		args := []string{}
 		command := []string{"python3", "-m", "otg_gnmi", "--server-port", "50051", "--app-mode", "athena", "--target-host", CONTROLLER_SERVICE, "--target-port", "443", "--insecure"}
 		var ports []corev1.ContainerPort
 		ports = append(ports, corev1.ContainerPort{Name: "gnmi", ContainerPort: 50051, Protocol: "TCP"})
 		log.Infof("Adding Pod: %s, Container: %s, Image: %s", CONTROLLER_NAME, name, image)
-		containers = append(containers, corev1.Container{
+		container := updateControllerContainer(corev1.Container{
 			Name:            name,
 			Image:           image,
-			Command:         command,
 			Ports:           ports,
 			ImagePullPolicy: "IfNotPresent",
-		})
+		}, pubRel, args, command)
+		containers = append(containers, container)
 	} else {
 		return nil, errors.New(fmt.Sprintf("gRPC image data not found for release %s", release))
 	}
@@ -693,21 +740,20 @@ func (r *IxiaTGReconciler) containersForController(ixia *networkv1alpha1.IxiaTG,
 func (r *IxiaTGReconciler) containersForIxia(ixia *networkv1alpha1.IxiaTG) []corev1.Container {
 	log.Infof("Inside containersForIxia: %v", ixia.Spec.Config)
 
-	conEnvs := getDefaultEnvVar()
+	conEnvs := map[string]string{
+		"OPT_LISTEN_PORT":  "5555",
+		"ARG_CORE_LIST":    "2 3 4",
+		"ARG_IFACE_LIST":   "virtual@af_packet,eth1",
+		"OPT_NO_HUGEPAGES": "Yes",
+	}
 	conSecurityCtx := getDefaultSecurityContext()
 	var containers []corev1.Container
+	config := &topopb.Config{}
 
 	if ixia.Spec.Config != "" {
-		config := &topopb.Config{}
 		err := json.Unmarshal([]byte(ixia.Spec.Config), config)
 		if err != nil {
 			log.Infof("config unmarshalling failed: %v", err)
-		} else {
-			//log.Infof("Unmarshalling successful, creating container with config data: %v", config)
-			if len(config.Env) > 0 {
-				conEnvs = updateEnvData(config.Env, conEnvs)
-			}
-			// Ignore image related entries
 		}
 	}
 
@@ -720,14 +766,29 @@ func (r *IxiaTGReconciler) containersForIxia(ixia *networkv1alpha1.IxiaTG) []cor
 
 		name := ixia.Name + "-" + k
 		image := v.Path + ":" + v.Tag
+		cfgMapEnv := make(map[string]string)
 		log.Infof("Adding Pod: %s, Container: %s, Image: %s", ixia.Name, name, image)
-		containers = append(containers, corev1.Container{
+		container := corev1.Container{
 			Name:            name,
 			Image:           image,
-			Env:             conEnvs,
 			ImagePullPolicy: "IfNotPresent",
 			SecurityContext: conSecurityCtx,
-		})
+		}
+		conArgs := getArgsData(nil, v.Args, config.Args)
+		if len(conArgs) > 0 {
+			container.Args = conArgs
+		}
+		if len(v.Command) > 0 {
+			container.Command = v.Command
+		}
+		for ek, ev := range v.Env {
+			cfgMapEnv[ek] = ev.(string)
+		}
+		conEnv := getEnvData(conEnvs, cfgMapEnv, config.Env)
+		if len(conEnv) > 0 {
+			container.Env = conEnv
+		}
+		containers = append(containers, container)
 	}
 
 	log.Infof("Done containersForIxia() total containers %v!", len(containers))
@@ -751,40 +812,51 @@ func containsString(slice []string, s string) bool {
 	return false
 }
 
-func updateEnvData(recvEnv map[string]string, conEnvs []corev1.EnvVar) []corev1.EnvVar {
-	for key, value := range recvEnv {
-		found := false
-		for index, env := range conEnvs {
-			if env.Name == key {
-				found = true
-				conEnvs[index].Value = value
-			}
-		}
-		if !found {
-			conEnvs = append(conEnvs, corev1.EnvVar{
-				Name:  key,
-				Value: value,
-			})
+func updateArgsData(data map[string]bool, update []string) map[string]bool {
+	if len(update) > 0 {
+		for _, v := range update {
+			data[v] = true
 		}
 	}
-	return conEnvs
+	return data
 }
 
-func getDefaultEnvVar() []corev1.EnvVar {
-	kv := map[string]string{
-		"OPT_LISTEN_PORT":  "5555",
-		"ARG_CORE_LIST":    "2 3 4",
-		"ARG_IFACE_LIST":   "virtual@af_packet,eth1",
-		"OPT_NO_HUGEPAGES": "Yes",
+func getArgsData(defArgs []string, cfgMapArgs []string, cfgArgs []string) []string {
+	retData := []string{}
+	argsData := make(map[string]bool)
+	argsData = updateArgsData(argsData, defArgs)
+	argsData = updateArgsData(argsData, cfgMapArgs)
+	argsData = updateArgsData(argsData, cfgArgs)
+	for k, _ := range argsData {
+		retData = append(retData, k)
 	}
-	var envVar []corev1.EnvVar
-	for k, v := range kv {
-		envVar = append(envVar, corev1.EnvVar{
-			Name:  k,
-			Value: v,
+	return retData
+}
+
+func updateEnvData(data map[string]string, update map[string]string) map[string]string {
+	if len(update) > 0 {
+		for k, v := range update {
+			data[k] = v
+		}
+	}
+	return data
+}
+
+func getEnvData(defEnv map[string]string, cfgMapEnv map[string]string, cfgEnv map[string]string) []corev1.EnvVar {
+	envData := make(map[string]string)
+	conEnvs := []corev1.EnvVar{}
+
+	envData = updateEnvData(envData, defEnv)
+	envData = updateEnvData(envData, cfgMapEnv)
+	envData = updateEnvData(envData, cfgEnv)
+
+	for key, value := range envData {
+		conEnvs = append(conEnvs, corev1.EnvVar{
+			Name:  key,
+			Value: value,
 		})
 	}
-	return envVar
+	return conEnvs
 }
 
 func getDefaultSecurityContext() *corev1.SecurityContext {
