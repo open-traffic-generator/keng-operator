@@ -344,6 +344,7 @@ func (r *IxiaTGReconciler) loadRelInfo(release string, relData *[]byte, list boo
 	var rel pubRel
 	var relList pubReleases
 	var err error
+	initContSeq := 0
 
 	if list {
 		err = json.Unmarshal(*relData, &relList)
@@ -371,15 +372,19 @@ func (r *IxiaTGReconciler) loadRelInfo(release string, relData *[]byte, list boo
 				fallthrough
 			case "grpc-server":
 				topoEntry.Controller.Containers[image.Name] = image
-			case "init-container":
-				fallthrough
 			case "traffic-engine":
 				fallthrough
 			case "protocol-engine":
 				topoEntry.Ixia.Containers[image.Name] = image
-			case "default":
-				log.Errorf("Error unknown image name: %s", image.Name)
-				return errors.New("Unknown image name")
+			default:
+				if strings.HasPrefix(image.Name, "init-") {
+					initContSeq = initContSeq + 1
+					contName := fmt.Sprintf("init%d", initContSeq)
+					topoEntry.Ixia.Containers[contName] = image
+				} else {
+					log.Errorf("Error unknown image name: %s", image.Name)
+					return errors.New("Unknown image name")
+				}
 			}
 		}
 
@@ -546,27 +551,34 @@ func (r *IxiaTGReconciler) deployController(ctx context.Context, ixia *networkv1
 }
 
 func (r *IxiaTGReconciler) podForIxia(ixia *networkv1alpha1.IxiaTG, secret *corev1.Secret) (*corev1.Pod, error) {
+	initContainers := []corev1.Container{}
 	versionToDeploy := latestVersion
 	if ixia.Spec.Version != "" && ixia.Spec.Version != DEFAULT_VERSION {
 		versionToDeploy = ixia.Spec.Version
 	}
 	contPodMap := componentDep[versionToDeploy].Ixia.Containers
-	args := []string{"2", "10"}
-	defInitCont := corev1.Container{
-		Name:            "init-container",
-		Image:           "networkop/init-wait:latest",
-		Args:            args,
-		ImagePullPolicy: "IfNotPresent",
-	}
-	if pubRel, ok := contPodMap["init-container"]; ok {
-		if len(pubRel.Path) > 0 {
-			args = []string{}
-			defInitCont.Image = pubRel.Path + ":" + pubRel.Tag
-			log.Infof("Adding init container image: %s", defInitCont.Image)
+	for _, cont := range contPodMap {
+		if strings.HasPrefix(cont.Name, "init-") {
+			initCont := corev1.Container{
+				Name:            cont.Name,
+				Image:           cont.Path + ":" + cont.Tag,
+				ImagePullPolicy: "IfNotPresent",
+			}
+			log.Infof("Adding init container image: %s", initCont.Image)
+			initCont = updateControllerContainer(initCont, cont, nil, nil)
+			initContainers = append(initContainers, initCont)
 		}
-		log.Infof("Updating init container image: %s", defInitCont.Image)
-		command := []string{}
-		defInitCont = updateControllerContainer(defInitCont, pubRel, args, command)
+	}
+	if len(initContainers) == 0 {
+		log.Infof("Adding default init container")
+		args := []string{"2", "10"}
+		defaultInitCont := corev1.Container{
+			Name:            "init-container",
+			Image:           "networkop/init-wait:latest",
+			Args:            args,
+			ImagePullPolicy: "IfNotPresent",
+		}
+		initContainers = append(initContainers, defaultInitCont)
 	}
 	imagePullSecrets := getImgPullSctSecret(secret)
 	pod := &corev1.Pod{
@@ -579,7 +591,7 @@ func (r *IxiaTGReconciler) podForIxia(ixia *networkv1alpha1.IxiaTG, secret *core
 			},
 		},
 		Spec: corev1.PodSpec{
-			InitContainers:                []corev1.Container{defInitCont},
+			InitContainers:                initContainers,
 			Containers:                    r.containersForIxia(ixia),
 			ImagePullSecrets:              imagePullSecrets,
 			TerminationGracePeriodSeconds: pointer.Int64(5),
@@ -648,7 +660,7 @@ func updateControllerContainer(cont corev1.Container, pubRel componentRel, args 
 		cfgMapEnv[ek] = ev.(string)
 	}
 	conEnv := getEnvData(nil, cfgMapEnv, nil)
-	conArgs := getArgsData(args, pubRel.Args, nil)
+	conArgs := append(args, pubRel.Args...)
 	if len(pubRel.Command) > 0 {
 		cmd = pubRel.Command
 	}
@@ -762,6 +774,9 @@ func (r *IxiaTGReconciler) containersForIxia(ixia *networkv1alpha1.IxiaTG) []cor
 		versionToDeploy = ixia.Spec.Version
 	}
 	for k, v := range componentDep[versionToDeploy].Ixia.Containers {
+		if strings.HasPrefix(v.Name, "init-") {
+			continue
+		}
 		log.Infof("Deploying %s version %s for config version %s, ns %s (source %s)", k, v.Tag, versionToDeploy, ixia.Namespace, componentDep[versionToDeploy].Source)
 
 		name := ixia.Name + "-" + k
@@ -774,7 +789,7 @@ func (r *IxiaTGReconciler) containersForIxia(ixia *networkv1alpha1.IxiaTG) []cor
 			ImagePullPolicy: "IfNotPresent",
 			SecurityContext: conSecurityCtx,
 		}
-		conArgs := getArgsData(nil, v.Args, config.Args)
+		conArgs := append(v.Args, config.Args...)
 		if len(conArgs) > 0 {
 			container.Args = conArgs
 		}
@@ -810,27 +825,6 @@ func containsString(slice []string, s string) bool {
 		}
 	}
 	return false
-}
-
-func updateArgsData(data map[string]bool, update []string) map[string]bool {
-	if len(update) > 0 {
-		for _, v := range update {
-			data[v] = true
-		}
-	}
-	return data
-}
-
-func getArgsData(defArgs []string, cfgMapArgs []string, cfgArgs []string) []string {
-	retData := []string{}
-	argsData := make(map[string]bool)
-	argsData = updateArgsData(argsData, defArgs)
-	argsData = updateArgsData(argsData, cfgMapArgs)
-	argsData = updateArgsData(argsData, cfgArgs)
-	for k, _ := range argsData {
-		retData = append(retData, k)
-	}
-	return retData
 }
 
 func updateEnvData(data map[string]string, update map[string]string) map[string]string {
