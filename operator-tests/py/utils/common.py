@@ -9,6 +9,7 @@ SUDO_USER = 'root'
 # path to dir containing kne configurations relative root dir
 CONFIGS_DIR = 'kne_configs'
 BAD_CONFIGMAP_FILE = 'bad-configmap.yaml'
+INIT_CONFIGMAP_FILE = 'init-configmap.yaml'
 IXIA_CONFIGMAP_FILE = 'ixia-configmap.yaml'
 
 KIND_SINGLE_NODE_NAME = 'kind-control-plane'
@@ -132,6 +133,34 @@ def apply_configmap(configmap):
         print("configmap {} applied inside kind container".format(
             configmap
         ))
+
+def unload_init_configmap():
+    print("Unloading init container Config...")
+    delete_file_from_kind(INIT_CONFIGMAP_FILE)
+    apply_configmap(IXIA_CONFIGMAP_FILE)
+
+
+def load_init_configmap():
+    print("Loading Init Container Config...")
+    cmd = "docker exec -t {} cat ./{}".format(
+        KIND_SINGLE_NODE_NAME,
+        IXIA_CONFIGMAP_FILE
+    )
+    out = exec_shell(cmd, False, True)
+    yaml_obj = yaml.safe_load(out)
+    json_obj = json.loads(yaml_obj["data"]["versions"])
+    init_cont = {"name":"init-wait", "path":"networkop/init-wait", "tag":"latest"}
+    json_obj["images"].append(init_cont)
+    yaml_obj["data"]["versions"] = json.dumps(json_obj)
+    init_configmap_path = "/tmp/{}".format(INIT_CONFIGMAP_FILE)
+    with open(init_configmap_path, "w") as yaml_file:
+        yaml.dump(yaml_obj, yaml_file)
+
+    copy_file_to_kind(init_configmap_path)
+    os.remove(init_configmap_path)
+
+    apply_configmap(INIT_CONFIGMAP_FILE)
+
 
 def unload_bad_configmap():
     print("Unloading Bad Config...")
