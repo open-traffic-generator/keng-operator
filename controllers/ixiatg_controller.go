@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -176,12 +177,14 @@ func (r *IxiaTGReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	} else {
 		if containsString(ixia.GetFinalizers(), myFinalizerName) {
 			found := &corev1.Pod{}
-			if r.Get(ctx, types.NamespacedName{Name: ixia.Name, Namespace: ixia.Namespace}, found) == nil {
-				if err := r.Delete(ctx, found); err != nil {
-					log.Errorf("Failed to delete associated pod %v %v", found, err)
-					return ctrl.Result{}, err
+			for _, intf := range ixia.Spec.Interfaces {
+				if r.Get(ctx, types.NamespacedName{Name: intf.PodName, Namespace: ixia.Namespace}, found) == nil {
+					if err := r.Delete(ctx, found); err != nil {
+						log.Errorf("Failed to delete associated pod %v %v", found, err)
+						return ctrl.Result{}, err
+					}
+					log.Infof("Deleted pod %v", found)
 				}
-				log.Infof("Deleted pod %v", found)
 			}
 			err = r.deleteController(ctx, ixia)
 			if err != nil {
@@ -202,14 +205,25 @@ func (r *IxiaTGReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 
 	requeue := false
 	found := &corev1.Pod{}
-	err = r.Get(ctx, types.NamespacedName{Name: ixia.Name, Namespace: ixia.Namespace}, found)
+	otgCtrlName := ixia.Name + "-" + CONTROLLER_NAME
+	err = r.Get(ctx, types.NamespacedName{Name: otgCtrlName, Namespace: ixia.Namespace}, found)
 	if err != nil && errapi.IsNotFound(err) {
 		// need to deploy, but first deploy controller if not present
 		if err = r.deployController(ctx, ixia, secret); err == nil {
 			log.Infof("Successfully deployed controller pod")
-			if pod, err := r.podForIxia(ixia, secret); err == nil {
+			podMap := make(map[string]int)
+			for _, intf := range ixia.Spec.Interfaces {
+				if val, ok := podMap[intf.PodName]; ok {
+					podMap[intf.PodName] = val + 1
+				} else {
+					podMap[intf.PodName] = 0
+				}
+			}
+			for name, intfs := range podMap {
 				//log.Infof("Creating pod %v", pod)
-				err = r.Create(ctx, pod)
+				if err := r.podForIxia(ctx, name, intfs, ixia, secret); err != nil {
+					break
+				}
 			}
 		}
 
@@ -416,7 +430,8 @@ func (r *IxiaTGReconciler) loadRelInfo(release string, relData *[]byte, list boo
 
 func (r *IxiaTGReconciler) deleteController(ctx context.Context, ixia *networkv1alpha1.IxiaTG) error {
 	found := &corev1.Pod{}
-	if r.Get(ctx, types.NamespacedName{Name: CONTROLLER_NAME, Namespace: ixia.Namespace}, found) == nil {
+	ctrlPodName := ixia.Name + "-" + CONTROLLER_NAME
+	if r.Get(ctx, types.NamespacedName{Name: ctrlPodName, Namespace: ixia.Namespace}, found) == nil {
 		if err := r.Delete(ctx, found); err != nil {
 			log.Errorf("Failed to delete associated controller %v - %v", found, err)
 			return err
@@ -426,44 +441,55 @@ func (r *IxiaTGReconciler) deleteController(ctx context.Context, ixia *networkv1
 
 	// Now delete the services
 	service := &corev1.Service{}
-	if r.Get(ctx, types.NamespacedName{Name: CONTROLLER_SERVICE, Namespace: ixia.Namespace}, service) == nil {
-		if err := r.Delete(ctx, service); err != nil {
-			log.Errorf("Failed to delete controller service %v - %v", service, err)
-			return err
+	for name, _ := range ixia.Spec.ApiEndPoint {
+		if r.Get(ctx, types.NamespacedName{Name: name + "-service", Namespace: ixia.Namespace}, service) == nil {
+			if err := r.Delete(ctx, service); err != nil {
+				log.Errorf("Failed to delete controller service %v - %v", service, err)
+				return err
+			}
+			log.Infof("Deleted controller service %v", service)
 		}
-		log.Infof("Deleted controller service %v", service)
 	}
 
-	if r.Get(ctx, types.NamespacedName{Name: GRPC_SERVICE, Namespace: ixia.Namespace}, service) == nil {
-		if err := r.Delete(ctx, service); err != nil {
-			log.Errorf("Failed to delete gRPC service %v - %v", service, err)
-			return err
-		}
-		log.Infof("Deleted gRPC service %v", service)
-	}
+	//service := &corev1.Service{}
+	//if r.Get(ctx, types.NamespacedName{Name: CONTROLLER_SERVICE, Namespace: ixia.Namespace}, service) == nil {
+	//	if err := r.Delete(ctx, service); err != nil {
+	//		log.Errorf("Failed to delete controller service %v - %v", service, err)
+	//		return err
+	//	}
+	//	log.Infof("Deleted controller service %v", service)
+	//}
 
-	if r.Get(ctx, types.NamespacedName{Name: GNMI_SERVICE, Namespace: ixia.Namespace}, service) == nil {
-		if err := r.Delete(ctx, service); err != nil {
-			log.Errorf("Failed to delete gNMI service %v - %v", service, err)
-			return err
-		}
-		log.Infof("Deleted gNMI service %v", service)
-	}
+	//if r.Get(ctx, types.NamespacedName{Name: GRPC_SERVICE, Namespace: ixia.Namespace}, service) == nil {
+	//	if err := r.Delete(ctx, service); err != nil {
+	//		log.Errorf("Failed to delete gRPC service %v - %v", service, err)
+	//		return err
+	//	}
+	//	log.Infof("Deleted gRPC service %v", service)
+	//}
+
+	//if r.Get(ctx, types.NamespacedName{Name: GNMI_SERVICE, Namespace: ixia.Namespace}, service) == nil {
+	//	if err := r.Delete(ctx, service); err != nil {
+	//		log.Errorf("Failed to delete gNMI service %v - %v", service, err)
+	//		return err
+	//	}
+	//	log.Infof("Deleted gNMI service %v", service)
+	//}
 
 	return nil
 }
 
 func (r *IxiaTGReconciler) deployController(ctx context.Context, ixia *networkv1alpha1.IxiaTG, secret *corev1.Secret) error {
-	podList := &corev1.PodList{}
-	opts := []client.ListOption{
-		client.InNamespace(ixia.Namespace),
-	}
+	//podList := &corev1.PodList{}
+	//opts := []client.ListOption{
+	//	client.InNamespace(ixia.Namespace),
+	//}
 	var err error
-	if ixia.Name == CONTROLLER_NAME {
-		err = errors.New(fmt.Sprintf("Error: %s name is reserved for Controller pod, use some other name", CONTROLLER_NAME))
-		log.Error(err, "Failed to create pod")
-		return err
-	}
+	//if ixia.Name == CONTROLLER_NAME {
+	//	err = errors.New(fmt.Sprintf("Error: %s name is reserved for Controller pod, use some other name", CONTROLLER_NAME))
+	//	log.Error(err, "Failed to create pod")
+	//	return err
+	//}
 
 	// First check if we have the component dependency data for the release
 	depVersion := DEFAULT_VERSION
@@ -488,26 +514,26 @@ func (r *IxiaTGReconciler) deployController(ctx context.Context, ixia *networkv1
 		}
 	}
 
-	if err = r.List(ctx, podList, opts...); err != nil {
-		log.Errorf("Failed to list current pods %v", err)
-		return err
-	}
-	for _, p := range podList.Items {
-		if p.ObjectMeta.Name == CONTROLLER_NAME {
-			log.Infof("Controller already deployed for %s", ixia.Name)
-			for _, c := range p.Spec.Containers {
-				if c.Name == CONTROLLER_NAME {
-					expVersion := componentDep[depVersion].Controller.Containers["controller"].Tag
-					if strings.HasSuffix(c.Image, ":"+expVersion) {
-						return nil
-					}
-					contVersion := strings.Split(c.Image, ":")
-					err = errors.New(fmt.Sprintf("Version mismatch - expected %s, found %s", contVersion[1], depVersion))
-					return err
-				}
-			}
-		}
-	}
+	//if err = r.List(ctx, podList, opts...); err != nil {
+	//	log.Errorf("Failed to list current pods %v", err)
+	//	return err
+	//}
+	//for _, p := range podList.Items {
+	//	if p.ObjectMeta.Name == CONTROLLER_NAME {
+	//		log.Infof("Controller already deployed for %s", ixia.Name)
+	//		for _, c := range p.Spec.Containers {
+	//			if c.Name == CONTROLLER_NAME {
+	//				expVersion := componentDep[depVersion].Controller.Containers["controller"].Tag
+	//				if strings.HasSuffix(c.Image, ":"+expVersion) {
+	//					return nil
+	//				}
+	//				contVersion := strings.Split(c.Image, ":")
+	//				err = errors.New(fmt.Sprintf("Version mismatch - expected %s, found %s", contVersion[1], depVersion))
+	//				return err
+	//			}
+	//		}
+	//	}
+	//}
 
 	// Deploy controller and services
 	imagePullSecrets := getImgPullSctSecret(secret)
@@ -518,7 +544,7 @@ func (r *IxiaTGReconciler) deployController(ctx context.Context, ixia *networkv1
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      CONTROLLER_NAME,
+			Name:      ixia.Name + "-" + CONTROLLER_NAME,
 			Namespace: ixia.Namespace,
 			Labels: map[string]string{
 				"app": CONTROLLER_NAME,
@@ -550,14 +576,14 @@ func (r *IxiaTGReconciler) deployController(ctx context.Context, ixia *networkv1
 	return nil
 }
 
-func (r *IxiaTGReconciler) podForIxia(ixia *networkv1alpha1.IxiaTG, secret *corev1.Secret) (*corev1.Pod, error) {
+func (r *IxiaTGReconciler) podForIxia(ctx context.Context, podName string, intfNum int, ixia *networkv1alpha1.IxiaTG, secret *corev1.Secret) error {
 	initContainers := []corev1.Container{}
 	versionToDeploy := latestVersion
 	if ixia.Spec.Version != "" && ixia.Spec.Version != DEFAULT_VERSION {
 		versionToDeploy = ixia.Spec.Version
 	}
 	contPodMap := componentDep[versionToDeploy].Ixia.Containers
-	args := []string{"2", "10"}
+	args := []string{strconv.Itoa(intfNum), "10"}
 	for _, cont := range contPodMap {
 		if strings.HasPrefix(cont.Name, "init-") {
 			initCont := corev1.Container{
@@ -583,73 +609,117 @@ func (r *IxiaTGReconciler) podForIxia(ixia *networkv1alpha1.IxiaTG, secret *core
 	imagePullSecrets := getImgPullSctSecret(secret)
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      ixia.Name,
+			Name:      podName,
 			Namespace: ixia.Namespace,
 			Labels: map[string]string{
-				"app":  ixia.Name,
+				"app":  podName,
 				"topo": ixia.Namespace,
 			},
 		},
 		Spec: corev1.PodSpec{
 			InitContainers:                initContainers,
-			Containers:                    r.containersForIxia(ixia),
+			Containers:                    r.containersForIxia(podName, ixia),
 			ImagePullSecrets:              imagePullSecrets,
 			TerminationGracePeriodSeconds: pointer.Int64(5),
 		},
 	}
-	return pod, nil
+	err := r.Create(ctx, pod)
+	if err != nil {
+		return err
+	}
+
+	// Now create corresponding services
+	svcPorts := []corev1.ServicePort{}
+	svcPorts = append(svcPorts, corev1.ServicePort{Name: "port-5555", Port: 5555, TargetPort: intstr.IntOrString{IntVal: 5555}})
+	svcPorts = append(svcPorts, corev1.ServicePort{Name: "port-50071", Port: 50071, TargetPort: intstr.IntOrString{IntVal: 50071}})
+	service := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "service-" + podName,
+			Namespace: ixia.Namespace,
+		},
+		Spec: corev1.ServiceSpec{
+			Selector: map[string]string{
+				"app": podName,
+			},
+			Ports: svcPorts,
+			Type:  "LoadBalancer",
+		},
+	}
+	err = r.Create(ctx, service)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (r *IxiaTGReconciler) getControllerService(ixia *networkv1alpha1.IxiaTG) []corev1.Service {
 	var services []corev1.Service
 
-	// Controller service
-	contPort := corev1.ServicePort{Name: "https", Port: 443, TargetPort: intstr.IntOrString{IntVal: 443}}
-	services = append(services, corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      CONTROLLER_SERVICE,
-			Namespace: ixia.Namespace,
-		},
-		Spec: corev1.ServiceSpec{
-			Selector: map[string]string{
-				"app": CONTROLLER_NAME,
+	for name, svc := range ixia.Spec.ApiEndPoint {
+		contPort := corev1.ServicePort{Name: name, Port: svc.In, TargetPort: intstr.IntOrString{IntVal: svc.In}}
+		services = append(services, corev1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name + "-service",
+				Namespace: ixia.Namespace,
 			},
-			Ports: []corev1.ServicePort{contPort},
-			Type:  "LoadBalancer",
-		},
-	})
+			Spec: corev1.ServiceSpec{
+				Selector: map[string]string{
+					"app": ixia.Name + "-" + CONTROLLER_NAME,
+				},
+				Ports: []corev1.ServicePort{contPort},
+				Type:  "LoadBalancer",
+			},
+		})
+	}
+
+	// Controller service
+	//contPort := corev1.ServicePort{Name: "https", Port: 443, TargetPort: intstr.IntOrString{IntVal: 443}}
+	//services = append(services, corev1.Service{
+	//	ObjectMeta: metav1.ObjectMeta{
+	//		Name:      CONTROLLER_SERVICE,
+	//		Namespace: ixia.Namespace,
+	//	},
+	//	Spec: corev1.ServiceSpec{
+	//		Selector: map[string]string{
+	//			"app": CONTROLLER_NAME,
+	//		},
+	//		Ports: []corev1.ServicePort{contPort},
+	//		Type:  "LoadBalancer",
+	//	},
+	//})
 
 	// gRPC service
-	contPort = corev1.ServicePort{Name: "grpc", Port: 40051, TargetPort: intstr.IntOrString{IntVal: 40051}}
-	services = append(services, corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      GRPC_SERVICE,
-			Namespace: ixia.Namespace,
-		},
-		Spec: corev1.ServiceSpec{
-			Selector: map[string]string{
-				"app": CONTROLLER_NAME,
-			},
-			Ports: []corev1.ServicePort{contPort},
-			Type:  "LoadBalancer",
-		},
-	})
+	//contPort = corev1.ServicePort{Name: "grpc", Port: 40051, TargetPort: intstr.IntOrString{IntVal: 40051}}
+	//services = append(services, corev1.Service{
+	//	ObjectMeta: metav1.ObjectMeta{
+	//		Name:      GRPC_SERVICE,
+	//		Namespace: ixia.Namespace,
+	//	},
+	//	Spec: corev1.ServiceSpec{
+	//		Selector: map[string]string{
+	//			"app": CONTROLLER_NAME,
+	//		},
+	//		Ports: []corev1.ServicePort{contPort},
+	//		Type:  "LoadBalancer",
+	//	},
+	//})
 
 	// gNMI service
-	contPort = corev1.ServicePort{Name: "gnmi", Port: 50051, TargetPort: intstr.IntOrString{IntVal: 50051}}
-	services = append(services, corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      GNMI_SERVICE,
-			Namespace: ixia.Namespace,
-		},
-		Spec: corev1.ServiceSpec{
-			Selector: map[string]string{
-				"app": CONTROLLER_NAME,
-			},
-			Ports: []corev1.ServicePort{contPort},
-			Type:  "LoadBalancer",
-		},
-	})
+	//contPort = corev1.ServicePort{Name: "gnmi", Port: 50051, TargetPort: intstr.IntOrString{IntVal: 50051}}
+	//services = append(services, corev1.Service{
+	//	ObjectMeta: metav1.ObjectMeta{
+	//		Name:      GNMI_SERVICE,
+	//		Namespace: ixia.Namespace,
+	//	},
+	//	Spec: corev1.ServiceSpec{
+	//		Selector: map[string]string{
+	//			"app": CONTROLLER_NAME,
+	//		},
+	//		Ports: []corev1.ServicePort{contPort},
+	//		Type:  "LoadBalancer",
+	//	},
+	//})
 
 	return services
 }
@@ -660,12 +730,12 @@ func updateControllerContainer(cont corev1.Container, pubRel componentRel, args 
 		cfgMapEnv[ek] = ev.(string)
 	}
 	conEnv := getEnvData(nil, cfgMapEnv, nil)
-	if len(pubRel.Args) > 0 {
-		args = pubRel.Args
-	}
-	if len(pubRel.Command) > 0 {
-		cmd = pubRel.Command
-	}
+	//if len(pubRel.Args) > 0 {
+	//	args = pubRel.Args
+	//}
+	//if len(pubRel.Command) > 0 {
+	//	cmd = pubRel.Command
+	//}
 
 	if len(args) > 0 {
 		cont.Args = args
@@ -747,12 +817,12 @@ func (r *IxiaTGReconciler) containersForController(ixia *networkv1alpha1.IxiaTG,
 		return nil, errors.New(fmt.Sprintf("gRPC image data not found for release %s", release))
 	}
 
-	log.Infof("Done containersForIxia() total containers %v!", len(containers))
+	log.Infof("Done containersForController total containers %v!", len(containers))
 	return containers, nil
 }
 
-func (r *IxiaTGReconciler) containersForIxia(ixia *networkv1alpha1.IxiaTG) []corev1.Container {
-	log.Infof("Inside containersForIxia: %v", ixia.Spec.Config)
+func (r *IxiaTGReconciler) containersForIxia(podName string, ixia *networkv1alpha1.IxiaTG) []corev1.Container {
+	//log.Infof("Inside containersForIxia: %v", ixia.Spec.Config)
 
 	conEnvs := map[string]string{
 		"OPT_LISTEN_PORT":  "5555",
@@ -764,12 +834,12 @@ func (r *IxiaTGReconciler) containersForIxia(ixia *networkv1alpha1.IxiaTG) []cor
 	var containers []corev1.Container
 	config := &topopb.Config{}
 
-	if ixia.Spec.Config != "" {
-		err := json.Unmarshal([]byte(ixia.Spec.Config), config)
-		if err != nil {
-			log.Infof("config unmarshalling failed: %v", err)
-		}
-	}
+	//if ixia.Spec.Config != "" {
+	//	err := json.Unmarshal([]byte(ixia.Spec.Config), config)
+	//	if err != nil {
+	//		log.Infof("config unmarshalling failed: %v", err)
+	//	}
+	//}
 
 	versionToDeploy := latestVersion
 	if ixia.Spec.Version != "" && ixia.Spec.Version != DEFAULT_VERSION {
@@ -781,19 +851,18 @@ func (r *IxiaTGReconciler) containersForIxia(ixia *networkv1alpha1.IxiaTG) []cor
 		}
 		log.Infof("Deploying %s version %s for config version %s, ns %s (source %s)", k, v.Tag, versionToDeploy, ixia.Namespace, componentDep[versionToDeploy].Source)
 
-		name := ixia.Name + "-" + k
+		name := podName + "-" + k
 		image := v.Path + ":" + v.Tag
 		cfgMapEnv := make(map[string]string)
-		log.Infof("Adding Pod: %s, Container: %s, Image: %s", ixia.Name, name, image)
+		log.Infof("Adding Pod: %s, Container: %s, Image: %s", podName, name, image)
 		container := corev1.Container{
 			Name:            name,
 			Image:           image,
 			ImagePullPolicy: "IfNotPresent",
 			SecurityContext: conSecurityCtx,
 		}
-		conArgs := append(v.Args, config.Args...)
-		if len(conArgs) > 0 {
-			container.Args = conArgs
+		if len(v.Args) > 0 {
+			container.Args = v.Args
 		}
 		if len(v.Command) > 0 {
 			container.Command = v.Command

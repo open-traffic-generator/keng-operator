@@ -23,16 +23,42 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
+type IxiaTGSvcPort struct {
+	In  int32 `json:"in"`
+	Out int32 `json:"out,omitempty"`
+	//InIp     string `json:"inside_ip,omitempty"`
+	//OutIp    string `json:"outside_ip,omitempty"`
+	//NodePort int32 `json:"node_port,omitempty"`
+}
+
+//type IxiaTGEP struct {
+//	Name string `json:"name"`
+//	SvcPortMap map[string]IxiaTGSvcPort `json:"service_port_map,omitempty"`
+//}
+
+type IxiaTGIntf struct {
+	Name    string `json:"name"`
+	PodName string `json:"pod_name"`
+	Group   string `json:"group,omitempty"`
+}
+
+type IxiaTGIntfMeta struct {
+	Name    string `json:"name"`
+	PodName string `json:"pod_name"`
+}
+
 // IxiaTGSpec defines the desired state of IxiaTG
 type IxiaTGSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// Version of the node
-	Version string `json:"version,omitempty"`
+	Version string `json:"release,omitempty"`
 	// Config of the node
-	Config string `json:"config,omitempty"`
-	Links  int    `json:"links,omitempty"`
+	//Config string `json:"config,omitempty"`
+	//ApiEndPoint IxiaTGEP `json:"api_endpoint"`
+	ApiEndPoint map[string]IxiaTGSvcPort `json:"api_endpoint,omitempty"`
+	Interfaces  []IxiaTGIntf             `json:"interfaces,omitempty"`
 }
 
 // IxiaTGStatus defines the observed state of IxiaTG
@@ -40,14 +66,15 @@ type IxiaTGStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 	//Pod    string `json:"pod,omitempty"`
-	Status string `json:"status,omitempty"`
-	Reason string `json:"reason,omitempty"`
+	Status         string           `json:"status,omitempty"`
+	Reason         string           `json:"reason,omitempty"`
+	InterfaceMetas []IxiaTGIntfMeta `json:"interface_metas,omitempty"`
 }
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
 
-// IxiaTG is the Schema for the ixiatgs API
+// IxiaTG is the Schema for the ixiacs API
 //+kubebuilder:subresource:status
 type IxiaTG struct {
 	metav1.TypeMeta   `json:",inline"`
