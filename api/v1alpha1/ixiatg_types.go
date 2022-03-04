@@ -31,20 +31,14 @@ type IxiaTGSvcPort struct {
 	//NodePort int32 `json:"node_port,omitempty"`
 }
 
-//type IxiaTGEP struct {
-//	Name string `json:"name"`
-//	SvcPortMap map[string]IxiaTGSvcPort `json:"service_port_map,omitempty"`
-//}
-
 type IxiaTGIntf struct {
-	Name    string `json:"name"`
-	PodName string `json:"pod_name"`
-	Group   string `json:"group,omitempty"`
+	Name  string `json:"name"`
+	Group string `json:"group,omitempty"`
 }
 
-type IxiaTGIntfMeta struct {
-	Name    string `json:"name"`
+type IxiaTGIntfStatus struct {
 	PodName string `json:"pod_name"`
+	Name    string `json:"name"`
 }
 
 // IxiaTGSpec defines the desired state of IxiaTG
@@ -53,12 +47,13 @@ type IxiaTGSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// Version of the node
-	Version string `json:"release,omitempty"`
-	// Config of the node
-	//Config string `json:"config,omitempty"`
-	//ApiEndPoint IxiaTGEP `json:"api_endpoint"`
-	ApiEndPoint map[string]IxiaTGSvcPort `json:"api_endpoint,omitempty"`
-	Interfaces  []IxiaTGIntf             `json:"interfaces,omitempty"`
+	Release string `json:"release,omitempty"`
+	// Desired state by network emulation (KNE)
+	DesiredState string `json:"desired_state,omitempty"`
+	// ApiEndPoint as define in OTG config
+	ApiEndPoint map[string]IxiaTGSvcPort `json:"api_endpoint_map,omitempty"`
+	// Interfaces with DUT
+	Interfaces []IxiaTGIntf `json:"interfaces,omitempty"`
 }
 
 // IxiaTGStatus defines the observed state of IxiaTG
@@ -66,9 +61,9 @@ type IxiaTGStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 	//Pod    string `json:"pod,omitempty"`
-	Status         string           `json:"status,omitempty"`
-	Reason         string           `json:"reason,omitempty"`
-	InterfaceMetas []IxiaTGIntfMeta `json:"interface_metas,omitempty"`
+	State      string             `json:"state,omitempty"`
+	Reason     string             `json:"reason,omitempty"`
+	Interfaces []IxiaTGIntfStatus `json:"interfaces,omitempty"`
 }
 
 //+kubebuilder:object:root=true

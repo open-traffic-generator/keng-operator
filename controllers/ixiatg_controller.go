@@ -178,7 +178,7 @@ func (r *IxiaTGReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		if containsString(ixia.GetFinalizers(), myFinalizerName) {
 			found := &corev1.Pod{}
 			for _, intf := range ixia.Spec.Interfaces {
-				if r.Get(ctx, types.NamespacedName{Name: intf.PodName, Namespace: ixia.Namespace}, found) == nil {
+				if r.Get(ctx, types.NamespacedName{Name: intf.Group, Namespace: ixia.Namespace}, found) == nil {
 					if err := r.Delete(ctx, found); err != nil {
 						log.Errorf("Failed to delete associated pod %v %v", found, err)
 						return ctrl.Result{}, err
@@ -205,18 +205,19 @@ func (r *IxiaTGReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 
 	requeue := false
 	found := &corev1.Pod{}
-	otgCtrlName := ixia.Name + "-" + CONTROLLER_NAME
+	//otgCtrlName := ixia.Name + "-" + CONTROLLER_NAME
+	otgCtrlName := CONTROLLER_NAME
 	err = r.Get(ctx, types.NamespacedName{Name: otgCtrlName, Namespace: ixia.Namespace}, found)
 	if err != nil && errapi.IsNotFound(err) {
 		// need to deploy, but first deploy controller if not present
 		if err = r.deployController(ctx, ixia, secret); err == nil {
 			log.Infof("Successfully deployed controller pod")
-			podMap := make(map[string]int)
+			podMap := make(map[string][]string)
 			for _, intf := range ixia.Spec.Interfaces {
-				if val, ok := podMap[intf.PodName]; ok {
-					podMap[intf.PodName] = val + 1
+				if _, ok := podMap[intf.Group]; ok {
+					podMap[intf.Group] = []string{intf.Name}
 				} else {
-					podMap[intf.PodName] = 0
+					podMap[intf.Group] = append(podMap[intf.Group], intf.Name)
 				}
 			}
 			for name, intfs := range podMap {
@@ -267,12 +268,12 @@ func (r *IxiaTGReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 
 	if !requeue || err != nil {
 		if err != nil {
-			ixia.Status.Status = "Failed"
+			ixia.Status.State = "Failed"
 			ixia.Status.Reason = err.Error()
 			// Ensure this is an end state, no need to requeue
 			requeue = false
 		} else {
-			ixia.Status.Status = "Success"
+			ixia.Status.State = "Success"
 		}
 
 		err = r.Status().Update(ctx, ixia)
@@ -430,7 +431,8 @@ func (r *IxiaTGReconciler) loadRelInfo(release string, relData *[]byte, list boo
 
 func (r *IxiaTGReconciler) deleteController(ctx context.Context, ixia *networkv1alpha1.IxiaTG) error {
 	found := &corev1.Pod{}
-	ctrlPodName := ixia.Name + "-" + CONTROLLER_NAME
+	//ctrlPodName := ixia.Name + "-" + CONTROLLER_NAME
+	ctrlPodName := CONTROLLER_NAME
 	if r.Get(ctx, types.NamespacedName{Name: ctrlPodName, Namespace: ixia.Namespace}, found) == nil {
 		if err := r.Delete(ctx, found); err != nil {
 			log.Errorf("Failed to delete associated controller %v - %v", found, err)
@@ -493,8 +495,8 @@ func (r *IxiaTGReconciler) deployController(ctx context.Context, ixia *networkv1
 
 	// First check if we have the component dependency data for the release
 	depVersion := DEFAULT_VERSION
-	if ixia.Spec.Version != "" {
-		depVersion = ixia.Spec.Version
+	if ixia.Spec.Release != "" {
+		depVersion = ixia.Spec.Release
 	} else {
 		log.Infof("No ixiatg version specified, using default version %s", depVersion)
 	}
@@ -544,7 +546,7 @@ func (r *IxiaTGReconciler) deployController(ctx context.Context, ixia *networkv1
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      ixia.Name + "-" + CONTROLLER_NAME,
+			Name:      CONTROLLER_NAME,
 			Namespace: ixia.Namespace,
 			Labels: map[string]string{
 				"app": CONTROLLER_NAME,
@@ -576,14 +578,14 @@ func (r *IxiaTGReconciler) deployController(ctx context.Context, ixia *networkv1
 	return nil
 }
 
-func (r *IxiaTGReconciler) podForIxia(ctx context.Context, podName string, intfNum int, ixia *networkv1alpha1.IxiaTG, secret *corev1.Secret) error {
+func (r *IxiaTGReconciler) podForIxia(ctx context.Context, podName string, intfList []string, ixia *networkv1alpha1.IxiaTG, secret *corev1.Secret) error {
 	initContainers := []corev1.Container{}
 	versionToDeploy := latestVersion
-	if ixia.Spec.Version != "" && ixia.Spec.Version != DEFAULT_VERSION {
-		versionToDeploy = ixia.Spec.Version
+	if ixia.Spec.Release != "" && ixia.Spec.Release != DEFAULT_VERSION {
+		versionToDeploy = ixia.Spec.Release
 	}
 	contPodMap := componentDep[versionToDeploy].Ixia.Containers
-	args := []string{strconv.Itoa(intfNum), "10"}
+	args := []string{strconv.Itoa(len(intfList) + 1), "10"}
 	for _, cont := range contPodMap {
 		if strings.HasPrefix(cont.Name, "init-") {
 			initCont := corev1.Container{
@@ -618,7 +620,7 @@ func (r *IxiaTGReconciler) podForIxia(ctx context.Context, podName string, intfN
 		},
 		Spec: corev1.PodSpec{
 			InitContainers:                initContainers,
-			Containers:                    r.containersForIxia(podName, ixia),
+			Containers:                    r.containersForIxia(podName, intfList, ixia),
 			ImagePullSecrets:              imagePullSecrets,
 			TerminationGracePeriodSeconds: pointer.Int64(5),
 		},
@@ -665,7 +667,7 @@ func (r *IxiaTGReconciler) getControllerService(ixia *networkv1alpha1.IxiaTG) []
 			},
 			Spec: corev1.ServiceSpec{
 				Selector: map[string]string{
-					"app": ixia.Name + "-" + CONTROLLER_NAME,
+					"app": CONTROLLER_NAME,
 				},
 				Ports: []corev1.ServicePort{contPort},
 				Type:  "LoadBalancer",
@@ -821,13 +823,14 @@ func (r *IxiaTGReconciler) containersForController(ixia *networkv1alpha1.IxiaTG,
 	return containers, nil
 }
 
-func (r *IxiaTGReconciler) containersForIxia(podName string, ixia *networkv1alpha1.IxiaTG) []corev1.Container {
+func (r *IxiaTGReconciler) containersForIxia(podName string, intfList []string, ixia *networkv1alpha1.IxiaTG) []corev1.Container {
 	//log.Infof("Inside containersForIxia: %v", ixia.Spec.Config)
+	argIntfList := "virtual@af_packet," + intfList[0]
 
 	conEnvs := map[string]string{
 		"OPT_LISTEN_PORT":  "5555",
 		"ARG_CORE_LIST":    "2 3 4",
-		"ARG_IFACE_LIST":   "virtual@af_packet,eth1",
+		"ARG_IFACE_LIST":   argIntfList,
 		"OPT_NO_HUGEPAGES": "Yes",
 	}
 	conSecurityCtx := getDefaultSecurityContext()
@@ -842,8 +845,8 @@ func (r *IxiaTGReconciler) containersForIxia(podName string, ixia *networkv1alph
 	//}
 
 	versionToDeploy := latestVersion
-	if ixia.Spec.Version != "" && ixia.Spec.Version != DEFAULT_VERSION {
-		versionToDeploy = ixia.Spec.Version
+	if ixia.Spec.Release != "" && ixia.Spec.Release != DEFAULT_VERSION {
+		versionToDeploy = ixia.Spec.Release
 	}
 	for k, v := range componentDep[versionToDeploy].Ixia.Containers {
 		if strings.HasPrefix(v.Name, "init-") {
@@ -866,6 +869,9 @@ func (r *IxiaTGReconciler) containersForIxia(podName string, ixia *networkv1alph
 		}
 		if len(v.Command) > 0 {
 			container.Command = v.Command
+		}
+		if v.Name == "protocol-engine" {
+			cfgMapEnv["INTF_LIST"] = strings.Join(intfList, ",")
 		}
 		for ek, ev := range v.Env {
 			cfgMapEnv[ek] = ev.(string)
