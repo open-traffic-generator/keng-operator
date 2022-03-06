@@ -158,17 +158,13 @@ func (r *IxiaTGReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return ctrl.Result{}, err
 	}
 
-	// Check if we need to creatte resources or not
-	secret, err := r.ReconcileSecret(ctx, req, ixia)
-
 	myFinalizerName := "keysight.com/finalizer"
-
 	if ixia.ObjectMeta.DeletionTimestamp.IsZero() {
 		log.Infof("Checking for finalizer")
 		if !containsString(ixia.GetFinalizers(), myFinalizerName) {
 			log.Infof("Adding finalizer")
 			controllerutil.AddFinalizer(ixia, myFinalizerName)
-			if err := r.Update(ctx, ixia); err != nil {
+			if err = r.Update(ctx, ixia); err != nil {
 				log.Error(err)
 				return ctrl.Result{}, err
 			}
@@ -176,14 +172,11 @@ func (r *IxiaTGReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		}
 	} else {
 		if containsString(ixia.GetFinalizers(), myFinalizerName) {
-			found := &corev1.Pod{}
-			for _, intf := range ixia.Spec.Interfaces {
-				if r.Get(ctx, types.NamespacedName{Name: intf.Group, Namespace: ixia.Namespace}, found) == nil {
-					if err := r.Delete(ctx, found); err != nil {
-						log.Errorf("Failed to delete associated pod %v %v", found, err)
-						return ctrl.Result{}, err
-					}
-					log.Infof("Deleted pod %v", found)
+			//found := &corev1.Pod{}
+			for _, intf := range ixia.Status.Interfaces {
+				if err = r.deleteIxiaPod(ctx, intf.PodName, ixia); err != nil {
+					//log.Errorf("Failed to delete associated pod %v %v", intf.PodName, err)
+					return ctrl.Result{}, err
 				}
 			}
 			err = r.deleteController(ctx, ixia)
@@ -193,7 +186,7 @@ func (r *IxiaTGReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 			}
 
 			controllerutil.RemoveFinalizer(ixia, myFinalizerName)
-			if err := r.Update(ctx, ixia); err != nil {
+			if err = r.Update(ctx, ixia); err != nil {
 				log.Errorf("Failed to delete finalizer, %v", err)
 				return ctrl.Result{}, err
 			}
@@ -203,33 +196,71 @@ func (r *IxiaTGReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return ctrl.Result{}, nil
 	}
 
+	// First we verify if the desired state is already reached; otherwise handle accordingly
+	if ixia.Spec.DesiredState == ixia.Status.State {
+		return ctrl.Result{}, nil
+	} else if ixia.Spec.DesiredState == "INITIATED" {
+		genPodNames := []networkv1alpha1.IxiaTGIntfStatus{}
+		for _, intf := range ixia.Spec.Interfaces {
+			podName := ixia.Name
+			if intf.Group == "" {
+				podName = podName + "-prt-" + intf.Name
+			} else {
+				podName = podName + "-grp-" + intf.Group
+			}
+			genPodNames = append(genPodNames, networkv1alpha1.IxiaTGIntfStatus{PodName: podName, Name: intf.Name})
+		}
+		ixia.Status.Interfaces = genPodNames
+		ixia.Status.State = ixia.Spec.DesiredState
+
+		err = r.Status().Update(ctx, ixia)
+		if err != nil {
+			log.Errorf("Failed to update ixia status - %v", err)
+			return ctrl.Result{RequeueAfter: time.Second}, err
+		}
+
+		return ctrl.Result{}, nil
+	} else if ixia.Spec.DesiredState != "DEPLOYED" {
+		err = errors.New(fmt.Sprintf("Unknown desired state found %s", ixia.Spec.DesiredState))
+		log.Error(err)
+		ixia.Status.Reason = err.Error()
+		ixia.Status.State = "FAILED"
+
+		return ctrl.Result{}, nil
+	}
+
+	// Check if we need to create resources or not
+	secret, err := r.ReconcileSecret(ctx, req, ixia)
+
 	requeue := false
 	found := &corev1.Pod{}
 	//otgCtrlName := ixia.Name + "-" + CONTROLLER_NAME
 	otgCtrlName := CONTROLLER_NAME
 	err = r.Get(ctx, types.NamespacedName{Name: otgCtrlName, Namespace: ixia.Namespace}, found)
 	if err != nil && errapi.IsNotFound(err) {
-		// need to deploy, but first deploy controller if not present
-		if err = r.deployController(ctx, ixia, secret); err == nil {
-			log.Infof("Successfully deployed controller pod")
-			podMap := make(map[string][]string)
-			for _, intf := range ixia.Spec.Interfaces {
-				if _, ok := podMap[intf.Group]; ok {
-					podMap[intf.Group] = []string{intf.Name}
-				} else {
-					podMap[intf.Group] = append(podMap[intf.Group], intf.Name)
-				}
+		podMap := make(map[string][]string)
+		for _, intf := range ixia.Status.Interfaces {
+			if _, ok := podMap[intf.PodName]; ok {
+				podMap[intf.PodName] = []string{intf.Name}
+			} else {
+				podMap[intf.PodName] = append(podMap[intf.PodName], intf.Name)
 			}
+		}
+		// need to deploy, but first deploy controller if not present
+		if err = r.deployController(ctx, &podMap, ixia, secret); err == nil {
+			log.Infof("Successfully deployed controller pod")
 			for name, intfs := range podMap {
-				//log.Infof("Creating pod %v", pod)
-				if err := r.podForIxia(ctx, name, intfs, ixia, secret); err != nil {
+				log.Infof("Creating pod %v", name)
+				if err = r.podForIxia(ctx, name, intfs, ixia, secret); err != nil {
+					//log.Infof("Pod %v create failed!", name)
 					break
 				}
+				//log.Infof("Pod %v created!", name)
 			}
 		}
 
 		if err == nil {
-			log.Infof("Created!")
+			log.Infof("All pods created!")
 			requeue = true
 		} else {
 			log.Errorf("Failed to create pod for %v in %v - %v", ixia.Name, ixia.Namespace, err)
@@ -240,22 +271,35 @@ func (r *IxiaTGReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		requeue = true
 		err = nil
 	} else {
-		contPod := &corev1.Pod{}
-		err = r.Get(ctx, types.NamespacedName{Name: CONTROLLER_NAME, Namespace: ixia.Namespace}, contPod)
+		var contStatus []corev1.ContainerStatus
+		if found.Status.Phase == corev1.PodFailed {
+			err = errors.New(fmt.Sprintf("Pod %s failed - %s", found.Name, found.Status.Reason))
+		}
+		if err == nil && found.Status.Phase != corev1.PodRunning {
+			requeue = true
+			for _, s := range found.Status.ContainerStatuses {
+				contStatus = append(contStatus, s)
+			}
+		}
 		if err == nil {
-			if found.Status.Phase == corev1.PodFailed {
-				err = errors.New(fmt.Sprintf("Pod %s failed - %s", found.Name, found.Status.Reason))
-			} else if contPod.Status.Phase == corev1.PodFailed {
-				err = errors.New(fmt.Sprintf("Pod %s failed - %s", contPod.Name, contPod.Status.Reason))
-			} else if found.Status.Phase != corev1.PodRunning || contPod.Status.Phase != corev1.PodRunning {
-				requeue = true
-				var contStatus []corev1.ContainerStatus
-				for _, s := range found.Status.ContainerStatuses {
-					contStatus = append(contStatus, s)
+			for _, podEntry := range ixia.Status.Interfaces {
+				err = r.Get(ctx, types.NamespacedName{Name: podEntry.PodName, Namespace: ixia.Namespace}, found)
+				if err != nil {
+					break
 				}
-				for _, s := range contPod.Status.ContainerStatuses {
-					contStatus = append(contStatus, s)
+				if found.Status.Phase == corev1.PodFailed {
+					err = errors.New(fmt.Sprintf("Pod %s failed - %s", found.Name, found.Status.Reason))
+					break
 				}
+				if found.Status.Phase != corev1.PodRunning {
+					requeue = true
+					for _, s := range found.Status.ContainerStatuses {
+						contStatus = append(contStatus, s)
+					}
+				}
+			}
+
+			if err == nil {
 				for _, c := range contStatus {
 					if c.State.Waiting != nil && c.State.Waiting.Reason == "ErrImagePull" {
 						err = errors.New(fmt.Sprintf("Container %s failed - %s", c.Name, c.State.Waiting.Message))
@@ -268,12 +312,12 @@ func (r *IxiaTGReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 
 	if !requeue || err != nil {
 		if err != nil {
-			ixia.Status.State = "Failed"
+			ixia.Status.State = "FAILED"
 			ixia.Status.Reason = err.Error()
 			// Ensure this is an end state, no need to requeue
 			requeue = false
 		} else {
-			ixia.Status.State = "Success"
+			ixia.Status.State = "DEPLOYED"
 		}
 
 		err = r.Status().Update(ctx, ixia)
@@ -429,6 +473,29 @@ func (r *IxiaTGReconciler) loadRelInfo(release string, relData *[]byte, list boo
 	return nil
 }
 
+func (r *IxiaTGReconciler) deleteIxiaPod(ctx context.Context, name string, ixia *networkv1alpha1.IxiaTG) error {
+	found := &corev1.Pod{}
+	if r.Get(ctx, types.NamespacedName{Name: name, Namespace: ixia.Namespace}, found) == nil {
+		if err := r.Delete(ctx, found); err != nil {
+			log.Errorf("Failed to delete ixia pod %v - %v", found, err)
+			return err
+		}
+		log.Infof("Deleted ixia pod %v", found)
+	}
+
+	// Now delete the services
+	service := &corev1.Service{}
+	if r.Get(ctx, types.NamespacedName{Name: "service-" + name, Namespace: ixia.Namespace}, service) == nil {
+		if err := r.Delete(ctx, service); err != nil {
+			log.Errorf("Failed to delete ixia pod service %v - %v", service, err)
+			return err
+		}
+		log.Infof("Deleted ixia pod service %v", service)
+	}
+
+	return nil
+}
+
 func (r *IxiaTGReconciler) deleteController(ctx context.Context, ixia *networkv1alpha1.IxiaTG) error {
 	found := &corev1.Pod{}
 	//ctrlPodName := ixia.Name + "-" + CONTROLLER_NAME
@@ -481,7 +548,7 @@ func (r *IxiaTGReconciler) deleteController(ctx context.Context, ixia *networkv1
 	return nil
 }
 
-func (r *IxiaTGReconciler) deployController(ctx context.Context, ixia *networkv1alpha1.IxiaTG, secret *corev1.Secret) error {
+func (r *IxiaTGReconciler) deployController(ctx context.Context, podMap *map[string][]string, ixia *networkv1alpha1.IxiaTG, secret *corev1.Secret) error {
 	//podList := &corev1.PodList{}
 	//opts := []client.ListOption{
 	//	client.InNamespace(ixia.Namespace),
@@ -544,6 +611,20 @@ func (r *IxiaTGReconciler) deployController(ctx context.Context, ixia *networkv1
 		return err
 	}
 
+	//intfMap := make(map[string]string)
+	//ctrlCfgMap := &corev1.ConfigMap{
+	//	ObjectMeta: metav1.ObjectMeta{
+	//		Name: "controller-config",
+	//		//Namespace: ixia.Namespace,
+	//	},
+	//	Data: intfMap,
+	//}
+
+	//localObjRef := corev1.LocalObjectReference{Name: "controller-config"}
+	//cfgMapVolSrc := &corev1.ConfigMapVolumeSource{LocalObjectReference: localObjRef}
+	//volSrc := corev1.VolumeSource{ConfigMap: cfgMapVolSrc}
+	//volume := corev1.Volume{VolumeSource: volSrc}
+
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      CONTROLLER_NAME,
@@ -556,6 +637,7 @@ func (r *IxiaTGReconciler) deployController(ctx context.Context, ixia *networkv1
 			Containers:                    containers,
 			ImagePullSecrets:              imagePullSecrets,
 			TerminationGracePeriodSeconds: pointer.Int64(5),
+			//Volumes:                       []corev1.Volume{volume},
 		},
 	}
 	log.Infof("Creating controller pod %v", pod)
@@ -764,11 +846,13 @@ func (r *IxiaTGReconciler) containersForController(ixia *networkv1alpha1.IxiaTG,
 		image := pubRel.Path + ":" + pubRel.Tag
 		args := []string{"--accept-eula", "--debug"}
 		command := []string{}
+		//volMount := corev1.VolumeMount{Name: "config", ReadOnly: true, MountPath: "/home/keysight/ixia-c/controller/config.yaml"}
 		log.Infof("Adding Pod: %s, Container: %s, Image: %s", CONTROLLER_NAME, name, image)
 		container := updateControllerContainer(corev1.Container{
 			Name:            name,
 			Image:           image,
 			ImagePullPolicy: "IfNotPresent",
+			//VolumeMounts:    []corev1.VolumeMount{volMount},
 		}, pubRel, args, command)
 		containers = append(containers, container)
 	} else {
