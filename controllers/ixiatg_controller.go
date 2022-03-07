@@ -120,6 +120,11 @@ type ixiaConfigMap struct {
 	} `yaml:"data"`
 }
 
+type controllerMap struct {
+	Location string `json:"location"`
+	EndPoint string `json:"endpoint"`
+}
+
 //+kubebuilder:rbac:groups=network.keysight.com,resources=ixiatgs,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=network.keysight.com,resources=ixiatgs/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=network.keysight.com,resources=ixiatgs/finalizers,verbs=update
@@ -611,19 +616,41 @@ func (r *IxiaTGReconciler) deployController(ctx context.Context, podMap *map[str
 		return err
 	}
 
-	//intfMap := make(map[string]string)
-	//ctrlCfgMap := &corev1.ConfigMap{
-	//	ObjectMeta: metav1.ObjectMeta{
-	//		Name: "controller-config",
-	//		//Namespace: ixia.Namespace,
-	//	},
-	//	Data: intfMap,
-	//}
+	mappings := []controllerMap{}
+	for podName, intfs := range *podMap {
+		podSvc := "service-" + podName + "." + ixia.Namespace + ".svc.cluster.local"
+		svcLoc := podSvc + ":5555+" + podSvc + ":50071"
+		for _, intf := range intfs {
+			mappings = append(mappings, controllerMap{Location: intf, EndPoint: svcLoc})
+		}
+	}
+	log.Infof("Prepared the location map object: %v", mappings)
 
-	//localObjRef := corev1.LocalObjectReference{Name: "controller-config"}
-	//cfgMapVolSrc := &corev1.ConfigMapVolumeSource{LocalObjectReference: localObjRef}
-	//volSrc := corev1.VolumeSource{ConfigMap: cfgMapVolSrc}
-	//volume := corev1.Volume{VolumeSource: volSrc}
+	jsonObj, err := json.Marshal(mappings)
+	if err != nil {
+		return err
+	}
+
+	intfMap := make(map[string]string)
+	intfMap["location_map"] = string(jsonObj)
+	ctrlCfgMap := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "controller-config",
+			Namespace: ixia.Namespace,
+		},
+		Data: intfMap,
+	}
+	err = r.Create(ctx, ctrlCfgMap)
+	if err != nil {
+		log.Errorf("Failed to create config map controller-config in %v, err %v", ixia.Namespace, err)
+		return err
+	}
+	log.Infof("Created the controller location mappings: %v", ctrlCfgMap)
+
+	localObjRef := corev1.LocalObjectReference{Name: "controller-config"}
+	cfgMapVolSrc := &corev1.ConfigMapVolumeSource{LocalObjectReference: localObjRef}
+	volSrc := corev1.VolumeSource{ConfigMap: cfgMapVolSrc}
+	volume := corev1.Volume{Name: "config", VolumeSource: volSrc}
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -637,7 +664,7 @@ func (r *IxiaTGReconciler) deployController(ctx context.Context, podMap *map[str
 			Containers:                    containers,
 			ImagePullSecrets:              imagePullSecrets,
 			TerminationGracePeriodSeconds: pointer.Int64(5),
-			//Volumes:                       []corev1.Volume{volume},
+			Volumes:                       []corev1.Volume{volume},
 		},
 	}
 	log.Infof("Creating controller pod %v", pod)
@@ -846,13 +873,13 @@ func (r *IxiaTGReconciler) containersForController(ixia *networkv1alpha1.IxiaTG,
 		image := pubRel.Path + ":" + pubRel.Tag
 		args := []string{"--accept-eula", "--debug"}
 		command := []string{}
-		//volMount := corev1.VolumeMount{Name: "config", ReadOnly: true, MountPath: "/home/keysight/ixia-c/controller/config.yaml"}
+		volMount := corev1.VolumeMount{Name: "config", ReadOnly: true, MountPath: "/home/keysight/ixia-c/controller/config.yaml"}
 		log.Infof("Adding Pod: %s, Container: %s, Image: %s", CONTROLLER_NAME, name, image)
 		container := updateControllerContainer(corev1.Container{
 			Name:            name,
 			Image:           image,
 			ImagePullPolicy: "IfNotPresent",
-			//VolumeMounts:    []corev1.VolumeMount{volMount},
+			VolumeMounts:    []corev1.VolumeMount{volMount},
 		}, pubRel, args, command)
 		containers = append(containers, container)
 	} else {
