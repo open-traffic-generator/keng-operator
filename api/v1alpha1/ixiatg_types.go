@@ -41,6 +41,11 @@ type IxiaTGIntfStatus struct {
 	Name    string `json:"name"`
 }
 
+type IxiaTGSvcEP struct {
+	PodName     string   `json:"pod_name"`
+	ServiceName []string `json:"service_names"`
+}
+
 // IxiaTGSpec defines the desired state of IxiaTG
 type IxiaTGSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
@@ -61,9 +66,10 @@ type IxiaTGStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 	//Pod    string `json:"pod,omitempty"`
-	State      string             `json:"state,omitempty"`
-	Reason     string             `json:"reason,omitempty"`
-	Interfaces []IxiaTGIntfStatus `json:"interfaces,omitempty"`
+	State       string             `json:"state,omitempty"`
+	Reason      string             `json:"reason,omitempty"`
+	Interfaces  []IxiaTGIntfStatus `json:"interfaces,omitempty"`
+	ApiEndPoint IxiaTGSvcEP        `json:"api_endpoint,omitempty"`
 }
 
 //+kubebuilder:object:root=true
