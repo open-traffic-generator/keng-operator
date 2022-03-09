@@ -41,7 +41,7 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	networkv1alpha1 "gitlab.it.keysight.com/athena/operator/api/v1alpha1"
+	networkv1alpha1 "github.com/open-traffic-generator/ixia-c-operator/api/v1alpha1"
 
 	log "github.com/sirupsen/logrus"
 

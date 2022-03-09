@@ -1,4 +1,4 @@
-module gitlab.it.keysight.com/athena/operator
+module github.com/open-traffic-generator/ixia-c-operator
 
 go 1.15
 
