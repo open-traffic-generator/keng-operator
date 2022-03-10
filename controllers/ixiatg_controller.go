@@ -253,9 +253,9 @@ func (r *IxiaTGReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		podMap := make(map[string][]string)
 		for _, intf := range ixia.Status.Interfaces {
 			if _, ok := podMap[intf.PodName]; ok {
-				podMap[intf.PodName] = []string{intf.Name}
-			} else {
 				podMap[intf.PodName] = append(podMap[intf.PodName], intf.Name)
+			} else {
+				podMap[intf.PodName] = []string{intf.Name}
 			}
 		}
 		// need to deploy, but first deploy controller if not present
