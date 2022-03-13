@@ -23,6 +23,7 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
+// IxiaTGSvcPort defines the endpoint services for configuration and stats for the OTG node
 type IxiaTGSvcPort struct {
 	In  int32 `json:"in"`
 	Out int32 `json:"out,omitempty"`
@@ -31,16 +32,19 @@ type IxiaTGSvcPort struct {
 	//NodePort int32 `json:"node_port,omitempty"`
 }
 
+// IxiaTGSvcPort defines the endpoint ports for network traffic for the OTG node
 type IxiaTGIntf struct {
 	Name  string `json:"name"`
 	Group string `json:"group,omitempty"`
 }
 
+// IxiaTGIntfStatus defines the mapping between endpoint ports and encasing pods
 type IxiaTGIntfStatus struct {
 	PodName string `json:"pod_name"`
 	Name    string `json:"name"`
 }
 
+// IxiaTGSvcEP defines the generated service names for OTG service endpoints
 type IxiaTGSvcEP struct {
 	PodName     string   `json:"pod_name"`
 	ServiceName []string `json:"service_names"`
@@ -65,11 +69,15 @@ type IxiaTGSpec struct {
 type IxiaTGStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	//Pod    string `json:"pod,omitempty"`
-	State       string             `json:"state,omitempty"`
-	Reason      string             `json:"reason,omitempty"`
-	Interfaces  []IxiaTGIntfStatus `json:"interfaces,omitempty"`
-	ApiEndPoint IxiaTGSvcEP        `json:"api_endpoint,omitempty"`
+
+	// Observed state
+	State string `json:"state,omitempty"`
+	// Reason in case of failure
+	Reason string `json:"reason,omitempty"`
+	// List of OTG port and pod mapping
+	Interfaces []IxiaTGIntfStatus `json:"interfaces,omitempty"`
+	// List of OTG service names
+	ApiEndPoint IxiaTGSvcEP `json:"api_endpoint,omitempty"`
 }
 
 //+kubebuilder:object:root=true
