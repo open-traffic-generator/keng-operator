@@ -24,19 +24,19 @@ def test_dut_double_namespace():
     namespace2 = 'ixia-c-alt'
     namespace2_config = 'dut_ixia_c_alt_namespace.txt'
     expected_svcs = [
-        'ixia-c-service',
-        'gnmi-service',
-        'grpc-service',
+        'service-http-otg-controller',
+        'service-gnmi-otg-controller',
+        'service-grpc-otg-controller',
         'service-arista1',
-        'service-ixia-c-port1',
-        'service-ixia-c-port2',
+        'service-otg-port-eth1',
+        'service-otg-port-eth2'
     ]
 
     expected_pods = [
-        'ixia-c',
         'arista1',
-        'ixia-c-port1',
-        'ixia-c-port2',
+        'otg-controller',
+        'otg-port-eth1',
+        'otg-port-eth2'
     ]
     try:
         op_rscount = utils.get_operator_restart_count()

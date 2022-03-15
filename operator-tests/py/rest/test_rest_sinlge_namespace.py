@@ -20,23 +20,23 @@ def test_rest_single_namespace(ixia_c_release):
     namespace1 = 'ixia-c-rest'
     namespace1_config = 'rest_ixia_c_namespace.txt'
     expected_svcs = [
-        'ixia-c-service',
-        'gnmi-service',
-        'grpc-service',
         'service-arista1',
         'service-arista2',
-        'service-ixia-c-port1',
-        'service-ixia-c-port2',
-        'service-ixia-c-port3'
+        'service-http-otg-controller',
+        'service-gnmi-otg-controller',
+        'service-grpc-otg-controller',
+        'service-otg-port-eth1',
+        'service-otg-port-eth2',
+        'service-otg-port-eth3'
     ]
 
     expected_pods = [
-        'ixia-c',
         'arista1',
         'arista2',
-        'ixia-c-port1',
-        'ixia-c-port2',
-        'ixia-c-port3'
+        'otg-controller',
+        'otg-port-eth1',
+        'otg-port-eth2',
+        'otg-port-eth3'
     ]
 
     utils.generate_rest_config_from_temaplate(

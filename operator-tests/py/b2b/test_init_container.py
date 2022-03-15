@@ -15,9 +15,9 @@ def test_init_container():
     namespace1 = 'ixia-c'
     namespace1_config = 'b2b_ixia_c_namespace.txt'
     expected_pods = [
-        'ixia-c',
-        'ixia-c-port1',
-        'ixia-c-port2'
+        'otg-controller',
+        'otg-port-eth1',
+        'otg-port-eth2'
     ]
     try:
         op_rscount = utils.get_operator_restart_count()

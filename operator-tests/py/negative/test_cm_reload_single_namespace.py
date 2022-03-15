@@ -29,21 +29,21 @@ def test_cm_reload_single_namespace():
     namespace1 = 'ixia-c'
     namespace1_config = 'b2b_ixia_c_namespace.txt'
     expected_svcs = [
-        'ixia-c-service',
-        'gnmi-service',
-        'grpc-service',
-        'service-ixia-c-port1',
-        'service-ixia-c-port2'
+        'service-http-otg-controller',
+        'service-gnmi-otg-controller',
+        'service-grpc-otg-controller',
+        'service-otg-port-eth1',
+        'service-otg-port-eth2'
     ]
 
     expected_pods_bad_config = [
-        'ixia-c'
+        'otg-controller'
     ]
 
     expected_pods_good_config = [
-        'ixia-c',
-        'ixia-c-port1',
-        'ixia-c-port2'
+        'otg-controller',
+        'otg-port-eth1',
+        'otg-port-eth2'
     ]
     try:
         op_rscount = utils.get_operator_restart_count()

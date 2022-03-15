@@ -1,22 +1,30 @@
 name: "ixia-c-alt"
 nodes: {
-    name: "ixia-c-port1"
+    name: "otg"
     type: IXIA_TG
     version: "local-latest"
     services: {
-        key: 5555
+        key: 443
         value: {
-            inside: 5555
+            name: "http"
+            inside: 443
             outside: 0
-            node_port: 31051
+        }
+    }
+    services: {
+        key: 40051
+        value: {
+            name: "grpc"
+            inside: 40051
+            outside: 0
         }
     }
     services: {
         key: 50071
         value: {
-            inside: 50071
+            name: "gnmi"
+            inside: 50051
             outside: 0
-            node_port: 31052
         }
     }
 }
@@ -31,7 +39,6 @@ nodes: {
         value: {
             name: "ssh"
             inside: 22
-            node_port: 31053
         }
     }
     services:{
@@ -39,7 +46,6 @@ nodes: {
         value: {
             name: "ssl"
             inside: 443
-            node_port: 31054
         }
     }
     services:{
@@ -47,35 +53,11 @@ nodes: {
         value: {
             name: "gnmi"
             inside: 6030
-            node_port: 31055
         }
     }
 }
-
-nodes: {
-    name: "ixia-c-port2"
-    type: IXIA_TG
-    version: "local-latest"
-    services: {
-        key: 5555
-        value: {
-            inside: 5555
-            outside: 0
-            node_port: 31056
-        }
-    }
-    services: {
-        key: 50071
-        value: {
-            inside: 50071
-            outside: 0
-            node_port: 31057
-        }
-    }
-}
-
 links: {
-    a_node: "ixia-c-port1"
+    a_node: "otg"
     a_int: "eth1"
     z_node: "arista1"
     z_int: "eth1"
@@ -83,6 +65,6 @@ links: {
 links: {
     a_node: "arista1"
     a_int: "eth2"
-    z_node: "ixia-c-port2"
-    z_int: "eth1"
+    z_node: "otg"
+    z_int: "eth2"
 }
