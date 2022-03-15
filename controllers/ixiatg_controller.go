@@ -479,26 +479,27 @@ func (r *IxiaTGReconciler) loadRelInfo(release string, relData *[]byte, list boo
 		for _, image := range relEntry.Images {
 			var compRef componentRel
 			ctrlComponent := false
+			contKeyName := image.Name
 			switch image.Name {
 			case IMAGE_CONTROLLER:
 				fallthrough
 			case IMAGE_GNMI_SERVER:
 				fallthrough
 			case IMAGE_GRPC_SERVER:
-				topoEntry.Controller.Containers[image.Name] = image
-				compRef = topoEntry.Controller.Containers[image.Name]
+				topoEntry.Controller.Containers[contKeyName] = image
+				compRef = topoEntry.Controller.Containers[contKeyName]
 				ctrlComponent = true
 			case IMAGE_TRAFFIC_ENG:
 				fallthrough
 			case IMAGE_PROTOCOL_ENG:
-				topoEntry.Ixia.Containers[image.Name] = image
-				compRef = topoEntry.Ixia.Containers[image.Name]
+				topoEntry.Ixia.Containers[contKeyName] = image
+				compRef = topoEntry.Ixia.Containers[contKeyName]
 			default:
 				if strings.HasPrefix(image.Name, INIT_CONT_NAME_PREFIX) {
 					initContSeq = initContSeq + 1
-					contName := fmt.Sprintf("init%d", initContSeq)
-					topoEntry.Ixia.Containers[contName] = image
-					compRef = topoEntry.Ixia.Containers[contName]
+					contKeyName = fmt.Sprintf("init%d", initContSeq)
+					topoEntry.Ixia.Containers[contKeyName] = image
+					compRef = topoEntry.Ixia.Containers[contKeyName]
 				} else {
 					log.Errorf("Error unknown image name: %s (ignoring)", image.Name)
 					continue
@@ -506,7 +507,7 @@ func (r *IxiaTGReconciler) loadRelInfo(release string, relData *[]byte, list boo
 			}
 
 			// Now update defaults
-			switch image.Name {
+			switch contKeyName {
 			case IMAGE_CONTROLLER:
 				compRef.ContainerName = CONTROLLER_NAME
 				compRef.DefArgs = []string{"--accept-eula", "--debug"}
@@ -531,12 +532,12 @@ func (r *IxiaTGReconciler) loadRelInfo(release string, relData *[]byte, list boo
 			case IMAGE_PROTOCOL_ENG:
 				compRef.ContainerName = IMAGE_PROTOCOL_ENG
 			default:
-				compRef.ContainerName = "init-container"
+				compRef.ContainerName = compRef.Name
 			}
 			if ctrlComponent {
-				topoEntry.Controller.Containers[image.Name] = compRef
+				topoEntry.Controller.Containers[contKeyName] = compRef
 			} else {
-				topoEntry.Ixia.Containers[image.Name] = compRef
+				topoEntry.Ixia.Containers[contKeyName] = compRef
 			}
 		}
 
@@ -547,12 +548,12 @@ func (r *IxiaTGReconciler) loadRelInfo(release string, relData *[]byte, list boo
 		}
 		log.Infof("Found version info for %s through %s", relEntry.Release, source)
 		log.Infof("Mapped controller components:")
-		for _, val := range topoEntry.Controller.Containers {
-			log.Infof("Component Added: %+v", val)
+		for key, val := range topoEntry.Controller.Containers {
+			log.Infof("Component Added (key %s): %+v", key, val)
 		}
 		log.Infof("Mapped ixiatg node components:")
-		for _, val := range topoEntry.Ixia.Containers {
-			log.Infof("Component Added: %+v", val)
+		for key, val := range topoEntry.Ixia.Containers {
+			log.Infof("Component Added (key %s): %+v", key, val)
 		}
 	}
 
@@ -743,17 +744,17 @@ func (r *IxiaTGReconciler) podForIxia(ctx context.Context, podName string, intfL
 	for _, cont := range contPodMap {
 		if strings.HasPrefix(cont.Name, INIT_CONT_NAME_PREFIX) {
 			initCont := corev1.Container{
-				Name:            cont.Name,
+				Name:            cont.ContainerName,
 				Image:           cont.Path + ":" + cont.Tag,
 				ImagePullPolicy: "IfNotPresent",
 			}
-			log.Infof("Adding init container image: %s", initCont.Image)
 			updateControllerContainer(&initCont, cont)
 			// Since the args are dynamic based on topology deployment, we verify if args
 			// are applied based on configmap spec; otherwise apply default args
 			if len(initCont.Args) == 0 {
 				initCont.Args = args
 			}
+			log.Infof("Adding init container image: %+v", initCont)
 			initContainers = append(initContainers, initCont)
 		}
 	}
