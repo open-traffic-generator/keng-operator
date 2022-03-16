@@ -1,5 +1,6 @@
 import pytest
 import utils
+import time
 
 
 @pytest.mark.sanity
@@ -54,5 +55,9 @@ def test_b2b_default_config():
         utils.ixia_c_pods_ok(namespace1, [])
         utils.ixia_c_services_ok(namespace1, [])
 
-
-
+        utils.wait_for(
+            lambda: utils.topology_deleted(namespace1),
+            'topology deleted',
+            timeout_seconds=30
+        )
+        time.sleep(5)

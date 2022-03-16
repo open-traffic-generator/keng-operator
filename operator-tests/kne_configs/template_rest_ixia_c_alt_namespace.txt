@@ -1,5 +1,4 @@
 name: "ixia-c-rest-alt"
-name: "ixia-c-rest"
 nodes: {
     name: "otg"
     type: IXIA_TG

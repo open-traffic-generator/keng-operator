@@ -119,7 +119,6 @@ def delete_kne_config(config_name, namespace):
         'topology deleted',
         timeout_seconds=30
     )
-    delete_file_from_kind(config_name)
 
 
 def apply_configmap(configmap):
@@ -458,7 +457,6 @@ def delete_opts_json():
     if os.path.exists(opts_json):
         os.remove(opts_json)
     print("opts.json deleted ...")
-    delete_file_from_kind(opts_json)
 
 
 def copy_opts_to_testclient():

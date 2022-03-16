@@ -1,4 +1,3 @@
-import pytest
 import utils
 
 
@@ -78,3 +77,14 @@ def test_b2b_double_namespace():
 
         utils.ixia_c_services_ok(namespace2, [])
         utils.ixia_c_pods_ok(namespace2, [])
+
+        utils.wait_for(
+            lambda: utils.topology_deleted(namespace1),
+            'topology deleted',
+            timeout_seconds=30
+        )
+        utils.wait_for(
+            lambda: utils.topology_deleted(namespace2),
+            'topology deleted',
+            timeout_seconds=30
+        )

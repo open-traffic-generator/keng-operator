@@ -77,14 +77,16 @@ def test_rest_double_namespace(ixia_c_release):
         utils.arista_sshable_ok(arista_pods, namespace1)
         utils.arista_sshable_ok(arista_pods, namespace2)
 
-        print("[Namespace:{}]Checking E2E tests running fine or not ...".format(
-            namespace1
-        ))
+        print("[Namespace:{}]Checking E2E tests "
+              "running fine or not ...".format(
+                  namespace1
+              ))
         utils.ixia_c_e2e_test_ok(namespace1, None, 'sanity', 90)
 
-        print("[Namespace:{}]Checking E2E tests running fine or not ...".format(
-            namespace2
-        ))
+        print("[Namespace:{}]Checking E2E tests "
+              "running fine or not ...".format(
+                  namespace2
+              ))
         utils.ixia_c_e2e_test_ok(
             namespace2,
             'TestEbgpv4Routes',
@@ -121,3 +123,14 @@ def test_rest_double_namespace(ixia_c_release):
         utils.delete_config(namespace2_config)
 
         utils.delete_opts_json()
+
+        utils.wait_for(
+            lambda: utils.topology_deleted(namespace1),
+            'topology deleted',
+            timeout_seconds=30
+        )
+        utils.wait_for(
+            lambda: utils.topology_deleted(namespace2),
+            'topology deleted',
+            timeout_seconds=30
+        )

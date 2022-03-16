@@ -1,4 +1,3 @@
-import pytest
 import utils
 
 
@@ -59,9 +58,10 @@ def test_rest_single_namespace(ixia_c_release):
         ]
         utils.arista_sshable_ok(arista_pods, namespace1)
 
-        print("[Namespace:{}]Checking E2E tests running fine or not ...".format(
-            namespace1
-        ))
+        print("[Namespace:{}]Checking E2E tests "
+              "running fine or not ...".format(
+                  namespace1
+              ))
         utils.ixia_c_e2e_test_ok(
             namespace1,
             'TestEbgpv4Routes',
@@ -81,3 +81,9 @@ def test_rest_single_namespace(ixia_c_release):
         utils.ixia_c_pods_ok(namespace1, [])
         utils.ixia_c_services_ok(namespace1, [])
         utils.delete_config(namespace1_config)
+
+        utils.wait_for(
+            lambda: utils.topology_deleted(namespace1),
+            'topology deleted',
+            timeout_seconds=30
+        )
