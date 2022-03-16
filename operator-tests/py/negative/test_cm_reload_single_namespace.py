@@ -2,7 +2,7 @@ import pytest
 import utils
 import time
 
-@pytest.mark.sanity
+
 def test_cm_reload_single_namespace():
     """
     Deploy b2b kne topology with BAD config,
@@ -88,6 +88,3 @@ def test_cm_reload_single_namespace():
         utils.ixia_c_pods_ok(namespace1, [])
         utils.ixia_c_services_ok(namespace1, [])
         utils.unload_bad_configmap()
-
-
-

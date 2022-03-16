@@ -53,6 +53,3 @@ def test_b2b_single_namespace():
         utils.delete_kne_config(namespace1_config, namespace1)
         utils.ixia_c_pods_ok(namespace1, [])
         utils.ixia_c_services_ok(namespace1, [])
-
-
-

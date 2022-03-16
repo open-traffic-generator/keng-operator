@@ -14,6 +14,7 @@ IXIA_CONFIGMAP_FILE = 'ixia-configmap.yaml'
 
 KIND_SINGLE_NODE_NAME = 'kind-control-plane'
 
+
 def exec_shell(cmd, sudo=True, check_return_code=True):
     """
     Executes a command in native shell and returns output as str on success or,
@@ -27,17 +28,19 @@ def exec_shell(cmd, sudo=True, check_return_code=True):
         cmd.encode('utf-8', errors='ignore'),
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True
     )
-    out, _ = p.communicate()
+    out, err = p.communicate()
     out = out.decode('utf-8', errors='ignore')
+    err = err.decode('utf-8', errors='ignore')
 
     print('Output:\n%s' % out)
+    print('Error:\n%s' % err)
 
     if check_return_code:
         if p.returncode == 0:
-            return out
-        return None
+            return out, err
+        return None, err
     else:
-        return out
+        return out, err
 
 
 def get_kne_config_path(config_name):
@@ -48,11 +51,12 @@ def get_kne_config_path(config_name):
         config_name
     ])
 
+
 def copy_file_to_kind(filepath):
     cmd = "docker cp {} {}:/".format(
         filepath, KIND_SINGLE_NODE_NAME
     )
-    out = exec_shell(cmd, True, True)
+    out = exec_shell(cmd, False, True)
     if out is None:
         raise Exception("Failed to copy file {} to kind container".format(
             filepath
@@ -61,6 +65,7 @@ def copy_file_to_kind(filepath):
         print("{} copied inside kind container".format(
             filepath
         ))
+
 
 def delete_file_from_kind(filepath):
     cmd = "docker exec -t {} rm -rf ./{}".format(
@@ -78,37 +83,35 @@ def delete_file_from_kind(filepath):
 
 
 def topology_deleted(namespace):
-    cmd = "docker exec -t {} kubectl get topology -n {}".format(
-        KIND_SINGLE_NODE_NAME,
+    cmd = "kubectl get topology -n {}".format(
         namespace
     )
-    out = exec_shell(cmd, True, False)
-    out = out.split('\n')
-    if 'No resources found' in out[0]:
+    _, err = exec_shell(cmd, True, False)
+    err = err.split('\n')
+
+    if 'No resources found' in err[0]:
         return True
     return False
-    
-    
+
+
 def create_kne_config(config_name, namespace):
     config_path = get_kne_config_path(config_name)
-    copy_file_to_kind(config_path)
     # Ensure topology was deleted from past run
     wait_for(
         lambda: topology_deleted(namespace),
         'ensured topology does not exists',
         timeout_seconds=120
     )
-    cmd = "docker exec -t {} ./kne_cli create ./{}".format(
-        KIND_SINGLE_NODE_NAME,
-        config_name
+    cmd = "kne_cli create ./{}".format(
+        config_path
     )
     exec_shell(cmd, True, False)
 
 
 def delete_kne_config(config_name, namespace):
-    cmd = "docker exec -t {} ./kne_cli delete ./{}".format(
-        KIND_SINGLE_NODE_NAME,
-        config_name
+    config_path = get_kne_config_path(config_name)
+    cmd = "kne_cli delete ./{}".format(
+        config_path
     )
     exec_shell(cmd, True, False)
     wait_for(
@@ -120,11 +123,11 @@ def delete_kne_config(config_name, namespace):
 
 
 def apply_configmap(configmap):
-    cmd = "docker exec -t {} kubectl apply -f /{}".format(
+    cmd = "kubectl apply -f /{}".format(
         KIND_SINGLE_NODE_NAME,
         configmap
     )
-    out = exec_shell(cmd, True, True)
+    out, _ = exec_shell(cmd, True, True)
     if out is None:
         raise Exception("Failed to apply configmap {} inside kind container".format(
             configmap
@@ -133,6 +136,7 @@ def apply_configmap(configmap):
         print("configmap {} applied inside kind container".format(
             configmap
         ))
+
 
 def unload_init_configmap():
     print("Unloading init container Config...")
@@ -146,10 +150,11 @@ def load_init_configmap():
         KIND_SINGLE_NODE_NAME,
         IXIA_CONFIGMAP_FILE
     )
-    out = exec_shell(cmd, False, True)
+    out, _ = exec_shell(cmd, False, True)
     yaml_obj = yaml.safe_load(out)
     json_obj = json.loads(yaml_obj["data"]["versions"])
-    init_cont = {"name":"init-wait", "path":"networkop/init-wait", "tag":"latest"}
+    init_cont = {"name": "init-wait",
+                 "path": "networkop/init-wait", "tag": "latest"}
     json_obj["images"].append(init_cont)
     yaml_obj["data"]["versions"] = json.dumps(json_obj)
     init_configmap_path = "/tmp/{}".format(INIT_CONFIGMAP_FILE)
@@ -174,13 +179,13 @@ def load_bad_configmap(bad_component, update_release=False):
         KIND_SINGLE_NODE_NAME,
         IXIA_CONFIGMAP_FILE
     )
-    out = exec_shell(cmd, False, True)
+    out, _ = exec_shell(cmd, False, True)
     yaml_obj = yaml.safe_load(out)
     json_obj = json.loads(yaml_obj["data"]["versions"])
     for elem in json_obj["images"]:
         if update_release and elem["name"] == "controller":
             json_obj["release"] = elem["tag"]
-            
+
         if elem["name"] == bad_component:
             elem["tag"] = "DUMMY"
             break
@@ -195,7 +200,7 @@ def load_bad_configmap(bad_component, update_release=False):
 
     apply_configmap(BAD_CONFIGMAP_FILE)
 
-        
+
 def seconds_elapsed(start_seconds):
     return int(round(time.time() - start_seconds))
 
@@ -244,15 +249,12 @@ def wait_for(func, condition_str, interval_seconds=None, timeout_seconds=None):
 
 
 def pods_count_ok(exp_pods, namespace):
-    cmd = "docker exec -t {} /bin/bash -c 'kubectl get pods -n {} | grep -v RESTARTS | wc -l'".format(
-        KIND_SINGLE_NODE_NAME, namespace
+    cmd = "kubectl get pods -n {} | grep -v RESTARTS | wc -l".format(
+        namespace
     )
-    out = exec_shell(cmd, True, False)
+    out, _ = exec_shell(cmd, True, False)
     out = out.split('\n')
-    if 'No resources found' in out[0]:
-        actual_pods = int(out[1])
-    else:
-        actual_pods = int(out[0])
+    actual_pods = int(out[0])
     print("Actual pods: {} - Expected: {}".format(
         actual_pods,
         exp_pods
@@ -260,16 +262,14 @@ def pods_count_ok(exp_pods, namespace):
     ))
     return exp_pods == actual_pods
 
+
 def svcs_count_ok(exp_svcs, namespace):
-    cmd = "docker exec -t {} /bin/bash -c 'kubectl get svc -n {} | grep -v TYPE | wc -l'".format(
-        KIND_SINGLE_NODE_NAME, namespace
+    cmd = "kubectl get svc -n {} | grep -v TYPE | wc -l".format(
+        namespace
     )
-    out = exec_shell(cmd, True, False)
+    out, _ = exec_shell(cmd, True, False)
     out = out.split('\n')
-    if 'No resources found' in out[0]:
-        actual_svcs = int(out[1])
-    else:
-        actual_svcs = int(out[0])
+    actual_svcs = int(out[0])
     print("Actual services: {} - Expected: {}".format(
         actual_svcs,
         exp_svcs
@@ -279,27 +279,25 @@ def svcs_count_ok(exp_svcs, namespace):
 
 
 def pods_status_ok(exp_pods, namespace):
-    cmd = "docker exec -t {} /bin/bash -c 'kubectl get pods -n {} | grep Running | wc -l'".format(
-        KIND_SINGLE_NODE_NAME, namespace
+    cmd = "kubectl get pods -n {} | grep Running | wc -l".format(
+        namespace
     )
-    out = exec_shell(cmd, True, False)
+    out, _ = exec_shell(cmd, True, False)
     out = out.split('\n')
-    if 'No resources found' in out[0]:
-        actual_pods = int(out[1])
-    else:
-        actual_pods = int(out[0])
+    actual_pods = int(out[0])
     print("Actual Running pods: {} - Expected: {}".format(
-       actual_pods,
+        actual_pods,
         exp_pods
 
     ))
     return exp_pods == actual_pods
 
+
 def pod_exists(podname, namespace):
-    cmd = "docker exec -t {} /bin/bash -c 'kubectl describe pods/{} -n {}'".format(
-        KIND_SINGLE_NODE_NAME, podname, namespace
+    cmd = "kubectl describe pods/{} -n {}".format(
+        podname, namespace
     )
-    out = exec_shell(cmd, True, True)
+    out, _ = exec_shell(cmd, True, True)
     if out is None:
         return False
     else:
@@ -307,10 +305,10 @@ def pod_exists(podname, namespace):
 
 
 def svc_exists(svcname, namespace):
-    cmd = "docker exec -t {} /bin/bash -c 'kubectl describe svc/{} -n {}'".format(
-        KIND_SINGLE_NODE_NAME, svcname, namespace
+    cmd = "kubectl describe svc/{} -n {}".format(
+        svcname, namespace
     )
-    out = exec_shell(cmd, True, True)
+    out, _ = exec_shell(cmd, True, True)
     if out is None:
         return False
     else:
@@ -318,8 +316,8 @@ def svc_exists(svcname, namespace):
 
 
 def get_operator_restart_count():
-    cmd = "docker exec -t " + KIND_SINGLE_NODE_NAME + " kubectl get pods -n ixiatg-op-system -o 'jsonpath={.items[0].status.containerStatuses[?(@.name==\"manager\")].restartCount}'"
-    out = exec_shell(cmd, True, True)
+    cmd = "kubectl get pods -n ixiatg-op-system -o 'jsonpath={.items[0].status.containerStatuses[?(@.name==\"manager\")].restartCount}'"
+    out, _ = exec_shell(cmd, True, True)
     if out is None:
         raise Exception("Operator pod not found!!!")
     else:
@@ -410,7 +408,7 @@ def generate_rest_config_from_temaplate(config, ixia_c_release):
         ixia_c_release,
         config_path
     )
-    out = exec_shell(cmd, True, True)
+    out, _ = exec_shell(cmd, True, True)
     if out is None:
         raise Exception('Failed to generate rest config from template')
     else:
@@ -424,7 +422,7 @@ def delete_config(config):
     cmd = "rm -rf {}".format(
         config_path
     )
-    out = exec_shell(cmd, True, True)
+    out, _ = exec_shell(cmd, True, True)
     if out is None:
         raise Exception('Failed to delete kne config ...')
     else:
@@ -438,7 +436,7 @@ def generate_opts_json_from_template(namespcae):
     template_json = 'template-opts.json'
     if os.path.exists(opts_json):
         os.remove(opts_json)
-    
+
     cmd = "cat {} | sed -E 's/IXIA_C_NAMESPACE/{}/g' | tee {} > /dev/null".format(
         template_json,
         namespcae,
@@ -446,7 +444,7 @@ def generate_opts_json_from_template(namespcae):
     )
 
     print(cmd)
-    out = exec_shell(cmd, True, True)
+    out, _ = exec_shell(cmd, True, True)
     if out is None:
         raise Exception('Failed to generate opts.json from template')
     else:
@@ -466,14 +464,13 @@ def delete_opts_json():
 def copy_opts_to_testclient():
     local_opts = "./opts.json"
     copy_file_to_kind(local_opts)
-    cp_cmd = "docker exec -t {} kubectl cp ./opts.json ixia-c-test-client:/home/keysight/athena/tests/go/tests/opts.json".format(
-        KIND_SINGLE_NODE_NAME
-    )
-    out = exec_shell(cp_cmd, True, True)
+    cp_cmd = "kubectl cp ./opts.json ixia-c-test-client:/home/keysight/athena/tests/go/tests/opts.json"
+    out, _ = exec_shell(cp_cmd, True, True)
     if out is None:
         raise Exception('Failed to copy opts.json to ixia-c-test-client')
     else:
         print("opts.json copied to ixia-c-test-client")
+
 
 def run_e2e_test_from_client(report, testcase=None, tags="sanity"):
     print("Running e2e test case ...")
@@ -487,28 +484,30 @@ def run_e2e_test_from_client(report, testcase=None, tags="sanity"):
         test_run_cmd = "go test -run={} -tags={} -v".format(
             testcase, tags
         )
-    cp_cmd = 'docker exec -t '+ KIND_SINGLE_NODE_NAME +' kubectl exec -t ixia-c-test-client -- bash -c "cd go/tests; '+ test_run_cmd + '" | tee '+ report
-    out = exec_shell(cp_cmd, True, False)
+    cp_cmd = 'kubectl exec -t ixia-c-test-client -- bash -c "cd go/tests; ' + \
+        test_run_cmd + '" | tee ' + report
+    exec_shell(cp_cmd, True, False)
+
 
 def check_e2e_test_status(report, expected_pass_rate=100):
     print("Checking e2e test status ...")
     cmd = "cat {} | grep -c '=== RUN'".format(
         report
     )
-    out = exec_shell(cmd,True, False)
+    out, _ = exec_shell(cmd, True, False)
     total_count = int(out)
 
     cmd = "cat {} | grep -c 'PASS:'".format(
         report
     )
-    out = exec_shell(cmd,True, False)
+    out, _ = exec_shell(cmd, True, False)
     pass_count = int(out)
 
     print('Total Count : {} - Pass Count: {}'.format(
         total_count,
         pass_count
     ))
-    
+
     pass_rate = (pass_count / total_count) * 100
 
     print('Actual Pass Rate : {} - Expected: {}'.format(
@@ -545,7 +544,8 @@ def ixia_c_e2e_test_ok(namespace, testcase=None, tags="sanity", expected_pass_ra
     print("[Namespace: {}]Analyzing E2E test results".format(
         namespace
     ))
-    assert check_e2e_test_status(test_report, expected_pass_rate), "E2E test case failed!!!"
+    assert check_e2e_test_status(
+        test_report, expected_pass_rate), "E2E test case failed!!!"
 
     print("[Namespace: {}]Deleting local opts.json".format(
         namespace
@@ -565,9 +565,12 @@ def arista_sshable_ok(arista_pods, namespace):
             timeout_seconds=300
         )
 
+
 def is_arista_ssh_reachable(pod, namespcae):
-    cmd = "docker exec -t " + KIND_SINGLE_NODE_NAME + " kubectl get services service-" + pod + " -n " + namespcae + " -o 'jsonpath={.spec.ports[?(@.name==\"ssh\")].nodePort}'"
-    out = exec_shell(cmd, True, True)
+    cmd = "kubectl get services service-" + \
+        pod + " -n " + namespcae + \
+        " -o 'jsonpath={.spec.ports[?(@.name==\"ssh\")].nodePort}'"
+    out, _ = exec_shell(cmd, True, True)
     if out is not None:
         nodeport = out.split('\n')[0]
         print("namespace: {}, pod: {} - nodeport: {}".format(
@@ -580,7 +583,7 @@ def is_arista_ssh_reachable(pod, namespcae):
             KIND_SINGLE_NODE_NAME,
             nodeport
         )
-        out = exec_shell(ssh_cmd, True, True)
+        out, _ = exec_shell(ssh_cmd, True, True)
         print(out)
         if out is not None:
             print('namespace: {}, pod: {} - sshable'.format(

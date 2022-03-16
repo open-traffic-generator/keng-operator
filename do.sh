@@ -11,13 +11,13 @@ export DEBIAN_FRONTEND=noninteractive
 IXIA_C_OPERATOR_IMAGE=ixia-c-operator
 GO_TARGZ=""
 
-IXIA_C_CONTROLLER=0.0.1-2662
+IXIA_C_CONTROLLER=0.0.1-2678
 IXIA_C_PROTOCOL_ENGINE=""
 IXIA_C_TRAFFIC_ENGINE=""
 IXIA_C_GRPC_SERVER=""
 IXIA_C_GNMI_SERVER=""
 ARISTA_CEOS_VERSION=4.26.1F
-IXIA_C_TEST_CLIENT=""
+IXIA_C_TEST_CLIENT=0.0.1-1213
 
 GCP_DOCKER_REPO=us-central1-docker.pkg.dev/kt-nts-athena-dev/keysight
 
@@ -140,88 +140,6 @@ gen_operator_artifacts() {
     docker save ${IXIA_C_OPERATOR_IMAGE}:${version} | gzip > ${art}/ixia-c-operator.tar.gz
 }
 
-cicd_get_versions_yaml() {
-    echo "Downloading versions.yaml for Ixia-C ${IXIA_C_CONTROLLER}..."
-    curl -kLO "https://${IXIA_C_ARTIFACTORY}/builds/${IXIA_C_CONTROLLER}/versions.yaml"
-}
-
-cicd_get_component_versions() {
-    cicd_get_versions_yaml
-    echo "Getting Coponents versions from versions.yaml..."
-    cat versions.yaml
-    echo ""
-    IXIA_C_PROTOCOL_ENGINE=$(cat versions.yaml | grep "ixia-c-protocol-engie: " | sed -n 's/^\ixia-c-protocol-engie: //p' | tr -d '[:space:]')
-    echo "Ixia-C protocol engine version : ${IXIA_C_PROTOCOL_ENGINE}"
-    IXIA_C_TRAFFIC_ENGINE=$(cat versions.yaml | grep "ixia-c-traffic-engine: " | sed -n 's/^\ixia-c-traffic-engine: //p' | tr -d '[:space:]')
-    echo "Ixia-C traffic engine version : ${IXIA_C_TRAFFIC_ENGINE}"
-    IXIA_C_GRPC_SERVER=$(cat versions.yaml | grep "ixia-c-grpc-server: " | sed -n 's/^\ixia-c-grpc-server: //p' | tr -d '[:space:]')
-    echo "Ixia-C gRPC server version : ${IXIA_C_GRPC_SERVER}"
-    IXIA_C_GNMI_SERVER=$(cat versions.yaml | grep "ixia-c-gnmi-server: " | sed -n 's/^\ixia-c-gnmi-server: //p' | tr -d '[:space:]')
-    echo "Ixia-C gnmi server version : ${IXIA_C_GNMI_SERVER}"
-    echo "Arista ceos version : ${ARISTA_CEOS_VERSION}"
-    rm -rf versions.yaml
-}
-
-cicd_gen_local_ixia_c_artifacts() {
-    ixia_c_art=./ixia_c_art
-    mkdir -p ${ixia_c_art}
-
-    cicd_get_component_versions
-
-    echo "Downloading ixia-c-controller:${IXIA_C_CONTROLLER}"
-    docker rmi -f $(docker images | grep 'ixia-c-controller') 2> /dev/null || true
-    curl -kLO "https://${IXIA_C_ARTIFACTORY}/builds/${IXIA_C_CONTROLLER}/ixia-c-controller.tar.gz" \
-    && docker load -i ixia-c-controller.tar.gz \
-    && rm -rf ixia-c-controller.tar.gz \
-    && docker tag ixia-c-controller:${IXIA_C_CONTROLLER} ${GCP_DOCKER_REPO}/ixia-c-controller:${IXIA_C_CONTROLLER} \
-    && docker save ${GCP_DOCKER_REPO}/ixia-c-controller:${IXIA_C_CONTROLLER} | gzip > ${ixia_c_art}/ixia-c-controller.tar.gz
-
-    echo "Downloading ixia-c-test-client"
-    docker rmi -f $(docker images | grep 'ixia-c-test-client') 2> /dev/null || true
-    curl -kLO "https://${IXIA_C_ARTIFACTORY}/builds/${IXIA_C_CONTROLLER}/ixia-c-test-client.tar.gz" \
-    && docker load -i ixia-c-test-client.tar.gz \
-    && rm -rf ixia-c-test-client.tar.gz
-    IXIA_C_TEST_CLIENT=$(docker images "ixia-c-test-client:*" --format '{{.Tag}}')
-    echo "ixia-c-test-client version is ${IXIA_C_TEST_CLIENT}"
-    docker tag ixia-c-test-client:${IXIA_C_TEST_CLIENT} ${GCP_DOCKER_REPO}/ixia-c-test-client:${IXIA_C_TEST_CLIENT} \
-    && docker save ${GCP_DOCKER_REPO}/ixia-c-test-client:${IXIA_C_TEST_CLIENT} | gzip > ${ixia_c_art}/ixia-c-test-client.tar.gz
-
-    echo "Downloading ixia-c-traffic-engine:${IXIA_C_TRAFFIC_ENGINE}"
-    docker rmi -f $(docker images | grep 'ixia-c-traffic-engine') 2> /dev/null || true
-    curl -kLO "https://${IXIA_C_ARTIFACTORY}/builds/${IXIA_C_CONTROLLER}/ixia-c-traffic-engine.tar.gz" \
-    && docker load -i ixia-c-traffic-engine.tar.gz \
-    && rm -rf ixia-c-traffic-engine.tar.gz \
-    && docker tag ixia-c-traffic-engine:${IXIA_C_TRAFFIC_ENGINE} ${GCP_DOCKER_REPO}/ixia-c-traffic-engine:${IXIA_C_TRAFFIC_ENGINE} \
-    && docker save ${GCP_DOCKER_REPO}/ixia-c-traffic-engine:${IXIA_C_TRAFFIC_ENGINE} | gzip > ${ixia_c_art}/ixia-c-traffic-engine.tar.gz
-
-    echo "Downloading ixia-c-protocol-engine:${IXIA_C_PROTOCOL_ENGINE}"
-    docker rmi -f $(docker images | grep 'ixia-c-protocol-engine') 2> /dev/null || true
-    curl -kLO "https://${IXIA_C_ARTIFACTORY}/builds/${IXIA_C_CONTROLLER}/ixia-c-protocol-engine.tar.gz" \
-    && docker load -i ixia-c-protocol-engine.tar.gz \
-    && rm -rf ixia-c-protocol-engine.tar.gz \
-    && docker tag ixia-c-protocol-engine:${IXIA_C_PROTOCOL_ENGINE} ${GCP_DOCKER_REPO}/ixia-c-protocol-engine:${IXIA_C_PROTOCOL_ENGINE} \
-    && docker save ${GCP_DOCKER_REPO}/ixia-c-protocol-engine:${IXIA_C_PROTOCOL_ENGINE} | gzip > ${ixia_c_art}/ixia-c-protocol-engine.tar.gz
-
-    echo "Downloading ixia-c-grpc-server:${IXIA_C_GRPC_SERVER}"
-    docker rmi -f $(docker images | grep 'ixiacom/ixia-c-grpc-server') 2> /dev/null || true
-    docker pull ixiacom/ixia-c-grpc-server:${IXIA_C_GRPC_SERVER} \
-    && docker tag ixiacom/ixia-c-grpc-server:${IXIA_C_GRPC_SERVER} ${GCP_DOCKER_REPO}/ixia-c-grpc-server:${IXIA_C_GRPC_SERVER} \
-    && docker save ${GCP_DOCKER_REPO}/ixia-c-grpc-server:${IXIA_C_GRPC_SERVER} | gzip > ${ixia_c_art}/ixia-c-grpc-server.tar.gz
-
-    echo "Downloading ixia-c-gnmi-server:${IXIA_C_GNMI_SERVER}"
-    docker rmi -f $(docker images | grep 'ixiacom/ixia-c-gnmi-server') 2> /dev/null || true
-    docker pull ixiacom/ixia-c-gnmi-server:${IXIA_C_GNMI_SERVER} \
-    && docker tag ixiacom/ixia-c-gnmi-server:${IXIA_C_GNMI_SERVER} ${GCP_DOCKER_REPO}/ixia-c-gnmi-server:${IXIA_C_GNMI_SERVER} \
-    && docker save ${GCP_DOCKER_REPO}/ixia-c-gnmi-server:${IXIA_C_GNMI_SERVER} | gzip > ${ixia_c_art}/ixia-c-gnmi-server.tar.gz
-
-    echo "Downloading arista-ceos:${ARISTA_CEOS_VERSION}"
-    cd ${ixia_c_art}
-    curl -kLO "https://${IXIA_C_ARTIFACTORY}/external/ceos/${ARISTA_CEOS_VERSION}/cEOS64-lab-${ARISTA_CEOS_VERSION}.tar"
-    cd ..
-
-    echo "Files in ./ixia_c_art: $(ls -lht ${ixia_c_art})"
-}
-
 cicd_exec_on_testbed() {
     cmd=${1}
     sshpass -p ${TESTBED_PASSWORD} ssh -o StrictHostKeyChecking=no  ${TESTBED_USERNAME}@${TESTBED} "${cmd}"
@@ -300,7 +218,6 @@ cicd_copy_file_to_testbed() {
 cicd_push_artifacts_to_testbed() {
     art=${1}
     cicd_copy_file_to_testbed ./art/*
-    cicd_copy_file_to_testbed ./ixia_c_art/*
     cicd_copy_file_to_testbed ./tests_art/*
 }
 
@@ -392,19 +309,9 @@ cicd_gen_tests_artifacts() {
     tar -zcvf ${tests_art}/operator-tests.tar.gz ./operator-tests
     cp ./operator-tests/helper/* ${tests_art}/
 
-    cat ${tests_art}/template-ixia-configmap.yaml | \
-        sed "s/IXIA_C_CONTROLLER_VERSION/${IXIA_C_CONTROLLER}/g" | \
-        sed "s/IXIA_C_GNMI_SERVER_VERSION/${IXIA_C_GNMI_SERVER}/g" | \
-        sed "s/IXIA_C_GRPC_SERVER_VERSION/${IXIA_C_GRPC_SERVER}/g" | \
-        sed "s/IXIA_C_TRAFFIC_ENGINE_VERSION/${IXIA_C_TRAFFIC_ENGINE}/g" | \
-        sed "s/IXIA_C_PROTOCOL_ENGINE_VERSION/${IXIA_C_PROTOCOL_ENGINE}/g" | \
-        tee ${tests_art}/ixia-configmap.yaml > /dev/null
-
-    cat ${tests_art}/template-ixia-c-test-client.yaml | \
-        sed "s/IXIA_C_TEST_CLIENT/${IXIA_C_TEST_CLIENT}/g" | \
-        tee ${tests_art}/ixia-c-test-client.yaml > /dev/null
-
-    rm -rf template-*.yaml
+    sed -i "s/^IXIA_C_CONTROLLER.*/IXIA_C_CONTROLLER\=$IXIA_C_CONTROLLER/g" ${tests_art}/operator-cicd-deploy.sh
+    sed -i "s/^ARISTA_CEOS_VERSION.*/ARISTA_CEOS_VERSION\=$ARISTA_CEOS_VERSION/g" ${tests_art}/operator-cicd-deploy.sh
+    sed -i "s/^IXIA_C_TEST_CLIENT.*/IXIA_C_TEST_CLIENT\=$IXIA_C_TEST_CLIENT/g" ${tests_art}/operator-cicd-deploy.sh
     echo "Files in ./tests_art: $(ls -lht ${tests_art})"
 }
 
@@ -457,8 +364,7 @@ cicd_verify_dockerhub_images() {
 }
 
 cicd_test() {
-    cicd_gen_local_ixia_c_artifacts \
-    && cicd_gen_tests_artifacts
+    cicd_gen_tests_artifacts
 
     version=$(get_version)
     cicd_wait_for_testbed_to_unlock \

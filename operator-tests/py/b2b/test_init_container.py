@@ -1,7 +1,7 @@
 import pytest
 import utils
 
-@pytest.mark.sanity
+
 def test_init_container():
     """
     Deploy neg-vm kne topology,
@@ -41,6 +41,3 @@ def test_init_container():
         utils.ixia_c_pods_ok(namespace1, [])
         utils.ixia_c_services_ok(namespace1, [])
         utils.unload_init_configmap()
-
-
-
