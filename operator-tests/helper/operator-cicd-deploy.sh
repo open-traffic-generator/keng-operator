@@ -507,6 +507,13 @@ get_kne() {
     && rm -rf kne
 }
 
+deploy_operator_tests() {
+    cecho "Deploying ixia-c operator tests ..." 
+    rm -rf operator-tests 2> /dev/null || true
+    tar -xvf operator-tests.tar.gz
+    python3 -m pip install -r ./operator-tests/py/requirements.txt
+}
+
 
 
 case $1 in

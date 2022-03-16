@@ -19,7 +19,7 @@ SANITY_SETTINGS = {
         "operator-tests.tar.gz",
         "template-ixia-c-test-client.yaml",
     ],
-    "deploy_cmd": "chmod u+x ./operator-cicd-deploy.sh && ./operator-cicd-deploy.sh load_images && ./operator-cicd-deploy.sh deploy && echo success", # noqa
+    "deploy_cmd": "chmod u+x ./operator-cicd-deploy.sh && ./operator-cicd-deploy.sh load_images && ./operator-cicd-deploy.sh deploy && ./operator-cicd-deploy.sh deploy_operator_tests && echo success", # noqa
     "cleanup_cmd": "chmod u+x ./operator-cicd-deploy.sh && ./operator-cicd-deploy.sh delete && ./operator-cicd-deploy.sh delete_images && echo success", # noqa
     "sanity_cmd": "{} -m pytest --html={} --self-contained-html --ixia_c_release={} ./py/ -m {} --capture sys --metadata-from-json '{}'", # noqa
 }
