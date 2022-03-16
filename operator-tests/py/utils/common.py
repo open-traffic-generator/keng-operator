@@ -102,7 +102,7 @@ def create_kne_config(config_name, namespace):
         'ensured topology does not exists',
         timeout_seconds=120
     )
-    cmd = "kne_cli create ./{}".format(
+    cmd = "$HOME/go/bin/kne_cli create ./{}".format(
         config_path
     )
     exec_shell(cmd, True, False)
@@ -110,7 +110,7 @@ def create_kne_config(config_name, namespace):
 
 def delete_kne_config(config_name, namespace):
     config_path = get_kne_config_path(config_name)
-    cmd = "kne_cli delete ./{}".format(
+    cmd = "$HOME/go/bin/kne_cli delete ./{}".format(
         config_path
     )
     exec_shell(cmd, True, False)
