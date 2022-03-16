@@ -1,0 +1,11 @@
+{
+    "recommendations": [
+        "ms-python.python",
+        "streetsidesoftware.code-spell-checker",
+        "redhat.vscode-yaml",
+        "zoellner.openapi-preview",
+        "eamodio.gitlens",
+        "zxh404.vscode-proto3",
+        "hediet.vscode-drawio"
+    ]
+}
