@@ -1,22 +1,31 @@
 name: "ixia-c-rest-alt"
+name: "ixia-c-rest"
 nodes: {
-    name: "ixia-c-port1"
+    name: "otg"
     type: IXIA_TG
     version: "IXIA_C_RELEASE"
     services: {
-        key: 5555
+        key: 443
         value: {
-            inside: 5555
+            name: "http"
+            inside: 443
             outside: 0
-            node_port: 31071
+        }
+    }
+    services: {
+        key: 40051
+        value: {
+            name: "grpc"
+            inside: 40051
+            outside: 0
         }
     }
     services: {
         key: 50071
         value: {
-            inside: 50071
+            name: "gnmi"
+            inside: 50051
             outside: 0
-            node_port: 31072
         }
     }
 }
@@ -35,7 +44,7 @@ nodes: {
             name: "ssh"
             inside: 22
             outside: 0
-            node_port: 31073
+            node_port: 31093
         }
     }
     services:{
@@ -43,7 +52,7 @@ nodes: {
         value: {
             name: "ssl"
             inside: 443
-            node_port: 31074
+            node_port: 31094
         }
     }
     services:{
@@ -51,7 +60,7 @@ nodes: {
         value: {
             name: "gnmi"
             inside: 6030
-            node_port: 31075
+            node_port: 31095
         }
     }
 }
@@ -70,7 +79,7 @@ nodes: {
             name: "ssh"
             inside: 22
             outside: 0
-            node_port: 31076
+            node_port: 31096
         }
     }
     services:{
@@ -78,7 +87,7 @@ nodes: {
         value: {
             name: "ssl"
             inside: 443
-            node_port: 31077
+            node_port: 31097
         }
     }
     services:{
@@ -86,54 +95,12 @@ nodes: {
         value: {
             name: "gnmi"
             inside: 6030
-            node_port: 31078
-        }
-    }
-}
-nodes: {
-    name: "ixia-c-port2"
-    type: IXIA_TG
-    version: "IXIA_C_RELEASE"
-    services: {
-        key: 5555
-        value: {
-            inside: 5555
-            outside: 0
-            node_port: 31079
-        }
-    }
-    services: {
-        key: 50071
-        value: {
-            inside: 50071
-            outside: 0
-            node_port: 31080
-        }
-    }
-}
-nodes: {
-    name: "ixia-c-port3"
-    type: IXIA_TG
-    version: "IXIA_C_RELEASE"
-    services: {
-        key: 5555
-        value: {
-            inside: 5555
-            outside: 0
-            node_port: 31081
-        }
-    }
-    services: {
-        key: 50071
-        value: {
-            inside: 50071
-            outside: 0
-            node_port: 31082
+            node_port: 31098
         }
     }
 }
 links: {
-    a_node: "ixia-c-port1"
+    a_node: "otg"
     a_int: "eth1"
     z_node: "arista1"
     z_int: "eth1"
@@ -147,12 +114,12 @@ links: {
 links: {
     a_node: "arista2"
     a_int: "eth2"
-    z_node: "ixia-c-port2"
-    z_int: "eth1"
+    z_node: "otg"
+    z_int: "eth2"
 }
 links: {
     a_node: "arista2"
     a_int: "eth3"
-    z_node: "ixia-c-port3"
-    z_int: "eth1"
+    z_node: "otg"
+    z_int: "eth3"
 }
