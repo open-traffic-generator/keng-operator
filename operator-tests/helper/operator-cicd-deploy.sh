@@ -17,11 +17,11 @@ IXIA_C_TEST_CLIENT=0.0.1-1213
 # source path for current session
 . $HOME/.profile
 
-# if [ "$(id -u)" -eq 0 ] && [ -n "$SUDO_USER" ]
-# then
-#     echo "This script should not be run as sudo"
-#     exit 1
-# fi
+if [ "$(id -u)" -eq 0 ] && [ -n "$SUDO_USER" ]
+then
+    echo "This script should not be run as sudo"
+    exit 1
+fi
 
 # get installers based on host architecture
 if [ "$(arch)" = "aarch64" ] || [ "$(arch)" = "arm64" ]

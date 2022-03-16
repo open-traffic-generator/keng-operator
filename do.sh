@@ -225,7 +225,7 @@ cicd_run_sanity_in_testbed() {
     version=${1}
     echo "sanity run in testbed: starting"
     sanity_run_cmd="python3 operator_cicd.py --test -build ${version} -mark sanity -ixia_c_release ${IXIA_C_CONTROLLER}"
-    cicd_exec_on_testbed "cd ./${TESTBED_CICD_DIR} && sudo ${sanity_run_cmd}"
+    cicd_exec_on_testbed "cd ./${TESTBED_CICD_DIR} && ${sanity_run_cmd}"
     echo "sanity run in testbed: done"
 }
 
@@ -246,7 +246,7 @@ cicd_pull_results_from_testbed() {
 
 cicd_cleanup_in_testbed() {
     echo "clean up in testbed: starting"
-    cicd_exec_on_testbed "cd ${TESTBED_CICD_DIR} && sudo python3 operator_cicd.py --clean"
+    cicd_exec_on_testbed "cd ${TESTBED_CICD_DIR} && python3 operator_cicd.py --clean"
     cicd_exec_on_testbed "cd ${TESTBED_CICD_DIR} && sudo rm operator_cicd.py"
     echo "clean up in testbed: done"
 }
