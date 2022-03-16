@@ -1,5 +1,6 @@
 import pytest
 import utils
+import time
 
 
 @pytest.mark.sanity
@@ -62,3 +63,4 @@ def test_dut_single_namespace():
             'topology deleted',
             timeout_seconds=30
         )
+        time.sleep(5)

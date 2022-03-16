@@ -122,15 +122,15 @@ def delete_kne_config(config_name, namespace):
 
 
 def apply_configmap(configmap):
-    cmd = "kubectl apply -f /{}".format(
-        KIND_SINGLE_NODE_NAME,
+    cmd = "kubectl apply -f {}".format(
         configmap
     )
     out, _ = exec_shell(cmd, True, True)
     if out is None:
-        raise Exception("Failed to apply configmap {} inside kind container".format(
-            configmap
-        ))
+        raise Exception("Failed to apply configmap {} "
+                        "inside kind container".format(
+                            configmap
+                        ))
     else:
         print("configmap {} applied inside kind container".format(
             configmap
@@ -139,14 +139,12 @@ def apply_configmap(configmap):
 
 def unload_init_configmap():
     print("Unloading init container Config...")
-    delete_file_from_kind(INIT_CONFIGMAP_FILE)
     apply_configmap(IXIA_CONFIGMAP_FILE)
 
 
 def load_init_configmap():
     print("Loading Init Container Config...")
-    cmd = "docker exec -t {} cat ./{}".format(
-        KIND_SINGLE_NODE_NAME,
+    cmd = "cat {}".format(
         IXIA_CONFIGMAP_FILE
     )
     out, _ = exec_shell(cmd, False, True)
@@ -156,26 +154,22 @@ def load_init_configmap():
                  "path": "networkop/init-wait", "tag": "latest"}
     json_obj["images"].append(init_cont)
     yaml_obj["data"]["versions"] = json.dumps(json_obj)
-    init_configmap_path = "/tmp/{}".format(INIT_CONFIGMAP_FILE)
+    init_configmap_path = "{}".format(INIT_CONFIGMAP_FILE)
     with open(init_configmap_path, "w") as yaml_file:
         yaml.dump(yaml_obj, yaml_file)
 
-    copy_file_to_kind(init_configmap_path)
+    apply_configmap(init_configmap_path)
     os.remove(init_configmap_path)
-
-    apply_configmap(INIT_CONFIGMAP_FILE)
 
 
 def unload_bad_configmap():
     print("Unloading Bad Config...")
-    delete_file_from_kind(BAD_CONFIGMAP_FILE)
     apply_configmap(IXIA_CONFIGMAP_FILE)
 
 
 def load_bad_configmap(bad_component, update_release=False):
     print("Loading Bad Config...")
-    cmd = "docker exec -t {} cat ./{}".format(
-        KIND_SINGLE_NODE_NAME,
+    cmd = "cat ./{}".format(
         IXIA_CONFIGMAP_FILE
     )
     out, _ = exec_shell(cmd, False, True)
@@ -190,14 +184,11 @@ def load_bad_configmap(bad_component, update_release=False):
             break
 
     yaml_obj["data"]["versions"] = json.dumps(json_obj)
-    bad_configmap_path = "/tmp/{}".format(BAD_CONFIGMAP_FILE)
+    bad_configmap_path = "{}".format(BAD_CONFIGMAP_FILE)
     with open(bad_configmap_path, "w") as yaml_file:
         yaml.dump(yaml_obj, yaml_file)
-
-    copy_file_to_kind(bad_configmap_path)
+    apply_configmap(bad_configmap_path)
     os.remove(bad_configmap_path)
-
-    apply_configmap(BAD_CONFIGMAP_FILE)
 
 
 def seconds_elapsed(start_seconds):
@@ -315,7 +306,7 @@ def svc_exists(svcname, namespace):
 
 
 def get_operator_restart_count():
-    cmd = "kubectl get pods -n ixiatg-op-system -o 'jsonpath={.items[0].status.containerStatuses[?(@.name==\"manager\")].restartCount}'"
+    cmd = "kubectl get pods -n ixiatg-op-system -o 'jsonpath={.items[0].status.containerStatuses[?(@.name==\"manager\")].restartCount}'"  # noqa
     out, _ = exec_shell(cmd, True, True)
     if out is None:
         raise Exception("Operator pod not found!!!")
@@ -351,7 +342,8 @@ def ixia_c_services_ok(namespace, exp_services=[]):
         )
 
 
-def ixia_c_pods_ok(namespace, exp_pods=[], count=True, health=True, individual=True):
+def ixia_c_pods_ok(namespace, exp_pods=[], count=True,
+                   health=True, individual=True):
     exp_pod_count = len(exp_pods)
     if count:
         print("[Namespace:{}]Verifying pods count in KNE topology".format(
@@ -436,7 +428,7 @@ def generate_opts_json_from_template(namespcae):
     if os.path.exists(opts_json):
         os.remove(opts_json)
 
-    cmd = "cat {} | sed -E 's/IXIA_C_NAMESPACE/{}/g' | tee {} > /dev/null".format(
+    cmd = "cat {} | sed -E 's/IXIA_C_NAMESPACE/{}/g' | tee {} > /dev/null".format(  # noqa
         template_json,
         namespcae,
         opts_json
@@ -462,7 +454,7 @@ def delete_opts_json():
 def copy_opts_to_testclient():
     local_opts = "./opts.json"
     copy_file_to_kind(local_opts)
-    cp_cmd = "kubectl cp ./opts.json ixia-c-test-client:/home/keysight/athena/tests/go/tests/opts.json"
+    cp_cmd = "kubectl cp ./opts.json ixia-c-test-client:/home/keysight/athena/tests/go/tests/opts.json"  # noqa
     out, _ = exec_shell(cp_cmd, True, True)
     if out is None:
         raise Exception('Failed to copy opts.json to ixia-c-test-client')
@@ -520,7 +512,8 @@ def check_e2e_test_status(report, expected_pass_rate=100):
     return False
 
 
-def ixia_c_e2e_test_ok(namespace, testcase=None, tags="sanity", expected_pass_rate=100):
+def ixia_c_e2e_test_ok(namespace, testcase=None, tags="sanity",
+                       expected_pass_rate=100):
     print("[Namespace: {}]Generating local opts.json from template".format(
         namespace
     ))
@@ -577,7 +570,7 @@ def is_arista_ssh_reachable(pod, namespcae):
             nodeport
         ))
 
-        ssh_cmd = "docker exec -t {} ssh -p {} -o StrictHostKeyChecking=no -o \"UserKnownHostsFile /dev/null\" admin@localhost echo ok".format(
+        ssh_cmd = "docker exec -t {} ssh -p {} -o StrictHostKeyChecking=no -o \"UserKnownHostsFile /dev/null\" admin@localhost echo ok".format(  # noqa
             KIND_SINGLE_NODE_NAME,
             nodeport
         )

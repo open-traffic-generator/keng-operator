@@ -451,7 +451,6 @@ deploy_ixia_configmap() {
         sed "s/IXIA_C_PROTOCOL_ENGINE_VERSION/${IXIA_C_PROTOCOL_ENGINE}/g" | \
         tee ./ixia-configmap.yaml > /dev/null
     kubectl apply -f ixia-configmap.yaml
-    rm -rf ixia-configmap.yaml
 }
 
 deploy() {
@@ -512,6 +511,7 @@ deploy_operator_tests() {
     rm -rf operator-tests 2> /dev/null || true
     tar -xvf operator-tests.tar.gz
     python3 -m pip install -r ./operator-tests/py/requirements.txt
+    cp ixia-configmap.yaml ./operator-tests/
 }
 
 

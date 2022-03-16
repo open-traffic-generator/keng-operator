@@ -43,7 +43,7 @@ nodes: {
             name: "ssh"
             inside: 22
             outside: 0
-            node_port: 31093
+            node_port: 31073
         }
     }
     services:{
@@ -51,7 +51,7 @@ nodes: {
         value: {
             name: "ssl"
             inside: 443
-            node_port: 31094
+            node_port: 31074
         }
     }
     services:{
@@ -59,7 +59,7 @@ nodes: {
         value: {
             name: "gnmi"
             inside: 6030
-            node_port: 31095
+            node_port: 31075
         }
     }
 }
@@ -78,7 +78,7 @@ nodes: {
             name: "ssh"
             inside: 22
             outside: 0
-            node_port: 31096
+            node_port: 31076
         }
     }
     services:{
@@ -86,7 +86,7 @@ nodes: {
         value: {
             name: "ssl"
             inside: 443
-            node_port: 31097
+            node_port: 31077
         }
     }
     services:{
@@ -94,7 +94,7 @@ nodes: {
         value: {
             name: "gnmi"
             inside: 6030
-            node_port: 31098
+            node_port: 31078
         }
     }
 }

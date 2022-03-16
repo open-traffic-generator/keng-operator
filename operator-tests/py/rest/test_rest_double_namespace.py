@@ -1,5 +1,6 @@
 import pytest
 import utils
+import time
 
 
 @pytest.mark.sanity
@@ -134,3 +135,5 @@ def test_rest_double_namespace(ixia_c_release):
             'topology deleted',
             timeout_seconds=30
         )
+
+        time.sleep(5)

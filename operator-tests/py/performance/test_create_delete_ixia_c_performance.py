@@ -1,5 +1,6 @@
 import pytest
 import utils
+import time
 
 
 @pytest.mark.sanity
@@ -104,3 +105,4 @@ def test_create_delete_ixia_c_performance():
             'topology deleted',
             timeout_seconds=30
         )
+        time.sleep(5)

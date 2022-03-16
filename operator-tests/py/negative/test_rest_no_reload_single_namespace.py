@@ -87,3 +87,9 @@ def test_rest_no_reload_single_namespace():
         utils.ixia_c_pods_ok(namespace1, [])
         utils.ixia_c_services_ok(namespace1, [])
         utils.unload_bad_configmap()
+        utils.wait_for(
+            lambda: utils.topology_deleted(namespace1),
+            'topology deleted',
+            timeout_seconds=30
+        )
+        time.sleep(5)
