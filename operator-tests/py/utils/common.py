@@ -11,6 +11,7 @@ CONFIGS_DIR = 'kne_configs'
 BAD_CONFIGMAP_FILE = 'bad-configmap.yaml'
 INIT_CONFIGMAP_FILE = 'init-configmap.yaml'
 IXIA_CONFIGMAP_FILE = 'ixia-configmap.yaml'
+CUSTOM_CONFIGMAP_FILE = 'custom-configmap.yaml'
 
 KIND_SINGLE_NODE_NAME = 'kind-control-plane'
 
@@ -135,6 +136,63 @@ def apply_configmap(configmap):
         print("configmap {} applied inside kind container".format(
             configmap
         ))
+
+
+def unload_custom_configmap():
+    print("Unloading custom container config...")
+    apply_configmap(IXIA_CONFIGMAP_FILE)
+
+
+def load_custom_configmap():
+    print("Loading custom container config...")
+    cmd = "cat ./{}".format(
+        IXIA_CONFIGMAP_FILE
+    )
+    out, _ = exec_shell(cmd, False, True)
+    yaml_obj = yaml.safe_load(out)
+    json_obj = json.loads(yaml_obj["data"]["versions"])
+    for elem in json_obj["images"]:
+        if elem["name"] == "controller":
+            elem["args"] = ["--dummy-arg"]
+        elif elem["name"] == "protocol-engine":
+            elem["command"] = ["dummy-command"]
+        elif elem["name"] == "traffic-engine":
+            elem["env"] = {"CUSTOM_ENV": "CUSTOM_VAL"}
+    yaml_obj["data"]["versions"] = json.dumps(json_obj)
+    custom_configmap_path = "{}".format(CUSTOM_CONFIGMAP_FILE)
+    with open(custom_configmap_path, "w") as yaml_file:
+        yaml.dump(yaml_obj, yaml_file)
+
+    apply_configmap(custom_configmap_path)
+    os.remove(custom_configmap_path)
+
+
+def ixia_c_custom_pods_ok(namespace):
+    cmd = "kubectl get pod/otg-controller -n {} -o yaml".format(
+        namespace
+    )
+    out, _ = exec_shell(cmd, True, False)
+    yaml_obj = yaml.safe_load(out)
+    for elem in yaml_obj["spec"]["containers"]:
+        if elem["name"] == "ixia-c":
+            assert elem["args"] == ["--dummy-arg"], "Unexpected controller custom args {}".format(elem["args"])
+            break
+
+    cmd = "kubectl get pod/otg-port-eth1 -n {} -o yaml".format(
+        namespace
+    )
+    out, _ = exec_shell(cmd, True, False)
+    yaml_obj = yaml.safe_load(out)
+    for elem in yaml_obj["spec"]["containers"]:
+        if elem["name"] == "otg-port-eth1-protocol-engine":
+            assert elem["command"] == ["dummy-command"], "Unexpected port custom command {}".format(elem["command"])
+        elif elem["name"] == "otg-port-eth1-traffic-engine":
+            for envElem in elem["env"]:
+                if envElem["name"] == "CUSTOM_ENV":
+                    assert envElem["value"] == "CUSTOM_VAL", "Unexpected port custom env {}".format(envElem["value"])
+                    return
+
+            assert False, "Expected port custom env CUSTOM_ENV entry not found"
 
 
 def unload_init_configmap():
