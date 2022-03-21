@@ -42,9 +42,6 @@ def test_rest_no_reload_single_namespace():
         'otg-port-eth1',
         'otg-port-eth2'
     ]
-    expected_pods_bad = [
-        'otg-controller'
-    ]
     try:
         op_rscount = utils.get_operator_restart_count()
         print("[Namespace:{}]Deploying KNE topology".format(
@@ -70,7 +67,7 @@ def test_rest_no_reload_single_namespace():
         ))
         utils.load_bad_configmap("protocol-engine", True)
         utils.create_kne_config(namespace1_config, namespace1)
-        utils.ixia_c_pods_ok(namespace1, expected_pods_bad, False)
+        utils.ixia_c_pods_ok(namespace1, expected_pods)
         utils.ixia_c_services_ok(namespace1, expected_svcs)
         op_rscount = utils.ixia_c_operator_ok(op_rscount)
 
