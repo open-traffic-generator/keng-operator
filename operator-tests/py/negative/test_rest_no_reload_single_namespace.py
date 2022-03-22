@@ -3,6 +3,7 @@ import utils
 import time
 
 
+@pytest.mark.sanity
 def test_rest_no_reload_single_namespace():
     """
     Deploy b2b kne topology with latest version,
