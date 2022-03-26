@@ -568,7 +568,7 @@ func (r *IxiaTGReconciler) loadRelInfo(release string, relData *[]byte, list boo
 func (r *IxiaTGReconciler) deleteIxiaPod(ctx context.Context, name string, ixia *networkv1alpha1.IxiaTG) error {
 	found := &corev1.Pod{}
 	if r.Get(ctx, types.NamespacedName{Name: name, Namespace: ixia.Namespace}, found) == nil {
-		if err := r.Delete(ctx, found); err != nil {
+		if err := r.Delete(ctx, found, client.GracePeriodSeconds(0)); err != nil {
 			log.Errorf("Failed to delete ixia pod %v - %v", found, err)
 			return err
 		}
@@ -578,7 +578,7 @@ func (r *IxiaTGReconciler) deleteIxiaPod(ctx context.Context, name string, ixia 
 	// Now delete the services
 	service := &corev1.Service{}
 	if r.Get(ctx, types.NamespacedName{Name: "service-" + name, Namespace: ixia.Namespace}, service) == nil {
-		if err := r.Delete(ctx, service); err != nil {
+		if err := r.Delete(ctx, service, client.GracePeriodSeconds(0)); err != nil {
 			log.Errorf("Failed to delete ixia pod service %v - %v", service, err)
 			return err
 		}
@@ -592,7 +592,7 @@ func (r *IxiaTGReconciler) deleteController(ctx context.Context, ixia *networkv1
 	found := &corev1.Pod{}
 	ctrlPodName := ixia.Name + "-controller"
 	if r.Get(ctx, types.NamespacedName{Name: ctrlPodName, Namespace: ixia.Namespace}, found) == nil {
-		if err := r.Delete(ctx, found); err != nil {
+		if err := r.Delete(ctx, found, client.GracePeriodSeconds(0)); err != nil {
 			log.Errorf("Failed to delete associated controller %v - %v", found, err)
 			return err
 		}
@@ -602,7 +602,7 @@ func (r *IxiaTGReconciler) deleteController(ctx context.Context, ixia *networkv1
 	// Now delete the config map
 	ctrlCfgMap := &corev1.ConfigMap{}
 	if r.Get(ctx, types.NamespacedName{Name: CTRL_CFG_MAP_NAME, Namespace: ixia.Namespace}, ctrlCfgMap) == nil {
-		if err := r.Delete(ctx, ctrlCfgMap); err != nil {
+		if err := r.Delete(ctx, ctrlCfgMap, client.GracePeriodSeconds(0)); err != nil {
 			log.Errorf("Failed to delete config map %v - %v", ctrlCfgMap, err)
 			return err
 		}
@@ -613,7 +613,7 @@ func (r *IxiaTGReconciler) deleteController(ctx context.Context, ixia *networkv1
 	service := &corev1.Service{}
 	for name, _ := range ixia.Spec.ApiEndPoint {
 		if r.Get(ctx, types.NamespacedName{Name: "service-" + name + "-" + ctrlPodName, Namespace: ixia.Namespace}, service) == nil {
-			if err := r.Delete(ctx, service); err != nil {
+			if err := r.Delete(ctx, service, client.GracePeriodSeconds(0)); err != nil {
 				log.Errorf("Failed to delete controller service %v - %v", service, err)
 				return err
 			}
