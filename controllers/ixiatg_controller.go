@@ -177,7 +177,7 @@ func (r *IxiaTGReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		if containsString(ixia.GetFinalizers(), myFinalizerName) {
 			found := &corev1.Pod{}
 			if r.Get(ctx, types.NamespacedName{Name: ixia.Name, Namespace: ixia.Namespace}, found) == nil {
-				if err := r.Delete(ctx, found); err != nil {
+				if err := r.Delete(ctx, found, client.GracePeriodSeconds(0)); err != nil {
 					log.Errorf("Failed to delete associated pod %v %v", found, err)
 					return ctrl.Result{}, err
 				}
@@ -417,7 +417,7 @@ func (r *IxiaTGReconciler) loadRelInfo(release string, relData *[]byte, list boo
 func (r *IxiaTGReconciler) deleteController(ctx context.Context, ixia *networkv1alpha1.IxiaTG) error {
 	found := &corev1.Pod{}
 	if r.Get(ctx, types.NamespacedName{Name: CONTROLLER_NAME, Namespace: ixia.Namespace}, found) == nil {
-		if err := r.Delete(ctx, found); err != nil {
+		if err := r.Delete(ctx, found, client.GracePeriodSeconds(0)); err != nil {
 			log.Errorf("Failed to delete associated controller %v - %v", found, err)
 			return err
 		}
@@ -427,7 +427,7 @@ func (r *IxiaTGReconciler) deleteController(ctx context.Context, ixia *networkv1
 	// Now delete the services
 	service := &corev1.Service{}
 	if r.Get(ctx, types.NamespacedName{Name: CONTROLLER_SERVICE, Namespace: ixia.Namespace}, service) == nil {
-		if err := r.Delete(ctx, service); err != nil {
+		if err := r.Delete(ctx, service, client.GracePeriodSeconds(0)); err != nil {
 			log.Errorf("Failed to delete controller service %v - %v", service, err)
 			return err
 		}
@@ -435,7 +435,7 @@ func (r *IxiaTGReconciler) deleteController(ctx context.Context, ixia *networkv1
 	}
 
 	if r.Get(ctx, types.NamespacedName{Name: GRPC_SERVICE, Namespace: ixia.Namespace}, service) == nil {
-		if err := r.Delete(ctx, service); err != nil {
+		if err := r.Delete(ctx, service, client.GracePeriodSeconds(0)); err != nil {
 			log.Errorf("Failed to delete gRPC service %v - %v", service, err)
 			return err
 		}
@@ -443,7 +443,7 @@ func (r *IxiaTGReconciler) deleteController(ctx context.Context, ixia *networkv1
 	}
 
 	if r.Get(ctx, types.NamespacedName{Name: GNMI_SERVICE, Namespace: ixia.Namespace}, service) == nil {
-		if err := r.Delete(ctx, service); err != nil {
+		if err := r.Delete(ctx, service, client.GracePeriodSeconds(0)); err != nil {
 			log.Errorf("Failed to delete gNMI service %v - %v", service, err)
 			return err
 		}
