@@ -3,7 +3,6 @@ import utils
 import time
 
 
-@pytest.mark.sanity
 def test_rest_double_namespace(ixia_c_release):
     """
     Config Map will be fetched via REST call from Ixia-C Release
