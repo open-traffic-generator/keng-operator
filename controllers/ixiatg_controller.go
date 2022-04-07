@@ -731,8 +731,8 @@ func (r *IxiaTGReconciler) containersForController(ixia *networkv1alpha1.IxiaTG,
 
 		name := "gnmi"
 		image := pubRel.Path + ":" + pubRel.Tag
-		args := []string{}
-		command := []string{"python3", "-m", "otg_gnmi", "--server-port", "50051", "--app-mode", "athena", "--target-host", CONTROLLER_SERVICE, "--target-port", "443", "--insecure"}
+		args := []string{"-http-server", "https://localhost:443", "--debug"}
+		command := []string{}
 		var ports []corev1.ContainerPort
 		ports = append(ports, corev1.ContainerPort{Name: "gnmi", ContainerPort: 50051, Protocol: "TCP"})
 		log.Infof("Adding Pod: %s, Container: %s, Image: %s", CONTROLLER_NAME, name, image)
