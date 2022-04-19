@@ -18,7 +18,10 @@ package main
 
 import (
 	"flag"
+	"fmt"
+	"io/ioutil"
 	"os"
+	"strings"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -97,7 +100,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	setupLog.Info("starting manager")
+	if buf, err := ioutil.ReadFile("version"); err != nil {
+		setupLog.Error(err, "unable to read build version")
+		setupLog.Info("starting manager")
+	} else {
+		setupLog.Info(fmt.Sprintf("starting manager - version %s", strings.TrimSuffix(string(buf), "\n")))
+	}
+
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)

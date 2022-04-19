@@ -46,6 +46,8 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"gopkg.in/yaml.v2"
+
+	version "github.com/hashicorp/go-version"
 )
 
 const (
@@ -101,6 +103,8 @@ const (
 	TERMINATION_TIMEOUT_SEC int64 = 5
 
 	HTTP_TIMEOUT_SEC time.Duration = 5
+
+	GNMI_NEW_BASE_VERSION string = "1.7.9"
 )
 
 var (
@@ -748,7 +752,7 @@ func (r *IxiaTGReconciler) podForIxia(ctx context.Context, podName string, intfL
 				Image:           cont.Path + ":" + cont.Tag,
 				ImagePullPolicy: "IfNotPresent",
 			}
-			updateControllerContainer(&initCont, cont)
+			updateControllerContainer(&initCont, cont, false)
 			// Since the args are dynamic based on topology deployment, we verify if args
 			// are applied based on configmap spec; otherwise apply default args
 			if len(initCont.Args) == 0 {
@@ -842,7 +846,7 @@ func (r *IxiaTGReconciler) getControllerService(ixia *networkv1alpha1.IxiaTG) []
 	return services
 }
 
-func updateControllerContainer(cont *corev1.Container, pubRel componentRel) {
+func updateControllerContainer(cont *corev1.Container, pubRel componentRel, newGNMI bool) {
 	conEnvs := []corev1.EnvVar{}
 	cfgMapEnv := make(map[string]string)
 	for ek, ev := range pubRel.DefEnv {
@@ -861,11 +865,15 @@ func updateControllerContainer(cont *corev1.Container, pubRel componentRel) {
 
 	if len(pubRel.Args) > 0 {
 		cont.Args = pubRel.Args
+	} else if newGNMI {
+		cont.Args = []string{"-http-server", "https://localhost:443", "--debug"}
 	} else if len(pubRel.DefArgs) > 0 {
 		cont.Args = pubRel.DefArgs
 	}
 	if len(pubRel.Command) > 0 {
 		cont.Command = pubRel.Command
+	} else if newGNMI {
+		cont.Command = []string{}
 	} else if len(pubRel.DefCmd) > 0 {
 		cont.Command = pubRel.DefCmd
 	}
@@ -885,7 +893,6 @@ func (r *IxiaTGReconciler) containersForController(ixia *networkv1alpha1.IxiaTG,
 		log.Infof("Deploying %s version %s for config version %s, ns %s (source %s)", name, comp.Tag, release, ixia.Namespace, componentDep[release].Source)
 		name := comp.ContainerName
 		image := comp.Path + ":" + comp.Tag
-		log.Infof("Adding to pod: %s, container: %s, Image: %s", CONTROLLER_NAME, name, image)
 		container := corev1.Container{
 			Name:            name,
 			Image:           image,
@@ -899,7 +906,24 @@ func (r *IxiaTGReconciler) containersForController(ixia *networkv1alpha1.IxiaTG,
 			port := corev1.ContainerPort{Name: comp.ContainerName, ContainerPort: comp.Port, Protocol: "TCP"}
 			container.Ports = []corev1.ContainerPort{port}
 		}
-		updateControllerContainer(&container, comp)
+		newGNMI := false
+		if name == GNMI_NAME {
+			base, err := version.NewVersion(GNMI_NEW_BASE_VERSION)
+			if err != nil {
+				log.Errorf("Failed to verify gNMI version (%s) - %v", GNMI_NEW_BASE_VERSION, err)
+			} else {
+				tag, err := version.NewVersion(comp.Tag)
+				if err != nil {
+					log.Errorf("Failed to verify gNMI version (%s) - %v", comp.Tag, err)
+				} else if base.LessThanOrEqual(tag) {
+					newGNMI = true
+				}
+			}
+		}
+		updateControllerContainer(&container, comp, newGNMI)
+		log.Infof("Adding to pod: %s, container: %s, Image: %s, Args: %v, Cmd: %v, Env: %v, Port: %v, Vol: %v",
+			CONTROLLER_NAME, name, image, container.Args, container.Command, container.Env,
+			container.Ports, container.VolumeMounts)
 		containers = append(containers, container)
 	}
 
@@ -941,7 +965,7 @@ func (r *IxiaTGReconciler) containersForIxia(podName string, intfList []string, 
 		} else {
 			compCopy.DefEnv["ARG_IFACE_LIST"] = argIntfList
 		}
-		updateControllerContainer(&container, compCopy)
+		updateControllerContainer(&container, compCopy, false)
 		containers = append(containers, container)
 	}
 
