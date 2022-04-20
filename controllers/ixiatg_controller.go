@@ -47,6 +47,8 @@ import (
 	topopb "github.com/google/kne/proto/topo"
 
 	"gopkg.in/yaml.v2"
+
+	version "github.com/hashicorp/go-version"
 )
 
 const (
@@ -62,11 +64,12 @@ const (
 	CONFIG_MAP_NAMESPACE string = "ixiatg-op-system"
 	DEFAULT_VERSION      string = "latest"
 
-	DS_RESTAPI         string = "Rest API"
-	DS_CONFIGMAP       string = "Config Map"
-	CONTROLLER_SERVICE string = "ixia-c-service"
-	GRPC_SERVICE       string = "grpc-service"
-	GNMI_SERVICE       string = "gnmi-service"
+	DS_RESTAPI            string = "Rest API"
+	DS_CONFIGMAP          string = "Config Map"
+	CONTROLLER_SERVICE    string = "ixia-c-service"
+	GRPC_SERVICE          string = "grpc-service"
+	GNMI_SERVICE          string = "gnmi-service"
+	GNMI_NEW_BASE_VERSION string = "1.7.9"
 )
 
 var (
@@ -692,12 +695,13 @@ func (r *IxiaTGReconciler) containersForController(ixia *networkv1alpha1.IxiaTG,
 		image := pubRel.Path + ":" + pubRel.Tag
 		args := []string{"--accept-eula", "--debug"}
 		command := []string{}
-		log.Infof("Adding Pod: %s, Container: %s, Image: %s", CONTROLLER_NAME, name, image)
 		container := updateControllerContainer(corev1.Container{
 			Name:            name,
 			Image:           image,
 			ImagePullPolicy: "IfNotPresent",
 		}, pubRel, args, command)
+		log.Infof("Adding Pod: %s, Container: %s, Image: %s, Args: %v, Cmd: %v, Env: %v, Ports: %v",
+			CONTROLLER_NAME, name, image, container.Args, container.Command, container.Env, container.Ports)
 		containers = append(containers, container)
 	} else {
 		return nil, errors.New(fmt.Sprintf("Controller image data not found for release %s", release))
@@ -713,13 +717,14 @@ func (r *IxiaTGReconciler) containersForController(ixia *networkv1alpha1.IxiaTG,
 		command := []string{"python3", "-m", "grpc_server", "--app-mode", "athena", "--target-host", CONTROLLER_SERVICE, "--target-port", "443", "--log-stdout", "--log-debug"}
 		var ports []corev1.ContainerPort
 		ports = append(ports, corev1.ContainerPort{Name: "grpc", ContainerPort: 40051, Protocol: "TCP"})
-		log.Infof("Adding Pod: %s, Container: %s, Image: %s", CONTROLLER_NAME, name, image)
 		container := updateControllerContainer(corev1.Container{
 			Name:            name,
 			Image:           image,
 			Ports:           ports,
 			ImagePullPolicy: "IfNotPresent",
 		}, pubRel, args, command)
+		log.Infof("Adding Pod: %s, Container: %s, Image: %s, Args: %v, Cmd: %v, Env: %v, Ports: %v",
+			CONTROLLER_NAME, name, image, container.Args, container.Command, container.Env, container.Ports)
 		containers = append(containers, container)
 	} else {
 		return nil, errors.New(fmt.Sprintf("gRPC image data not found for release %s", release))
@@ -731,17 +736,30 @@ func (r *IxiaTGReconciler) containersForController(ixia *networkv1alpha1.IxiaTG,
 
 		name := "gnmi"
 		image := pubRel.Path + ":" + pubRel.Tag
-		args := []string{"-http-server", "https://localhost:443", "--debug"}
-		command := []string{}
+		args := []string{}
+		command := []string{"python3", "-m", "otg_gnmi", "--server-port", "50051", "--app-mode", "athena", "--target-host", CONTROLLER_SERVICE, "--target-port", "443", "--insecure"}
+		base, err := version.NewVersion(GNMI_NEW_BASE_VERSION)
+		if err != nil {
+			log.Errorf("Failed to verify gNMI version (%s) - %v", GNMI_NEW_BASE_VERSION, err)
+		} else {
+			tag, err := version.NewVersion(pubRel.Tag)
+			if err != nil {
+				log.Errorf("Failed to verify gNMI version (%s) - %v", pubRel.Tag, err)
+			} else if base.LessThanOrEqual(tag) {
+				args = []string{"-http-server", "https://localhost:443", "--debug"}
+				command = []string{}
+			}
+		}
 		var ports []corev1.ContainerPort
 		ports = append(ports, corev1.ContainerPort{Name: "gnmi", ContainerPort: 50051, Protocol: "TCP"})
-		log.Infof("Adding Pod: %s, Container: %s, Image: %s", CONTROLLER_NAME, name, image)
 		container := updateControllerContainer(corev1.Container{
 			Name:            name,
 			Image:           image,
 			Ports:           ports,
 			ImagePullPolicy: "IfNotPresent",
 		}, pubRel, args, command)
+		log.Infof("Adding Pod: %s, Container: %s, Image: %s, Args: %v, Cmd: %v, Env: %v, Ports: %v",
+			CONTROLLER_NAME, name, image, container.Args, container.Command, container.Env, container.Ports)
 		containers = append(containers, container)
 	} else {
 		return nil, errors.New(fmt.Sprintf("gRPC image data not found for release %s", release))

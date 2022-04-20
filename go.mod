@@ -5,6 +5,7 @@ go 1.15
 require (
 	github.com/go-logr/logr v0.4.0
 	github.com/google/kne v0.0.0-20210520181145-85670fdcebce
+	github.com/hashicorp/go-version v1.4.0 // indirect
 	github.com/onsi/ginkgo v1.14.1
 	github.com/onsi/gomega v1.10.2
 	github.com/sirupsen/logrus v1.8.0
