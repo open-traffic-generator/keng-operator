@@ -41,7 +41,7 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	networkv1alpha1 "github.com/open-traffic-generator/ixia-c-operator/api/v1alpha1"
+	networkv1beta1 "github.com/open-traffic-generator/ixia-c-operator/api/v1beta1"
 
 	log "github.com/sirupsen/logrus"
 
@@ -195,7 +195,7 @@ type location struct {
 func (r *IxiaTGReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = r.Log.WithValues("ixiatg", req.NamespacedName)
 
-	ixia := &networkv1alpha1.IxiaTG{}
+	ixia := &networkv1beta1.IxiaTG{}
 	err := r.Get(ctx, req.NamespacedName, ixia)
 
 	log.Infof("Reconcile: %v, %s", ixia.Name, ixia.Namespace)
@@ -259,7 +259,7 @@ func (r *IxiaTGReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		if err == nil {
 			log.Infof("Controller version for OTG %v", otgCtrl)
 			// For OTG model check for multiple OTGs; otherwise for multiple Ixia nodes check for all versions match
-			crdList := &networkv1alpha1.IxiaTGList{}
+			crdList := &networkv1beta1.IxiaTGList{}
 			opts := []client.ListOption{
 				client.InNamespace(req.NamespacedName.Namespace),
 			}
@@ -269,7 +269,7 @@ func (r *IxiaTGReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 			} else if otgCtrl && len(crdList.Items) > 1 {
 				err = errors.New(fmt.Sprintf("Unsupported configuration; multiple (%d) OTG nodes specified", len(crdList.Items)))
 			} else {
-				genPodNames := []networkv1alpha1.IxiaTGIntfStatus{}
+				genPodNames := []networkv1beta1.IxiaTGIntfStatus{}
 				for _, intf := range ixia.Spec.Interfaces {
 					deployIntf := DEFAULT_INTF
 					if otgCtrl {
@@ -280,14 +280,14 @@ func (r *IxiaTGReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 						podName = ixia.Name + PORT_GROUP_NAME_INFIX + intf.Group
 					}
 					genPodNames = append(genPodNames,
-						networkv1alpha1.IxiaTGIntfStatus{PodName: podName, Name: intf.Name, Intf: deployIntf})
+						networkv1beta1.IxiaTGIntfStatus{PodName: podName, Name: intf.Name, Intf: deployIntf})
 				}
 
 				svcList := []string{}
 				for name, _ := range ixia.Spec.ApiEndPoint {
 					svcList = append(svcList, "service-"+name+"-"+otgCtrlName)
 				}
-				genSvcEP := networkv1alpha1.IxiaTGSvcEP{PodName: otgCtrlName, ServiceName: svcList}
+				genSvcEP := networkv1beta1.IxiaTGSvcEP{PodName: otgCtrlName, ServiceName: svcList}
 				log.Infof("Node update with interfaces: %v", genPodNames)
 				ixia.Status.Interfaces = genPodNames
 				ixia.Status.State = ixia.Spec.DesiredState
@@ -606,7 +606,7 @@ func (r *IxiaTGReconciler) loadRelInfo(release string, relData *[]byte, list boo
 	return nil
 }
 
-func (r *IxiaTGReconciler) deleteIxiaPod(ctx context.Context, name string, ixia *networkv1alpha1.IxiaTG) error {
+func (r *IxiaTGReconciler) deleteIxiaPod(ctx context.Context, name string, ixia *networkv1beta1.IxiaTG) error {
 	found := &corev1.Pod{}
 	if r.Get(ctx, types.NamespacedName{Name: name, Namespace: ixia.Namespace}, found) == nil {
 		if err := r.Delete(ctx, found, client.GracePeriodSeconds(5)); err != nil {
@@ -629,7 +629,7 @@ func (r *IxiaTGReconciler) deleteIxiaPod(ctx context.Context, name string, ixia 
 	return nil
 }
 
-func (r *IxiaTGReconciler) deleteController(ctx context.Context, ixia *networkv1alpha1.IxiaTG) error {
+func (r *IxiaTGReconciler) deleteController(ctx context.Context, ixia *networkv1beta1.IxiaTG) error {
 	found := &corev1.Pod{}
 	ctrlPodName := ixia.Name + "-controller"
 	if r.Get(ctx, types.NamespacedName{Name: ctrlPodName, Namespace: ixia.Namespace}, found) == nil {
@@ -665,7 +665,7 @@ func (r *IxiaTGReconciler) deleteController(ctx context.Context, ixia *networkv1
 	return nil
 }
 
-func (r *IxiaTGReconciler) deployController(ctx context.Context, podMap *map[string][]string, ixia *networkv1alpha1.IxiaTG, secret *corev1.Secret, checkOtgOnly bool) (bool, error) {
+func (r *IxiaTGReconciler) deployController(ctx context.Context, podMap *map[string][]string, ixia *networkv1beta1.IxiaTG, secret *corev1.Secret, checkOtgOnly bool) (bool, error) {
 	var err error
 	isOtgCtrl := true
 
@@ -793,7 +793,7 @@ func (r *IxiaTGReconciler) deployController(ctx context.Context, podMap *map[str
 	return isOtgCtrl, nil
 }
 
-func (r *IxiaTGReconciler) podForIxia(ctx context.Context, podName string, intfList []string, ixia *networkv1alpha1.IxiaTG, secret *corev1.Secret) error {
+func (r *IxiaTGReconciler) podForIxia(ctx context.Context, podName string, intfList []string, ixia *networkv1beta1.IxiaTG, secret *corev1.Secret) error {
 	initContainers := []corev1.Container{}
 	versionToDeploy := latestVersion
 	if ixia.Spec.Release != "" && ixia.Spec.Release != DEFAULT_VERSION {
@@ -877,7 +877,7 @@ func (r *IxiaTGReconciler) podForIxia(ctx context.Context, podName string, intfL
 	return nil
 }
 
-func (r *IxiaTGReconciler) getControllerService(ixia *networkv1alpha1.IxiaTG) []corev1.Service {
+func (r *IxiaTGReconciler) getControllerService(ixia *networkv1beta1.IxiaTG) []corev1.Service {
 	var services []corev1.Service
 
 	// Ensure default ixia-c service is create from grpc/gnmi to communicate with controller
@@ -953,7 +953,7 @@ func versionLaterOrEqual(baseVer string, chkVer string) (bool, error) {
 	return false, nil
 }
 
-func (r *IxiaTGReconciler) containersForController(ixia *networkv1alpha1.IxiaTG, release string, otg bool) ([]corev1.Container, error) {
+func (r *IxiaTGReconciler) containersForController(ixia *networkv1beta1.IxiaTG, release string, otg bool) ([]corev1.Container, error) {
 	log.Infof("Get containers for Controller (release %s)", release)
 	var containers []corev1.Container
 	var newGNMI bool
@@ -999,7 +999,7 @@ func (r *IxiaTGReconciler) containersForController(ixia *networkv1alpha1.IxiaTG,
 	return containers, nil
 }
 
-func (r *IxiaTGReconciler) containersForIxia(podName string, intfList []string, ixia *networkv1alpha1.IxiaTG) []corev1.Container {
+func (r *IxiaTGReconciler) containersForIxia(podName string, intfList []string, ixia *networkv1beta1.IxiaTG) []corev1.Container {
 	log.Infof("Get containers for Ixia: %s", podName)
 	argIntfList := "virtual@af_packet," + intfList[0]
 	var containers []corev1.Container
@@ -1046,7 +1046,7 @@ func (r *IxiaTGReconciler) containersForIxia(podName string, intfList []string, 
 // SetupWithManager sets up the controller with the Manager.
 func (r *IxiaTGReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&networkv1alpha1.IxiaTG{}).
+		For(&networkv1beta1.IxiaTG{}).
 		Complete(r)
 }
 
@@ -1069,7 +1069,7 @@ func getDefaultSecurityContext() *corev1.SecurityContext {
 }
 
 func (r *IxiaTGReconciler) ReconcileSecret(ctx context.Context,
-	req ctrl.Request, ixia *networkv1alpha1.IxiaTG) (*corev1.Secret, error) {
+	req ctrl.Request, ixia *networkv1beta1.IxiaTG) (*corev1.Secret, error) {
 	_ = r.Log.WithValues("ixiatg", req.NamespacedName)
 	// Fetch the Secret instance
 	instance := &corev1.Secret{}

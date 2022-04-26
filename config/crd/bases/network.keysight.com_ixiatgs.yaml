@@ -16,10 +16,10 @@ spec:
     singular: ixiatg
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - name: v1beta1
     schema:
       openAPIV3Schema:
-        description: IxiaTG is the Schema for the ixiatgs API
+        description: IxiaTG is the Schema for the ixiacs API
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -36,24 +36,75 @@ spec:
           spec:
             description: IxiaTGSpec defines the desired state of IxiaTG
             properties:
-              config:
-                description: Config of the node
+              api_endpoint_map:
+                additionalProperties:
+                  description: IxiaTGSvcPort defines the endpoint services for configuration
+                    and stats for the OTG node
+                  properties:
+                    in:
+                      format: int32
+                      type: integer
+                    out:
+                      format: int32
+                      type: integer
+                  required:
+                  - in
+                  type: object
+                description: ApiEndPoint as define in OTG config
+                type: object
+              desired_state:
+                description: Desired state by network emulation (KNE)
                 type: string
-              links:
-                type: integer
-              version:
+              interfaces:
+                description: Interfaces with DUT
+                items:
+                  description: IxiaTGSvcPort defines the endpoint ports for network
+                    traffic for the OTG node
+                  properties:
+                    group:
+                      type: string
+                    name:
+                      type: string
+                  required:
+                  - name
+                  type: object
+                type: array
+              release:
                 description: Version of the node
                 type: string
             type: object
           status:
             description: IxiaTGStatus defines the observed state of IxiaTG
             properties:
+              api_endpoint:
+                description: List of OTG service names
+                properties:
+                  pod_name:
+                    type: string
+                  service_names:
+                    items:
+                      type: string
+                    type: array
+                type: object
+              interfaces:
+                description: List of OTG port and pod mapping
+                items:
+                  description: IxiaTGIntfStatus defines the mapping between endpoint
+                    ports and encasing pods
+                  properties:
+                    interface:
+                      type: string
+                    name:
+                      type: string
+                    pod_name:
+                      type: string
+                  type: object
+                type: array
               reason:
+                description: Reason in case of failure
                 type: string
-              status:
-                description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
-                  of cluster Important: Run "make" to regenerate code after modifying
-                  this file Pod    string `json:"pod,omitempty"`'
+              state:
+                description: Observed state
                 type: string
             type: object
         type: object

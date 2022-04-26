@@ -15,5 +15,5 @@ resources:
   group: network
   kind: IxiaTG
   path: github.com/open-traffic-generator/ixia-c-operator
-  version: v1alpha1
+  version: v1beta1
 version: "3"

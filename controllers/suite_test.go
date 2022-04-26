@@ -30,7 +30,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	networkv1alpha1 "github.com/open-traffic-generator/ixia-c-operator/api/v1alpha1"
+	networkv1beta1 "github.com/open-traffic-generator/ixia-c-operator/api/v1beta1"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -62,7 +62,7 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(cfg).NotTo(BeNil())
 
-	err = networkv1alpha1.AddToScheme(scheme.Scheme)
+	err = networkv1beta1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
 	//+kubebuilder:scaffold:scheme

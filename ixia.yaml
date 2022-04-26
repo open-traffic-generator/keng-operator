@@ -1,4 +1,4 @@
-apiVersion: network.keysight.com/v1alpha1
+apiVersion: network.keysight.com/v1beta1
 kind: IxiaTG
 metadata:
   name: ixia-sample
