@@ -65,6 +65,7 @@ const (
 	CONFIG_MAP_NAME      string = "ixiatg-release-config"
 	CONFIG_MAP_NAMESPACE string = "ixiatg-op-system"
 	DEFAULT_VERSION      string = "latest"
+	DEFAULT_INTF         string = "eth1"
 
 	DS_RESTAPI         string = "Rest API"
 	DS_CONFIGMAP       string = "Config Map"
@@ -105,6 +106,7 @@ const (
 	HTTP_TIMEOUT_SEC time.Duration = 5
 
 	GNMI_NEW_BASE_VERSION string = "1.7.9"
+	IXIA_C_OTG_VERSION    string = "0.0.1-2727"
 )
 
 var (
@@ -253,23 +255,51 @@ func (r *IxiaTGReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	if ixia.Spec.DesiredState == ixia.Status.State {
 		return ctrl.Result{}, nil
 	} else if ixia.Spec.DesiredState == STATE_INITED {
-		genPodNames := []networkv1alpha1.IxiaTGIntfStatus{}
-		for _, intf := range ixia.Spec.Interfaces {
-			podName := ixia.Name + PORT_NAME_INFIX + intf.Name
-			if intf.Group != "" {
-				podName = ixia.Name + PORT_GROUP_NAME_INFIX + intf.Group
+		otgCtrl, err := r.deployController(ctx, nil, ixia, nil, true)
+		if err == nil {
+			log.Infof("Controller version for OTG %v", otgCtrl)
+			// For OTG model check for multiple OTGs; otherwise for multiple Ixia nodes check for all versions match
+			crdList := &networkv1alpha1.IxiaTGList{}
+			opts := []client.ListOption{
+				client.InNamespace(req.NamespacedName.Namespace),
 			}
-			genPodNames = append(genPodNames, networkv1alpha1.IxiaTGIntfStatus{PodName: podName, Name: intf.Name})
+			err = r.List(ctx, crdList, opts...)
+			if err != nil {
+				log.Errorf("Failed to get list of IxiaTG nodes - %v", err)
+			} else if otgCtrl && len(crdList.Items) > 1 {
+				err = errors.New(fmt.Sprintf("Unsupported configuration; multiple (%d) OTG nodes specified", len(crdList.Items)))
+			} else {
+				genPodNames := []networkv1alpha1.IxiaTGIntfStatus{}
+				for _, intf := range ixia.Spec.Interfaces {
+					deployIntf := DEFAULT_INTF
+					if otgCtrl {
+						deployIntf = intf.Name
+					}
+					podName := ixia.Name + PORT_NAME_INFIX + intf.Name
+					if intf.Group != "" {
+						podName = ixia.Name + PORT_GROUP_NAME_INFIX + intf.Group
+					}
+					genPodNames = append(genPodNames,
+						networkv1alpha1.IxiaTGIntfStatus{PodName: podName, Name: intf.Name, Intf: deployIntf})
+				}
+
+				svcList := []string{}
+				for name, _ := range ixia.Spec.ApiEndPoint {
+					svcList = append(svcList, "service-"+name+"-"+otgCtrlName)
+				}
+				genSvcEP := networkv1alpha1.IxiaTGSvcEP{PodName: otgCtrlName, ServiceName: svcList}
+				log.Infof("Node update with interfaces: %v", genPodNames)
+				ixia.Status.Interfaces = genPodNames
+				ixia.Status.State = ixia.Spec.DesiredState
+				ixia.Status.ApiEndPoint = genSvcEP
+			}
 		}
 
-		svcList := []string{}
-		for name, _ := range ixia.Spec.ApiEndPoint {
-			svcList = append(svcList, "service-"+name+"-"+otgCtrlName)
+		if err != nil {
+			log.Error(err)
+			ixia.Status.Reason = err.Error()
+			ixia.Status.State = STATE_FAILED
 		}
-		genSvcEP := networkv1alpha1.IxiaTGSvcEP{PodName: otgCtrlName, ServiceName: svcList}
-		ixia.Status.Interfaces = genPodNames
-		ixia.Status.State = ixia.Spec.DesiredState
-		ixia.Status.ApiEndPoint = genSvcEP
 
 		err = r.Status().Update(ctx, ixia)
 		if err != nil {
@@ -283,6 +313,12 @@ func (r *IxiaTGReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		log.Error(err)
 		ixia.Status.Reason = err.Error()
 		ixia.Status.State = STATE_FAILED
+
+		err = r.Status().Update(ctx, ixia)
+		if err != nil {
+			log.Errorf("Failed to update ixia status - %v", err)
+			return ctrl.Result{RequeueAfter: time.Second}, err
+		}
 
 		return ctrl.Result{}, nil
 	}
@@ -298,12 +334,13 @@ func (r *IxiaTGReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		podMap := make(map[string][]string)
 		for _, intf := range ixia.Status.Interfaces {
 			if _, ok := podMap[intf.PodName]; ok {
-				podMap[intf.PodName] = append(podMap[intf.PodName], intf.Name)
+				podMap[intf.PodName] = append(podMap[intf.PodName], intf.Intf)
 			} else {
-				podMap[intf.PodName] = []string{intf.Name}
+				podMap[intf.PodName] = []string{intf.Intf}
 			}
 		}
-		if err = r.deployController(ctx, &podMap, ixia, secret); err == nil {
+		log.Infof("Deployment interface map created: %v", podMap)
+		if _, err = r.deployController(ctx, &podMap, ixia, secret, false); err == nil {
 			log.Infof("Successfully deployed controller pod")
 			for name, intfs := range podMap {
 				log.Infof("Creating pod %v", name)
@@ -628,8 +665,9 @@ func (r *IxiaTGReconciler) deleteController(ctx context.Context, ixia *networkv1
 	return nil
 }
 
-func (r *IxiaTGReconciler) deployController(ctx context.Context, podMap *map[string][]string, ixia *networkv1alpha1.IxiaTG, secret *corev1.Secret) error {
+func (r *IxiaTGReconciler) deployController(ctx context.Context, podMap *map[string][]string, ixia *networkv1alpha1.IxiaTG, secret *corev1.Secret, checkOtgOnly bool) (bool, error) {
 	var err error
+	isOtgCtrl := true
 
 	// First check if we have the component dependency data for the release
 	depVersion := DEFAULT_VERSION
@@ -642,23 +680,39 @@ func (r *IxiaTGReconciler) deployController(ctx context.Context, podMap *map[str
 	if _, ok := componentDep[depVersion]; !ok || depVersion == DEFAULT_VERSION || componentDep[depVersion].Source == DS_CONFIGMAP {
 		if err = r.getRelInfo(ctx, depVersion); err != nil {
 			log.Errorf("Failed to get release information for %s", depVersion)
-			return err
+			return isOtgCtrl, err
 		}
 	}
 	if depVersion == DEFAULT_VERSION {
 		if latestVersion == "" {
 			log.Errorf("Failed to get release information for %s", depVersion)
-			return errors.New(fmt.Sprintf("Failed to get release information for version %s", DEFAULT_VERSION))
+			return isOtgCtrl, errors.New(fmt.Sprintf("Failed to get release information for version %s", DEFAULT_VERSION))
 		} else {
 			depVersion = latestVersion
 		}
 	}
 
+	// Determine if Controller supports new OTG model
+	found := false
+	for _, comp := range componentDep[depVersion].Controller.Containers {
+		if comp.ContainerName == CONTROLLER_NAME {
+			found = true
+			isOtgCtrl, err = versionLaterOrEqual(IXIA_C_OTG_VERSION, comp.Tag)
+			break
+		}
+	}
+	if !found || err != nil {
+		return isOtgCtrl, errors.New(fmt.Sprintf("Failed to determine Controller release for version %s", depVersion))
+	}
+	if checkOtgOnly {
+		return isOtgCtrl, nil
+	}
+
 	// Deploy controller and services
 	imagePullSecrets := getImgPullSctSecret(secret)
-	containers, err := r.containersForController(ixia, depVersion)
+	containers, err := r.containersForController(ixia, depVersion, isOtgCtrl)
 	if err != nil {
-		return err
+		return isOtgCtrl, err
 	}
 
 	locations := []location{}
@@ -677,7 +731,7 @@ func (r *IxiaTGReconciler) deployController(ctx context.Context, podMap *map[str
 
 	yamlObj, err := yaml.Marshal(&mappings)
 	if err != nil {
-		return err
+		return isOtgCtrl, err
 	}
 
 	intfMap := make(map[string]string)
@@ -692,7 +746,7 @@ func (r *IxiaTGReconciler) deployController(ctx context.Context, podMap *map[str
 	err = r.Create(ctx, ctrlCfgMap)
 	if err != nil {
 		log.Errorf("Failed to create config map controller-config in %v, err %v", ixia.Namespace, err)
-		return err
+		return isOtgCtrl, err
 	}
 	log.Infof("Created the controller location mappings: %v", ctrlCfgMap)
 
@@ -714,14 +768,16 @@ func (r *IxiaTGReconciler) deployController(ctx context.Context, podMap *map[str
 			Containers:                    containers,
 			ImagePullSecrets:              imagePullSecrets,
 			TerminationGracePeriodSeconds: pointer.Int64(TERMINATION_TIMEOUT_SEC),
-			Volumes:                       []corev1.Volume{volume},
 		},
+	}
+	if isOtgCtrl {
+		pod.Spec.Volumes = []corev1.Volume{volume}
 	}
 	log.Infof("Creating controller pod %v", pod)
 	err = r.Create(ctx, pod)
 	if err != nil {
 		log.Errorf("Failed to create pod %v in %v, err %v", pod.Name, pod.Namespace, err)
-		return err
+		return isOtgCtrl, err
 	}
 
 	// Now create and map services
@@ -730,11 +786,11 @@ func (r *IxiaTGReconciler) deployController(ctx context.Context, podMap *map[str
 		err = r.Create(ctx, &s)
 		if err != nil {
 			log.Errorf("Failed to create service %v in %v, err %v", s, ixia.Namespace, err)
-			return err
+			return isOtgCtrl, err
 		}
 	}
 
-	return nil
+	return isOtgCtrl, nil
 }
 
 func (r *IxiaTGReconciler) podForIxia(ctx context.Context, podName string, intfList []string, ixia *networkv1alpha1.IxiaTG, secret *corev1.Secret) error {
@@ -882,23 +938,41 @@ func updateControllerContainer(cont *corev1.Container, pubRel componentRel, newG
 	}
 }
 
-func (r *IxiaTGReconciler) containersForController(ixia *networkv1alpha1.IxiaTG, release string) ([]corev1.Container, error) {
+func versionLaterOrEqual(baseVer string, chkVer string) (bool, error) {
+	base, err := version.NewVersion(baseVer)
+	if err != nil {
+		return false, errors.New(fmt.Sprintf("Failed to verify gNMI version (%s) - %v", baseVer, err))
+	}
+
+	chk, err := version.NewVersion(chkVer)
+	if err != nil {
+		return false, errors.New(fmt.Sprintf("Failed to verify gNMI version (%s) - %v", chkVer, err))
+	} else if chk.GreaterThanOrEqual(base) {
+		return true, nil
+	}
+	return false, nil
+}
+
+func (r *IxiaTGReconciler) containersForController(ixia *networkv1alpha1.IxiaTG, release string, otg bool) ([]corev1.Container, error) {
 	log.Infof("Get containers for Controller (release %s)", release)
 	var containers []corev1.Container
+	var newGNMI bool
+	var err error
 
 	if len(componentDep[release].Controller.Containers) < 3 {
 		return nil, errors.New(fmt.Sprintf("Failed to find all container images for controller pod for release %s", release))
 	}
-	for name, comp := range componentDep[release].Controller.Containers {
-		log.Infof("Deploying %s version %s for config version %s, ns %s (source %s)", name, comp.Tag, release, ixia.Namespace, componentDep[release].Source)
+	for _, comp := range componentDep[release].Controller.Containers {
 		name := comp.ContainerName
 		image := comp.Path + ":" + comp.Tag
+		log.Infof("Deploying %s version %s for config version %s, ns %s (source %s)",
+			name, comp.Tag, release, ixia.Namespace, componentDep[release].Source)
 		container := corev1.Container{
 			Name:            name,
 			Image:           image,
 			ImagePullPolicy: "IfNotPresent",
 		}
-		if comp.VolMntName != "" {
+		if comp.VolMntName != "" && otg {
 			volMount := corev1.VolumeMount{Name: comp.VolMntName, ReadOnly: true, MountPath: comp.VolMntPath}
 			container.VolumeMounts = []corev1.VolumeMount{volMount}
 		}
@@ -906,18 +980,12 @@ func (r *IxiaTGReconciler) containersForController(ixia *networkv1alpha1.IxiaTG,
 			port := corev1.ContainerPort{Name: comp.ContainerName, ContainerPort: comp.Port, Protocol: "TCP"}
 			container.Ports = []corev1.ContainerPort{port}
 		}
-		newGNMI := false
+		newGNMI = false
+		err = nil
 		if name == GNMI_NAME {
-			base, err := version.NewVersion(GNMI_NEW_BASE_VERSION)
+			newGNMI, err = versionLaterOrEqual(GNMI_NEW_BASE_VERSION, comp.Tag)
 			if err != nil {
-				log.Errorf("Failed to verify gNMI version (%s) - %v", GNMI_NEW_BASE_VERSION, err)
-			} else {
-				tag, err := version.NewVersion(comp.Tag)
-				if err != nil {
-					log.Errorf("Failed to verify gNMI version (%s) - %v", comp.Tag, err)
-				} else if base.LessThanOrEqual(tag) {
-					newGNMI = true
-				}
+				log.Error(err)
 			}
 		}
 		updateControllerContainer(&container, comp, newGNMI)
@@ -945,10 +1013,10 @@ func (r *IxiaTGReconciler) containersForIxia(podName string, intfList []string, 
 		if strings.HasPrefix(comp.Name, INIT_CONT_NAME_PREFIX) {
 			continue
 		}
-		log.Infof("Deploying %s version %s for config version %s, ns %s (source %s)", cName, comp.Tag, versionToDeploy, ixia.Namespace, componentDep[versionToDeploy].Source)
+		log.Infof("Deploying %s version %s for config version %s, ns %s (source %s)",
+			cName, comp.Tag, versionToDeploy, ixia.Namespace, componentDep[versionToDeploy].Source)
 		name := podName + "-" + comp.ContainerName
 		image := comp.Path + ":" + comp.Tag
-		log.Infof("Adding to pod: %s, container: %s, Image: %s", podName, name, image)
 		container := corev1.Container{
 			Name:            name,
 			Image:           image,
@@ -966,6 +1034,8 @@ func (r *IxiaTGReconciler) containersForIxia(podName string, intfList []string, 
 			compCopy.DefEnv["ARG_IFACE_LIST"] = argIntfList
 		}
 		updateControllerContainer(&container, compCopy, false)
+		log.Infof("Adding to pod: %s, container: %s, Image: %s, Args: %v, Cmd: %v, Env: %v",
+			podName, name, image, container.Args, container.Command, container.Env)
 		containers = append(containers, container)
 	}
 

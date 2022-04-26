@@ -40,14 +40,15 @@ type IxiaTGIntf struct {
 
 // IxiaTGIntfStatus defines the mapping between endpoint ports and encasing pods
 type IxiaTGIntfStatus struct {
-	PodName string `json:"pod_name"`
-	Name    string `json:"name"`
+	PodName string `json:"pod_name,omitempty"`
+	Name    string `json:"name,omitempty"`
+	Intf    string `json:"interface,omitempty"`
 }
 
 // IxiaTGSvcEP defines the generated service names for OTG service endpoints
 type IxiaTGSvcEP struct {
-	PodName     string   `json:"pod_name"`
-	ServiceName []string `json:"service_names"`
+	PodName     string   `json:"pod_name,omitempty"`
+	ServiceName []string `json:"service_names,omitempty"`
 }
 
 // IxiaTGSpec defines the desired state of IxiaTG
