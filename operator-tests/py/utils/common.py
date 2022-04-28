@@ -791,3 +791,10 @@ def socket_alive(exp_svcs, svc_ing_map):
                 exp_svc, port
             )
 
+
+def delete_namespace(namespace):
+    cmd = "kubectl delete namespace {}".format(
+        namespace
+    )
+    exec_shell(cmd, True, True)
+

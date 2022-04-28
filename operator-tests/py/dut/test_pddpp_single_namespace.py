@@ -7,7 +7,7 @@ from deepdiff import DeepDiff
 @pytest.mark.sanity
 def test_pddpp_single_namespace():
     """
-    Deploy pdpdpp kne topology,
+    Deploy pddpp kne topology,
     - namespace - 1: ixia-c
     Delete pdp kne topology,
     - namespace - 1: ixia-c
@@ -18,6 +18,9 @@ def test_pddpp_single_namespace():
     - individual pod status
     - individual service status
     - operator pod health
+    - socket connection
+    - meshnet topologies
+    - ixiatgs
     """
     namespace1 = 'ixia-c'
     namespace1_config = 'pddpp_ixia_c_namespace.txt'
@@ -259,4 +262,4 @@ def test_pddpp_single_namespace():
             'topology deleted',
             timeout_seconds=30
         )
-        time.sleep(2)
+        utils.delete_namespace(namespace1)

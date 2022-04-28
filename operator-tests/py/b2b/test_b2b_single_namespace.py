@@ -1,5 +1,6 @@
 import utils
 import pytest
+import time
 from deepdiff import DeepDiff
 
 @pytest.mark.sanity
@@ -16,6 +17,9 @@ def test_b2b_single_namespace():
     - individual pod status
     - individual service status
     - operator pod health
+    - socket connection
+    - meshnet topologies
+    - ixiatgs
     """
     namespace1 = 'ixia-c'
     namespace1_config = 'b2b_ixia_c_namespace.txt'
@@ -163,3 +167,4 @@ def test_b2b_single_namespace():
             'topology deleted',
             timeout_seconds=30
         )
+        utils.delete_namespace(namespace1)
