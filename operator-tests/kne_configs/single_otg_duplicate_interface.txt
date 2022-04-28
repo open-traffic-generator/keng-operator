@@ -1,0 +1,36 @@
+name: "ixia-c"
+nodes: {
+    name: "otg"
+    type: IXIA_TG
+    version: "local-latest"
+    services: {
+        key: 443
+        value: {
+            name: "https"
+            inside: 443
+            outside: 0
+        }
+    }
+    services: {
+        key: 40051
+        value: {
+            name: "grpc"
+            inside: 40051
+            outside: 0
+        }
+    }
+    services: {
+        key: 50071
+        value: {
+            name: "gnmi"
+            inside: 50051
+            outside: 0
+        }
+    }
+}
+links: {
+    a_node: "otg"
+    a_int: "eth1"
+    z_node: "otg"
+    z_int: "eth1"
+}
