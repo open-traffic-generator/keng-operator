@@ -115,7 +115,9 @@ def create_kne_config(config_name, namespace):
     cmd = "$HOME/go/bin/kne_cli create ./{}".format(
         config_path
     )
-    exec_shell(cmd, True, False)
+    out, err = exec_shell(cmd, True, False)
+    return out, err
+    
 
 
 def delete_kne_config(config_name, namespace):
