@@ -1,13 +1,15 @@
-import utils
 import pytest
+import utils
+import time
 from deepdiff import DeepDiff
 
+
 @pytest.mark.sanity
-def test_b2b_single_namespace():
+def test_pdpp_single_namespace():
     """
-    Deploy b2b kne topology,
+    Deploy pdpp kne topology,
     - namespace - 1: ixia-c
-    Delete b2b kne topology,
+    Delete pdp kne topology,
     - namespace - 1: ixia-c
     Validate,
     - total pods count
@@ -18,22 +20,61 @@ def test_b2b_single_namespace():
     - operator pod health
     """
     namespace1 = 'ixia-c'
-    namespace1_config = 'b2b_ixia_c_namespace.txt'
+    namespace1_config = 'pdpp_ixia_c_namespace.txt'
+
     expected_svcs = {
         'service-https-otg-controller': [443],
         'service-gnmi-otg-controller': [50051],
         'service-grpc-otg-controller': [40051],
         'service-otg-port-eth1': [5555, 50071],
-        'service-otg-port-eth2': [5555, 50071]
+        'service-otg-port-eth2': [5555, 50071],
+        'service-otg-port-eth3': [5555, 50071],
+        'service-arista1': []
     }
 
     expected_pods = [
+        'arista1',
         'otg-controller',
         'otg-port-eth1',
-        'otg-port-eth2'
+        'otg-port-eth2',
+        'otg-port-eth3'
     ]
 
     expected_topology = [
+        {
+            "metadata": {
+                "name": "arista1",
+                "namespace": "ixia-c",
+            },
+            "spec": {
+                "links": [
+                    {
+                        "local_intf": "eth2",
+                        "local_ip": "",
+                        "peer_intf": "eth2",
+                        "peer_ip": "",
+                        "peer_pod": "otg-port-eth2",
+                        "uid": 1
+                    },
+                    {
+                        "local_intf": "eth3",
+                        "local_ip": "",
+                        "peer_intf": "eth3",
+                        "peer_ip": "",
+                        "peer_pod": "otg-port-eth3",
+                        "uid": 2
+                    },
+                    {
+                        "local_intf": "eth1",
+                        "local_ip": "",
+                        "peer_intf": "eth1",
+                        "peer_ip": "",
+                        "peer_pod": "otg-port-eth1",
+                        "uid": 0
+                    }
+                ]
+            },
+        },
         {
             "metadata": {
                 "name": "otg-port-eth1",
@@ -44,9 +85,9 @@ def test_b2b_single_namespace():
                     {
                         "local_intf": "eth1",
                         "local_ip": "",
-                        "peer_intf": "eth2",
+                        "peer_intf": "eth1",
                         "peer_ip": "",
-                        "peer_pod": "otg-port-eth2",
+                        "peer_pod": "arista1",
                         "uid": 0
                     }
                 ]
@@ -62,10 +103,28 @@ def test_b2b_single_namespace():
                     {
                         "local_intf": "eth2",
                         "local_ip": "",
-                        "peer_intf": "eth1",
+                        "peer_intf": "eth2",
                         "peer_ip": "",
-                        "peer_pod": "otg-port-eth1",
-                        "uid": 0
+                        "peer_pod": "arista1",
+                        "uid": 1
+                    }
+                ]
+            },
+        },
+        {
+            "metadata": {
+                "name": "otg-port-eth3",
+                "namespace": "ixia-c",
+            },
+            "spec": {
+                "links": [
+                    {
+                        "local_intf": "eth3",
+                        "local_ip": "",
+                        "peer_intf": "eth3",
+                        "peer_ip": "",
+                        "peer_pod": "arista1",
+                        "uid": 2
                     }
                 ]
             },
@@ -97,6 +156,9 @@ def test_b2b_single_namespace():
                     },
                     {
                         "name": "eth2"
+                    },
+                    {
+                        "name": "eth3"
                     }
                 ],
                 "release": "local-latest"
@@ -120,12 +182,18 @@ def test_b2b_single_namespace():
                         "interface": "eth2",
                         "name": "eth2",
                         "pod_name": "otg-port-eth2"
+                    },
+                    {
+                        "interface": "eth3",
+                        "name": "eth3",
+                        "pod_name": "otg-port-eth3"
                     }
                 ],
                 "state": "DEPLOYED"
             }
         }
     ]
+
     try:
         op_rscount = utils.get_operator_restart_count()
         print("[Namespace:{}]Deploying KNE topology".format(
@@ -137,6 +205,7 @@ def test_b2b_single_namespace():
         op_rscount = utils.ixia_c_operator_ok(op_rscount)
 
         actual_topologies = utils.get_topologies(namespace1)
+        print(actual_topologies)
         assert not DeepDiff(expected_topology, actual_topologies, ignore_order=True), "expected topologies mismatched!!!"
 
         actual_ixiatgs = utils.get_ixiatgs(namespace1)
@@ -163,3 +232,4 @@ def test_b2b_single_namespace():
             'topology deleted',
             timeout_seconds=30
         )
+        time.sleep(2)

@@ -1,21 +1,28 @@
 import pytest
 import utils
-import time
 
 
-@pytest.mark.sanity
-def test_init_container():
+def test_args_cmd_env_override():
     """
-    Deploy neg-vm kne topology,
+    Deploy b2b kne topology with default version, but custom args, cmd and env
     - namespace - 1: ixia-c
-    Delete neg-vm kne topology,
+    Delete b2b kne topology,
     - namespace - 1: ixia-c
     Validate,
-    - individual pod status
-    - operator pod health
+    - total pods count
+    - total service count
+    - individual pod description
     """
     namespace1 = 'ixia-c'
     namespace1_config = 'b2b_ixia_c_namespace.txt'
+    expected_svcs = [
+        'service-http-otg-controller',
+        'service-gnmi-otg-controller',
+        'service-grpc-otg-controller',
+        'service-otg-port-eth1',
+        'service-otg-port-eth2'
+    ]
+
     expected_pods = [
         'otg-controller',
         'otg-port-eth1',
@@ -26,9 +33,11 @@ def test_init_container():
         print("[Namespace:{}]Deploying KNE topology".format(
             namespace1
         ))
-        utils.load_init_configmap()
+        utils.load_custom_configmap()
         utils.create_kne_config(namespace1_config, namespace1)
-        utils.ixia_c_pods_ok(namespace1, expected_pods, False)
+        utils.ixia_c_pods_ok(namespace1, expected_pods, True, False, True)
+        utils.ixia_c_custom_pods_ok(namespace1)
+        utils.ixia_c_services_ok(namespace1, expected_svcs)
         op_rscount = utils.ixia_c_operator_ok(op_rscount)
 
         print("[Namespace:{}]Deleting KNE topology".format(
@@ -36,16 +45,16 @@ def test_init_container():
         ))
         utils.delete_kne_config(namespace1_config, namespace1)
         utils.ixia_c_pods_ok(namespace1, [])
+        utils.ixia_c_services_ok(namespace1, [])
         op_rscount = utils.ixia_c_operator_ok(op_rscount)
-
+        utils.unload_custom_configmap()
+        return
     finally:
+        print("Done")
         utils.delete_kne_config(namespace1_config, namespace1)
         utils.ixia_c_pods_ok(namespace1, [])
         utils.ixia_c_services_ok(namespace1, [])
-        utils.unload_init_configmap()
-        utils.wait_for(
-            lambda: utils.topology_deleted(namespace1),
-            'topology deleted',
-            timeout_seconds=30
-        )
-        time.sleep(5)
+        utils.unload_custom_configmap()
+
+
+

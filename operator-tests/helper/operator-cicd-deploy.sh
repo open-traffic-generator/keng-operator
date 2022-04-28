@@ -2,17 +2,17 @@
 
 GO_VERSION=1.17.3
 
-KNE_COMMIT=9a8d6e9
+KNE_COMMIT=11b0119
 MESHNET_COMMIT=de89b2e
 MESHNET_VERSION=v0.3.0
 
-IXIA_C_CONTROLLER=0.0.1-2738
+IXIA_C_CONTROLLER=0.0.1-2770
 IXIA_C_PROTOCOL_ENGINE=""
 IXIA_C_TRAFFIC_ENGINE=""
 IXIA_C_GRPC_SERVER=""
 IXIA_C_GNMI_SERVER=""
 ARISTA_CEOS_VERSION=4.26.1F
-IXIA_C_TEST_CLIENT=0.0.1-1244
+IXIA_C_TEST_CLIENT=0.0.1-1282
 
 # source path for current session
 . $HOME/.profile
@@ -112,11 +112,13 @@ get_kubectl() {
 
 get_kne() {
     cecho "Getting kne commit: $KNE_COMMIT ..."
+    rm -rfv kne 
+    git clone https://github.com/google/kne.git
+    cd kne 
+    git checkout $KNE_COMMIT 
+    cd -
+    cd kne/kne_cli && go install && cd -
     rm -rf kne
-    git clone https://github.com/open-traffic-generator/kne.git \
-    && cd kne && git checkout otg-refactor && git checkout $KNE_COMMIT && cd - \
-    && cd kne/kne_cli && go install && cd - \
-    && rm -rf kne
 }
 
 gcloud_auth() {
@@ -207,6 +209,23 @@ get_meshnet() {
     && rm -rf meshnet-cni
 }
 
+get_metallb() {
+    cecho "Getting metallb ..."
+    kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.12/manifests/namespace.yaml \
+    && kubectl create secret generic -n metallb-system memberlist --from-literal=secretkey="$(openssl rand -base64 128)" \
+    && kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.12/manifests/metallb.yaml \
+    && wait_for_pod_counts metallb-system 1 \
+    && wait_for_all_pods_to_be_ready -ns metallb-system || exit 1
+
+    prefix=$(docker network inspect -f '{{.IPAM.Config}}' kind | grep -Eo "[0-9]+\.[0-9]+\.[0-9]+" | tail -n 1)
+
+    yml=metallb-config
+    sed -e "s/\${prefix}/${prefix}/g" ${yml}.template.yaml > ${yml}.yaml \
+    && cecho "Applying metallb config map for exposing internal services via public IP addresses ..." \
+    && cat ${yml}.yaml \
+    && kubectl apply -f ${yml}.yaml
+}
+
 rm_meshnet() {
     cecho "Getting meshnet-cni commit: $MESHNET_COMMIT ..."
     rm -rf meshnet-cni && git clone https://github.com/networkop/meshnet-cni
@@ -232,6 +251,7 @@ setup_kind_cluster() {
     && kind create cluster --wait 5m \
     && get_kubectl \
     && get_meshnet \
+    && get_metallb \
     && wait_for_all_pods_to_be_ready \
     && install_kind_container_deps
 }
@@ -378,7 +398,7 @@ get_component_versions() {
     echo "Getting Coponents versions from versions.yaml..."
     cat versions.yaml
     echo ""
-    IXIA_C_PROTOCOL_ENGINE=$(cat versions.yaml | grep "ixia-c-protocol-engie: " | sed -n 's/^\ixia-c-protocol-engie: //p' | tr -d '[:space:]')
+    IXIA_C_PROTOCOL_ENGINE=$(cat versions.yaml | grep "ixia-c-protocol-engine: " | sed -n 's/^\ixia-c-protocol-engine: //p' | tr -d '[:space:]')
     echo "Ixia-C protocol engine version : ${IXIA_C_PROTOCOL_ENGINE}"
     IXIA_C_TRAFFIC_ENGINE=$(cat versions.yaml | grep "ixia-c-traffic-engine: " | sed -n 's/^\ixia-c-traffic-engine: //p' | tr -d '[:space:]')
     echo "Ixia-C traffic engine version : ${IXIA_C_TRAFFIC_ENGINE}"
@@ -495,15 +515,6 @@ delete() {
     delete_ixia_c_test_client \
     && delete_ixia_configmap \
     && delete_ixia_c_operator
-}
-
-get_kne() {
-    cecho "Getting kne commit: $KNE_COMMIT ..."
-    rm -rf kne
-    git clone https://github.com/open-traffic-generator/kne.git \
-    && cd kne && git checkout otg-refactor && git checkout $KNE_COMMIT && cd - \
-    && cd kne/kne_cli && go install && cd - \
-    && rm -rf kne
 }
 
 deploy_operator_tests() {

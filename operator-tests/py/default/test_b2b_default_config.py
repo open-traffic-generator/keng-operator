@@ -3,7 +3,6 @@ import utils
 import time
 
 
-@pytest.mark.sanity
 def test_b2b_default_config():
     """
     Deploy b2b kne topology with default version,

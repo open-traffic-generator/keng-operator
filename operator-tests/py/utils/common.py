@@ -3,6 +3,7 @@ import subprocess
 import time
 import json
 import yaml
+import socket
 
 SUDO_USER = 'root'
 
@@ -14,6 +15,14 @@ IXIA_CONFIGMAP_FILE = 'ixia-configmap.yaml'
 CUSTOM_CONFIGMAP_FILE = 'custom-configmap.yaml'
 
 KIND_SINGLE_NODE_NAME = 'kind-control-plane'
+
+expected_svc_port_map = [
+    'service-https-otg-controller',
+    'service-gnmi-otg-controller',
+    'service-grpc-otg-controller',
+    'service-otg-port-eth1',
+    'service-otg-port-eth2'
+]
 
 
 def exec_shell(cmd, sudo=True, check_return_code=True):
@@ -685,3 +694,100 @@ def time_ok(time_taken, exp_time, tolerance):
     if time_taken <= exp_max_time:
         return True
     return False
+
+
+def get_topologies(namespace):
+    print("Getting meshnet topologies ...")
+    actual_topologies = []
+    cmd = "kubectl get topologies -o yaml -n {}".format(
+        namespace
+    )
+    out, _ = exec_shell(cmd, True, True)
+    yaml_obj = yaml.safe_load(out)
+    for item in yaml_obj["items"]:
+        topology = {
+            "metadata": {
+                "name": item["metadata"]["name"],
+                "namespace": item["metadata"]["namespace"],
+            },
+            "spec": item["spec"],
+        }
+        actual_topologies.append(topology)
+    return actual_topologies
+
+
+
+def get_ixiatgs(namespace):
+    print("Getting ixiatgs ...")
+    actual_ixiatgs = []
+    cmd = "kubectl get ixiatgs -o yaml -n {}".format(
+        namespace
+    )
+    out, _ = exec_shell(cmd, True, True)
+    yaml_obj = yaml.safe_load(out)
+    for item in yaml_obj["items"]:
+        ixiatg = {
+            "metadata": {
+                "name": item["metadata"]["name"],
+                "namespace": item["metadata"]["namespace"],
+            },
+            "spec": item["spec"],
+            "status": item["status"]
+        }
+        actual_ixiatgs.append(ixiatg)
+    return actual_ixiatgs
+
+
+def get_ingress_ip(namespace, service):
+    cmd = "kubectl get svc/" + service + " -n " + namespace + " -o 'jsonpath={.status.loadBalancer}'"
+    out, _ = exec_shell(cmd, True, True)
+    yaml_obj = yaml.safe_load(out)
+    ingress_ip = yaml_obj['ingress'][0]['ip']
+    print("Ingress IP of service: {} in namespace: {}".format(
+        service,
+        namespace
+    ))
+    return ingress_ip
+
+
+def get_ingress_mapping(namespace, services):
+    ingress_map = dict()
+    for service in services:
+        print("Finding ingress mapping for service: {} in namespace: {}".format(
+            service, namespace
+        ))
+        ingress_map[service] = get_ingress_ip(namespace, service)
+
+    return ingress_map
+
+
+
+def check_socket_connection(host, port):
+    retry = 5
+    attempt = 1
+    while attempt <= retry:
+        try:
+            print("attempt: {}".format(attempt))
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.connect((host,port))
+            s.close()
+            print("Socket connection for {}:{} is alive....".format(host, port))
+            return True
+        except Exception as e:
+            attempt += 1
+            time.sleep(1)
+    print("Socket connection for {}:{} is dead....".format(host, port))
+    return False
+
+
+def socket_alive(exp_svcs, svc_ing_map):
+    for exp_svc, ports in exp_svcs.items():
+        for port in ports:
+            print("Checking socket is alive for service {} on port {}...".format(
+                exp_svc,
+                port
+            ))
+            assert check_socket_connection(svc_ing_map[exp_svc], port), "socket is dead for service {} on port {}...".format(
+                exp_svc, port
+            )
+
