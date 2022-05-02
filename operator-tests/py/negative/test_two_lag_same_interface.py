@@ -3,7 +3,6 @@ import pytest
 import time
 from deepdiff import DeepDiff
 
-@pytest.mark.sanity
 def test_two_lag_same_interface():
     """
     Deploy two lags same interface kne topology,

@@ -3,7 +3,7 @@ import pytest
 import time
 from deepdiff import DeepDiff
 
-@pytest.mark.sanity
+
 def test_single_lag_duplicate_interface():
     """
     Deploy single lag duplicate interfaces kne topology,
@@ -28,7 +28,6 @@ def test_single_lag_duplicate_interface():
         utils.ixia_c_pods_ok(namespace1, [])
         utils.ixia_c_services_ok(namespace1, [])
         op_rscount = utils.ixia_c_operator_ok(op_rscount)
-
         print("[Namespace:{}]Deleting KNE topology".format(
             namespace1
         ))
