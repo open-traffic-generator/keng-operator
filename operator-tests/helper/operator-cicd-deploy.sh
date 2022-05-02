@@ -490,6 +490,18 @@ deploy_ixia_configmap() {
     rm -rf ixia-configmap.yaml
 }
 
+deploy_minimal_topo() {
+    cecho "Deploying minimal topology...."
+    kne_cli create minimal_topo.txt
+    wait_for_pod_counts ixia-c 3
+    wait_for_all_pods_to_be_ready
+
+    cecho "Deleting minimal topology...."
+    kne_cli delete minimal_topo.txt
+    wait_for_pod_counts ixia-c 0
+    kubectl delete namespace ixia-c
+}
+
 deploy_old_topo_configmap() {
     OLD_RELEASE=local-old
     get_component_versions
@@ -509,9 +521,10 @@ deploy_old_topo_configmap() {
 deploy() {
     deploy_ixia_c_test_client \
     && deploy_ixia_c_operator \
+    && get_kne \
     && deploy_ixia_configmap \
-    && deploy_old_topo_configmap \
-    && get_kne
+    && deploy_minimal_topo \
+    && deploy_old_topo_configmap
 }
 
 delete_ixia_c_test_client() {
