@@ -2,7 +2,7 @@
 
 GO_VERSION=1.17.3
 
-KNE_COMMIT=11b0119
+KNE_COMMIT=1129822
 MESHNET_COMMIT=de89b2e
 MESHNET_VERSION=v0.3.0
 
@@ -13,6 +13,8 @@ IXIA_C_GRPC_SERVER=""
 IXIA_C_GNMI_SERVER=""
 ARISTA_CEOS_VERSION=4.26.1F
 IXIA_C_TEST_CLIENT=0.0.1-1282
+
+OLD_TOPO_SUPPORTED_VERSION=0.0.1-2678
 
 # source path for current session
 . $HOME/.profile
@@ -329,11 +331,23 @@ load_ixia_c_operator_image() {
     kind load image-archive "${img}"
 }
 
+load_older_topo_supported_controller() {
+    LATEST_PTH=us-central1-docker.pkg.dev/kt-nts-athena-dev/keysight/ixia-c-controller:${IXIA_C_CONTROLLER}
+    cecho "Loading $LATEST_PTH"
+    docker pull $LATEST_PTH
+
+    cecho "Loading $PTH"
+    PTH=us-central1-docker.pkg.dev/kt-nts-athena-dev/keysight/ixia-c-controller:${OLD_TOPO_SUPPORTED_VERSION}
+    docker tag $LATEST_PTH $PTH
+    kind load docker-image $PTH
+}
+
 load_images() {
     load_ixia_c_images \
     && load_ixia_c_test_client_image \
     && load_ceos_image \
-    && load_ixia_c_operator_image
+    && load_ixia_c_operator_image \
+    && load_older_topo_supported_controller
 }
 
 delete_ixia_c_images() {
@@ -461,9 +475,11 @@ deploy_ixia_c_test_client() {
 }
 
 deploy_ixia_configmap() {
+    LATEST_RELEASE=local-latest
     get_component_versions
     cecho "Deploying ixia-configmap..."
     cat ./template-ixia-configmap.yaml | \
+        sed "s/LATEST_RELEASE/${LATEST_RELEASE}/g" | \
         sed "s/IXIA_C_CONTROLLER_VERSION/${IXIA_C_CONTROLLER}/g" | \
         sed "s/IXIA_C_GNMI_SERVER_VERSION/${IXIA_C_GNMI_SERVER}/g" | \
         sed "s/IXIA_C_GRPC_SERVER_VERSION/${IXIA_C_GRPC_SERVER}/g" | \
@@ -471,12 +487,30 @@ deploy_ixia_configmap() {
         sed "s/IXIA_C_PROTOCOL_ENGINE_VERSION/${IXIA_C_PROTOCOL_ENGINE}/g" | \
         tee ./ixia-configmap.yaml > /dev/null
     kubectl apply -f ixia-configmap.yaml
+    rm -rf ixia-configmap.yaml
+}
+
+deploy_old_topo_configmap() {
+    OLD_RELEASE=local-old
+    get_component_versions
+    cecho "Deploying ixia-configmap..."
+    cat ./template-ixia-configmap.yaml | \
+        sed "s/LATEST_RELEASE/${OLD_RELEASE}/g" | \
+        sed "s/IXIA_C_CONTROLLER_VERSION/${OLD_TOPO_SUPPORTED_VERSION}/g" | \
+        sed "s/IXIA_C_GNMI_SERVER_VERSION/${IXIA_C_GNMI_SERVER}/g" | \
+        sed "s/IXIA_C_GRPC_SERVER_VERSION/${IXIA_C_GRPC_SERVER}/g" | \
+        sed "s/IXIA_C_TRAFFIC_ENGINE_VERSION/${IXIA_C_TRAFFIC_ENGINE}/g" | \
+        sed "s/IXIA_C_PROTOCOL_ENGINE_VERSION/${IXIA_C_PROTOCOL_ENGINE}/g" | \
+        tee ./ixia-configmap.yaml > /dev/null
+    kubectl apply -f ixia-configmap.yaml
+    rm -rf ixia-configmap.yaml
 }
 
 deploy() {
     deploy_ixia_c_test_client \
     && deploy_ixia_c_operator \
     && deploy_ixia_configmap \
+    && deploy_old_topo_configmap \
     && get_kne
 }
 
