@@ -308,10 +308,16 @@ func (r *IxiaTGReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 
 					if err == nil {
 						svcList := []string{}
-						for name, _ := range ixia.Spec.ApiEndPoint {
-							svcList = append(svcList, "service-"+name+"-"+otgCtrlName)
+						podName := ixia.Name
+						if otgCtrl {
+							podName = otgCtrlName
+							for name, _ := range ixia.Spec.ApiEndPoint {
+								svcList = append(svcList, "service-"+name+"-"+otgCtrlName)
+							}
+						} else {
+							svcList = append(svcList, "service-"+podName)
 						}
-						genSvcEP := networkv1beta1.IxiaTGSvcEP{PodName: otgCtrlName, ServiceName: svcList}
+						genSvcEP := networkv1beta1.IxiaTGSvcEP{PodName: podName, ServiceName: svcList}
 						log.Infof("Node update with interfaces: %v", genPodNames)
 						ixia.Status.Interfaces = genPodNames
 						ixia.Status.State = ixia.Spec.DesiredState
