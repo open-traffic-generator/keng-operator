@@ -492,12 +492,13 @@ deploy_ixia_configmap() {
 
 deploy_minimal_topo() {
     cecho "Deploying minimal topology...."
-    kne_cli create minimal_topo.txt
+    kubectl delete namespace ixia-c
+    $HOME/go/bin/kne_cli create minimal_topo.txt
     wait_for_pod_counts ixia-c 3
     wait_for_all_pods_to_be_ready
 
     cecho "Deleting minimal topology...."
-    kne_cli delete minimal_topo.txt
+    $HOME/go/bin/kne_cli delete minimal_topo.txt
     wait_for_pod_counts ixia-c 0
     kubectl delete namespace ixia-c
 }
