@@ -198,7 +198,7 @@ func (r *IxiaTGReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	ixia := &networkv1beta1.IxiaTG{}
 	err := r.Get(ctx, req.NamespacedName, ixia)
 
-	log.Infof("Reconcile: %v, %s", ixia.Name, ixia.Namespace)
+	log.Infof("Reconcile: %v (Desired State: %v), Namespace: %s", ixia.Name, ixia.Spec.DesiredState, ixia.Namespace)
 
 	if err != nil {
 		if errapi.IsNotFound(err) {
@@ -252,6 +252,7 @@ func (r *IxiaTGReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 
 	// First we verify if the desired state is already reached; otherwise handle accordingly
 	otgCtrlName := ixia.Name + CTRL_POD_NAME_SUFFIX
+	log.Infof("IXIA DS %v CS %v", ixia.Spec.DesiredState, ixia.Status.State)
 	if ixia.Spec.DesiredState == ixia.Status.State {
 		return ctrl.Result{}, nil
 	} else if ixia.Spec.DesiredState == STATE_INITED {
@@ -261,37 +262,68 @@ func (r *IxiaTGReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 			// For OTG model check for multiple OTGs; otherwise for multiple Ixia nodes check for all versions match
 			crdList := &networkv1beta1.IxiaTGList{}
 			opts := []client.ListOption{
-				client.InNamespace(req.NamespacedName.Namespace),
+				client.InNamespace(ixia.Namespace),
 			}
 			err = r.List(ctx, crdList, opts...)
 			if err != nil {
 				log.Errorf("Failed to get list of IxiaTG nodes - %v", err)
 			} else if otgCtrl && len(crdList.Items) > 1 {
 				err = errors.New(fmt.Sprintf("Unsupported configuration; multiple (%d) OTG nodes specified", len(crdList.Items)))
+			} else if !otgCtrl && len(ixia.Spec.Interfaces) > 1 {
+				err = errors.New(fmt.Sprintf("Multiple interfaces (%d) specified for node %s", len(ixia.Spec.Interfaces), ixia.Name))
+			} else if !otgCtrl && ixia.Spec.Interfaces[0].Name != DEFAULT_INTF {
+				err = errors.New(fmt.Sprintf("Unsupported interface %s for Controller version", ixia.Spec.Interfaces[0].Name))
+			} else if !otgCtrl && ixia.Name == CONTROLLER_NAME {
+				err = errors.New(fmt.Sprintf("Node name %s is reserved for Controller pod, use some other name", CONTROLLER_NAME))
 			} else {
-				genPodNames := []networkv1beta1.IxiaTGIntfStatus{}
-				for _, intf := range ixia.Spec.Interfaces {
-					deployIntf := DEFAULT_INTF
-					if otgCtrl {
-						deployIntf = intf.Name
+				if !otgCtrl && len(crdList.Items) > 1 {
+					specVer := crdList.Items[0].Spec.Release
+					for _, node := range crdList.Items {
+						if node.Spec.Release != specVer {
+							err = errors.New("IxiaTG node versions are not consistent")
+							break
+						}
 					}
-					podName := ixia.Name + PORT_NAME_INFIX + intf.Name
-					if intf.Group != "" {
-						podName = ixia.Name + PORT_GROUP_NAME_INFIX + intf.Group
-					}
-					genPodNames = append(genPodNames,
-						networkv1beta1.IxiaTGIntfStatus{PodName: podName, Name: intf.Name, Intf: deployIntf})
 				}
 
-				svcList := []string{}
-				for name, _ := range ixia.Spec.ApiEndPoint {
-					svcList = append(svcList, "service-"+name+"-"+otgCtrlName)
+				if err == nil {
+					genPodNames := []networkv1beta1.IxiaTGIntfStatus{}
+					for _, intf := range ixia.Spec.Interfaces {
+						deployIntf := DEFAULT_INTF
+						podName := ixia.Name
+						if otgCtrl {
+							deployIntf = intf.Name
+							podName = ixia.Name + PORT_NAME_INFIX + intf.Name
+						}
+						if intf.Group != "" {
+							if !otgCtrl {
+								err = errors.New("Group not supported for old KNE configs")
+								break
+							}
+							podName = ixia.Name + PORT_GROUP_NAME_INFIX + intf.Group
+						}
+						genPodNames = append(genPodNames,
+							networkv1beta1.IxiaTGIntfStatus{PodName: podName, Name: intf.Name, Intf: deployIntf})
+					}
+
+					if err == nil {
+						svcList := []string{}
+						podName := ixia.Name
+						if otgCtrl {
+							podName = otgCtrlName
+							for name, _ := range ixia.Spec.ApiEndPoint {
+								svcList = append(svcList, "service-"+name+"-"+otgCtrlName)
+							}
+						} else {
+							svcList = append(svcList, "service-"+podName)
+						}
+						genSvcEP := networkv1beta1.IxiaTGSvcEP{PodName: podName, ServiceName: svcList}
+						log.Infof("Node update with interfaces: %v", genPodNames)
+						ixia.Status.Interfaces = genPodNames
+						ixia.Status.State = ixia.Spec.DesiredState
+						ixia.Status.ApiEndPoint = genSvcEP
+					}
 				}
-				genSvcEP := networkv1beta1.IxiaTGSvcEP{PodName: otgCtrlName, ServiceName: svcList}
-				log.Infof("Node update with interfaces: %v", genPodNames)
-				ixia.Status.Interfaces = genPodNames
-				ixia.Status.State = ixia.Spec.DesiredState
-				ixia.Status.ApiEndPoint = genSvcEP
 			}
 		}
 
@@ -328,7 +360,13 @@ func (r *IxiaTGReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 
 	requeue := false
 	found := &corev1.Pod{}
-	err = r.Get(ctx, types.NamespacedName{Name: otgCtrlName, Namespace: ixia.Namespace}, found)
+	otgCtrl, err := r.deployController(ctx, nil, ixia, nil, true)
+	if err == nil {
+		if !otgCtrl {
+			otgCtrlName = ixia.Name
+		}
+		err = r.Get(ctx, types.NamespacedName{Name: otgCtrlName, Namespace: ixia.Namespace}, found)
+	}
 	if err != nil && errapi.IsNotFound(err) {
 		// need to deploy, but first deploy controller if not present
 		podMap := make(map[string][]string)
@@ -668,6 +706,10 @@ func (r *IxiaTGReconciler) deleteController(ctx context.Context, ixia *networkv1
 func (r *IxiaTGReconciler) deployController(ctx context.Context, podMap *map[string][]string, ixia *networkv1beta1.IxiaTG, secret *corev1.Secret, checkOtgOnly bool) (bool, error) {
 	var err error
 	isOtgCtrl := true
+	podList := &corev1.PodList{}
+	opts := []client.ListOption{
+		client.InNamespace(ixia.Namespace),
+	}
 
 	// First check if we have the component dependency data for the release
 	depVersion := DEFAULT_VERSION
@@ -706,6 +748,18 @@ func (r *IxiaTGReconciler) deployController(ctx context.Context, podMap *map[str
 	}
 	if checkOtgOnly {
 		return isOtgCtrl, nil
+	} else if !isOtgCtrl {
+		// Skip if already deployed for old KNE configs
+		if err = r.List(ctx, podList, opts...); err != nil {
+			log.Errorf("Failed to list current pods %v", err)
+			return isOtgCtrl, err
+		}
+		for _, p := range podList.Items {
+			if p.ObjectMeta.Name == CONTROLLER_NAME {
+				log.Infof("Controller already deployed for %s", ixia.Name)
+				return isOtgCtrl, nil
+			}
+		}
 	}
 
 	// Deploy controller and services
@@ -772,6 +826,8 @@ func (r *IxiaTGReconciler) deployController(ctx context.Context, podMap *map[str
 	}
 	if isOtgCtrl {
 		pod.Spec.Volumes = []corev1.Volume{volume}
+	} else {
+		pod.ObjectMeta.Name = CONTROLLER_NAME
 	}
 	log.Infof("Creating controller pod %v", pod)
 	err = r.Create(ctx, pod)
@@ -781,7 +837,7 @@ func (r *IxiaTGReconciler) deployController(ctx context.Context, podMap *map[str
 	}
 
 	// Now create and map services
-	services := r.getControllerService(ixia)
+	services := r.getControllerService(ixia, isOtgCtrl)
 	for _, s := range services {
 		err = r.Create(ctx, &s)
 		if err != nil {
@@ -877,16 +933,65 @@ func (r *IxiaTGReconciler) podForIxia(ctx context.Context, podName string, intfL
 	return nil
 }
 
-func (r *IxiaTGReconciler) getControllerService(ixia *networkv1beta1.IxiaTG) []corev1.Service {
+func (r *IxiaTGReconciler) getControllerService(ixia *networkv1beta1.IxiaTG, isOtgCtrl bool) []corev1.Service {
 	var services []corev1.Service
 
 	// Ensure default ixia-c service is create from grpc/gnmi to communicate with controller
-	ctrlPodName := ixia.Name + "-controller"
-	for name, svc := range ixia.Spec.ApiEndPoint {
-		contPort := corev1.ServicePort{Name: name, Port: svc.In, TargetPort: intstr.IntOrString{IntVal: svc.In}}
+	ctrlPodName := ixia.Name + CTRL_POD_NAME_SUFFIX
+	if isOtgCtrl {
+		for name, svc := range ixia.Spec.ApiEndPoint {
+			contPort := corev1.ServicePort{Name: name, Port: svc.In, TargetPort: intstr.IntOrString{IntVal: svc.In}}
+			service := corev1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "service-" + name + "-" + ctrlPodName,
+					Namespace: ixia.Namespace,
+				},
+				Spec: corev1.ServiceSpec{
+					Selector: map[string]string{
+						"app": ctrlPodName,
+					},
+					Ports: []corev1.ServicePort{contPort},
+					Type:  "LoadBalancer",
+				},
+			}
+			services = append(services, service)
+		}
+	} else {
+		// Default HTTPS service
+		contPort := corev1.ServicePort{Name: CONTROLLER_NAME, Port: CTRL_HTTPS_PORT, TargetPort: intstr.IntOrString{IntVal: CTRL_HTTPS_PORT}}
 		services = append(services, corev1.Service{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "service-" + name + "-" + ctrlPodName,
+				Name:      CONTROLLER_SERVICE,
+				Namespace: ixia.Namespace,
+			},
+			Spec: corev1.ServiceSpec{
+				Selector: map[string]string{
+					"app": ctrlPodName,
+				},
+				Ports: []corev1.ServicePort{contPort},
+				Type:  "LoadBalancer",
+			},
+		})
+		// Default gRPC service
+		contPort = corev1.ServicePort{Name: GRPC_NAME, Port: CTRL_GRPC_PORT, TargetPort: intstr.IntOrString{IntVal: CTRL_GRPC_PORT}}
+		services = append(services, corev1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      GRPC_SERVICE,
+				Namespace: ixia.Namespace,
+			},
+			Spec: corev1.ServiceSpec{
+				Selector: map[string]string{
+					"app": ctrlPodName,
+				},
+				Ports: []corev1.ServicePort{contPort},
+				Type:  "LoadBalancer",
+			},
+		})
+		// Default gNMI service
+		contPort = corev1.ServicePort{Name: GNMI_NAME, Port: CTRL_GNMI_PORT, TargetPort: intstr.IntOrString{IntVal: CTRL_GNMI_PORT}}
+		services = append(services, corev1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      GNMI_SERVICE,
 				Namespace: ixia.Namespace,
 			},
 			Spec: corev1.ServiceSpec{
