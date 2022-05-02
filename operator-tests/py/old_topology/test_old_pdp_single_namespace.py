@@ -131,10 +131,9 @@ def test_old_pdp_single_namespace():
             },
             "status": {
                 "api_endpoint": {
-                    "pod_name": "ixia-c-port1-controller",
+                    "pod_name": "ixia-c-port1",
                     "service_names": [
-                        "service-cp-ixia-c-port1-controller",
-                        "service-dp-ixia-c-port1-controller"
+                        "service-ixia-c-port1"
                     ]
                 },
                 "interfaces": [
@@ -171,10 +170,9 @@ def test_old_pdp_single_namespace():
             },
             "status": {
                 "api_endpoint": {
-                    "pod_name": "ixia-c-port2-controller",
+                    "pod_name": "ixia-c-port2",
                     "service_names": [
-                        "service-cp-ixia-c-port2-controller",
-                        "service-dp-ixia-c-port2-controller"
+                        "service-ixia-c-port2"
                     ]
                 },
                 "interfaces": [
