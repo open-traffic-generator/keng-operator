@@ -1,4 +1,4 @@
-name: "ixia-c-alt"
+name: "ixia-c"
 nodes: {
     name: "otg"
     type: IXIA_TG
@@ -33,4 +33,10 @@ links: {
     a_int: "eth1"
     z_node: "otg"
     z_int: "eth2"
+}
+links: {
+    a_node: "otg"
+    a_int: "eth1"
+    z_node: "otg"
+    z_int: "eth3"
 }

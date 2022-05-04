@@ -3,29 +3,18 @@ import utils
 import time
 
 
-def test_b2b_default_config():
+def test_init_container():
     """
-    Deploy b2b kne topology with default version,
+    Deploy neg-vm kne topology,
     - namespace - 1: ixia-c
-    Delete b2b kne topology,
+    Delete neg-vm kne topology,
     - namespace - 1: ixia-c
     Validate,
-    - total pods count
-    - overall pods status
-    - total service count
     - individual pod status
-    - individual service status
     - operator pod health
     """
     namespace1 = 'ixia-c'
-    namespace1_config = 'ixia_c_default_config.txt'
-    expected_svcs = [
-        'service-gnmi-otg-controller',
-        'service-grpc-otg-controller',
-        'service-otg-port-eth1',
-        'service-otg-port-eth2'
-    ]
-
+    namespace1_config = 'b2b_ixia_c_namespace.txt'
     expected_pods = [
         'otg-controller',
         'otg-port-eth1',
@@ -36,9 +25,9 @@ def test_b2b_default_config():
         print("[Namespace:{}]Deploying KNE topology".format(
             namespace1
         ))
+        utils.load_init_configmap()
         utils.create_kne_config(namespace1_config, namespace1)
-        utils.ixia_c_pods_ok(namespace1, expected_pods)
-        utils.ixia_c_services_ok(namespace1, expected_svcs)
+        utils.ixia_c_pods_ok(namespace1, expected_pods, False)
         op_rscount = utils.ixia_c_operator_ok(op_rscount)
 
         print("[Namespace:{}]Deleting KNE topology".format(
@@ -46,14 +35,13 @@ def test_b2b_default_config():
         ))
         utils.delete_kne_config(namespace1_config, namespace1)
         utils.ixia_c_pods_ok(namespace1, [])
-        utils.ixia_c_services_ok(namespace1, [])
         op_rscount = utils.ixia_c_operator_ok(op_rscount)
 
     finally:
         utils.delete_kne_config(namespace1_config, namespace1)
         utils.ixia_c_pods_ok(namespace1, [])
         utils.ixia_c_services_ok(namespace1, [])
-
+        utils.unload_init_configmap()
         utils.wait_for(
             lambda: utils.topology_deleted(namespace1),
             'topology deleted',

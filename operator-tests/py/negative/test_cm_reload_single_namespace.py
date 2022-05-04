@@ -3,7 +3,6 @@ import utils
 import time
 
 
-@pytest.mark.sanity
 def test_cm_reload_single_namespace():
     """
     Deploy b2b kne topology with BAD config,

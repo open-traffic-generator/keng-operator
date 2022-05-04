@@ -6,7 +6,7 @@ nodes: {
     services: {
         key: 443
         value: {
-            name: "http"
+            name: "https"
             inside: 443
             outside: 0
         }
@@ -67,4 +67,10 @@ links: {
     a_int: "eth2"
     z_node: "otg"
     z_int: "eth2"
+}
+links: {
+    a_node: "arista1"
+    a_int: "eth3"
+    z_node: "otg"
+    z_int: "eth3"
 }

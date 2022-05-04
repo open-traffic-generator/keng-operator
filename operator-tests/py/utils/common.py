@@ -3,17 +3,27 @@ import subprocess
 import time
 import json
 import yaml
+import socket
 
 SUDO_USER = 'root'
 
 # path to dir containing kne configurations relative root dir
 CONFIGS_DIR = 'kne_configs'
+EXPECTED_DIR = 'expected_outputs'
 BAD_CONFIGMAP_FILE = 'bad-configmap.yaml'
 INIT_CONFIGMAP_FILE = 'init-configmap.yaml'
 IXIA_CONFIGMAP_FILE = 'ixia-configmap.yaml'
 CUSTOM_CONFIGMAP_FILE = 'custom-configmap.yaml'
 
 KIND_SINGLE_NODE_NAME = 'kind-control-plane'
+
+expected_svc_port_map = [
+    'service-https-otg-controller',
+    'service-gnmi-otg-controller',
+    'service-grpc-otg-controller',
+    'service-otg-port-eth1',
+    'service-otg-port-eth2'
+]
 
 
 def exec_shell(cmd, sudo=True, check_return_code=True):
@@ -106,7 +116,9 @@ def create_kne_config(config_name, namespace):
     cmd = "$HOME/go/bin/kne_cli create ./{}".format(
         config_path
     )
-    exec_shell(cmd, True, False)
+    out, err = exec_shell(cmd, True, False)
+    return out, err
+    
 
 
 def delete_kne_config(config_name, namespace):
@@ -685,3 +697,149 @@ def time_ok(time_taken, exp_time, tolerance):
     if time_taken <= exp_max_time:
         return True
     return False
+
+
+def get_topologies(namespace):
+    print("Getting meshnet topologies ...")
+    actual_topologies = []
+    cmd = "kubectl get topologies -o yaml -n {}".format(
+        namespace
+    )
+    out, _ = exec_shell(cmd, True, True)
+    yaml_obj = yaml.safe_load(out)
+    for item in yaml_obj["items"]:
+        topology = {
+            "metadata": {
+                "name": item["metadata"]["name"],
+                "namespace": item["metadata"]["namespace"],
+            },
+            "spec": item["spec"],
+        }
+        actual_topologies.append(topology)
+    return actual_topologies
+
+
+
+def get_ixiatgs(namespace):
+    print("Getting ixiatgs ...")
+    actual_ixiatgs = []
+    cmd = "kubectl get ixiatgs -o yaml -n {}".format(
+        namespace
+    )
+    out, _ = exec_shell(cmd, True, True)
+    yaml_obj = yaml.safe_load(out)
+    for item in yaml_obj["items"]:
+        ixiatg = {
+            "metadata": {
+                "name": item["metadata"]["name"],
+                "namespace": item["metadata"]["namespace"],
+            },
+            "spec": item["spec"],
+            "status": item["status"]
+        }
+        actual_ixiatgs.append(ixiatg)
+    return actual_ixiatgs
+
+
+def get_ingress_ip(namespace, service):
+    cmd = "kubectl get svc/" + service + " -n " + namespace + " -o 'jsonpath={.status.loadBalancer}'"
+    out, _ = exec_shell(cmd, True, True)
+    yaml_obj = yaml.safe_load(out)
+    ingress_ip = yaml_obj['ingress'][0]['ip']
+    print("Ingress IP of service: {} in namespace: {}".format(
+        service,
+        namespace
+    ))
+    return ingress_ip
+
+
+def get_ingress_mapping(namespace, services):
+    ingress_map = dict()
+    for service in services:
+        print("Finding ingress mapping for service: {} in namespace: {}".format(
+            service, namespace
+        ))
+        ingress_map[service] = get_ingress_ip(namespace, service)
+
+    return ingress_map
+
+
+
+def check_socket_connection(host, port):
+    retry = 5
+    attempt = 1
+    while attempt <= retry:
+        try:
+            print("attempt: {}".format(attempt))
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.connect((host,port))
+            s.close()
+            print("Socket connection for {}:{} is alive....".format(host, port))
+            return True
+        except Exception as e:
+            attempt += 1
+            time.sleep(1)
+    print("Socket connection for {}:{} is dead....".format(host, port))
+    return False
+
+
+def socket_alive(exp_svcs, svc_ing_map):
+    for exp_svc, ports in exp_svcs.items():
+        for port in ports:
+            print("Checking socket is alive for service {} on port {}...".format(
+                exp_svc,
+                port
+            ))
+            assert check_socket_connection(svc_ing_map[exp_svc], port), "socket is dead for service {} on port {}...".format(
+                exp_svc, port
+            )
+
+
+def delete_namespace(namespace):
+    cmd = "kubectl delete namespace {}".format(
+        namespace
+    )
+    exec_shell(cmd, True, True)
+
+
+def get_knecli_topology(config_name):
+    print("Getting kne_cli topology service ...")
+    config_path = get_kne_config_path(config_name)
+    cmd = "$HOME/go/bin/kne_cli topology service ./{}".format(
+        config_path
+    )
+    out, _ = exec_shell(cmd, True, True)
+    out = out.strip()
+    return out
+
+def get_knecli_show(config_name):
+    print("Getting kne_cli topology service ...")
+    config_path = get_kne_config_path(config_name)
+    cmd = "$HOME/go/bin/kne_cli show ./{}".format(
+        config_path
+    )
+    out, _ = exec_shell(cmd, True, True)
+    out = out.strip()
+    return out
+
+def get_expected_file_path(filename):
+    sep = os.path.sep
+    return sep.join([
+        '.',
+        EXPECTED_DIR,
+        filename
+    ])
+
+
+def validate_expected_text(actual_text, exp_file):
+    exp_lines = []
+    exp_file_loc = get_expected_file_path(exp_file)
+    with open(exp_file_loc, 'r') as f:
+        exp_lines = f.readlines()
+    for exp_line in exp_lines:
+        if exp_line not in actual_text:
+            raise Exception("{} not found in output!!!".format(
+                exp_line
+            ))
+    
+

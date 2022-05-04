@@ -1,44 +1,32 @@
-import pytest
 import utils
+import pytest
 import time
+from deepdiff import DeepDiff
 
-
-def test_b2b_default_config():
+@pytest.mark.sanity
+def test_single_interface_connected_multiple_interfaces():
     """
-    Deploy b2b kne topology with default version,
-    - namespace - 1: ixia-c
-    Delete b2b kne topology,
+    Deploy single interface connected to multipole interfaces kne topology,
     - namespace - 1: ixia-c
     Validate,
-    - total pods count
-    - overall pods status
-    - total service count
-    - individual pod status
-    - individual service status
+    - kne_cli error
+    - total pods count - 0
+    - total service count - 0
     - operator pod health
     """
     namespace1 = 'ixia-c'
-    namespace1_config = 'ixia_c_default_config.txt'
-    expected_svcs = [
-        'service-gnmi-otg-controller',
-        'service-grpc-otg-controller',
-        'service-otg-port-eth1',
-        'service-otg-port-eth2'
-    ]
-
-    expected_pods = [
-        'otg-controller',
-        'otg-port-eth1',
-        'otg-port-eth2'
-    ]
+    namespace1_config = 'single_inf_to_multi_intf.txt'
     try:
         op_rscount = utils.get_operator_restart_count()
         print("[Namespace:{}]Deploying KNE topology".format(
             namespace1
         ))
-        utils.create_kne_config(namespace1_config, namespace1)
-        utils.ixia_c_pods_ok(namespace1, expected_pods)
-        utils.ixia_c_services_ok(namespace1, expected_svcs)
+        _, err = utils.create_kne_config(namespace1_config, namespace1)
+        expected_err = "interface otg:eth1 already connected"
+        err = err.split("\n")[-2]
+        assert expected_err in err, "Expected error mismatch!!!"
+        utils.ixia_c_pods_ok(namespace1, [])
+        utils.ixia_c_services_ok(namespace1, [])
         op_rscount = utils.ixia_c_operator_ok(op_rscount)
 
         print("[Namespace:{}]Deleting KNE topology".format(
@@ -59,4 +47,4 @@ def test_b2b_default_config():
             'topology deleted',
             timeout_seconds=30
         )
-        time.sleep(5)
+        utils.delete_namespace(namespace1)

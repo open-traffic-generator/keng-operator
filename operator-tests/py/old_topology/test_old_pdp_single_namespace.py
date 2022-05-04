@@ -1,14 +1,15 @@
-import utils
 import pytest
+import utils
 import time
 from deepdiff import DeepDiff
 
+
 @pytest.mark.sanity
-def test_b2b_single_namespace():
+def test_old_pdp_single_namespace():
     """
-    Deploy b2b kne topology,
+    Deploy old pdp kne topology,
     - namespace - 1: ixia-c
-    Delete b2b kne topology,
+    Delete old pdp kne topology,
     - namespace - 1: ixia-c
     Validate,
     - total pods count
@@ -20,30 +21,75 @@ def test_b2b_single_namespace():
     - socket connection
     - meshnet topologies
     - ixiatgs
-    TODO: 
-    - add proper way to parse output of kne_cli show & toplogy
     """
     namespace1 = 'ixia-c'
-    namespace1_config = 'b2b_ixia_c_namespace.txt'
+    namespace1_config = 'old_pdp_ixia_c_namespace.txt'
+
     expected_svcs = {
-        'service-https-otg-controller': [443],
-        'service-gnmi-otg-controller': [50051],
-        'service-grpc-otg-controller': [40051],
-        'service-otg-port-eth1': [5555, 50071],
-        'service-otg-port-eth2': [5555, 50071]
+        'ixia-c-service': [443],
+        'gnmi-service': [50051],
+        'grpc-service': [40051],
+        'service-ixia-c-port1': [5555, 50071],
+        'service-ixia-c-port2': [5555, 50071],
+        'service-arista1': []
     }
 
     expected_pods = [
-        'otg-controller',
-        'otg-port-eth1',
-        'otg-port-eth2'
+        'arista1',
+        'ixia-c',
+        'ixia-c-port1',
+        'ixia-c-port2'
     ]
 
     expected_topology = [
         {
             "metadata": {
-                "name": "otg-port-eth1",
-                "namespace": "ixia-c",
+                "name": "arista1",
+                "namespace": "ixia-c"
+            },
+            "spec": {
+                "links": [
+                    {
+                        "local_intf": "eth1",
+                        "local_ip": "",
+                        "peer_intf": "eth1",
+                        "peer_ip": "",
+                        "peer_pod": "ixia-c-port1",
+                        "uid": 0
+                    },
+                    {
+                        "local_intf": "eth2",
+                        "local_ip": "",
+                        "peer_intf": "eth1",
+                        "peer_ip": "",
+                        "peer_pod": "ixia-c-port2",
+                        "uid": 1
+                    }
+                ]
+            }
+        },
+        {
+            "metadata": {
+                "name": "ixia-c-port1",
+                "namespace": "ixia-c"
+            },
+            "spec": {
+                "links": [
+                    {
+                        "local_intf": "eth1",
+                        "local_ip": "",
+                        "peer_intf": "eth1",
+                        "peer_ip": "",
+                        "peer_pod": "arista1",
+                        "uid": 0
+                    }
+                ]
+            }
+        },
+        {
+            "metadata": {
+                "name": "ixia-c-port2",
+                "namespace": "ixia-c"
             },
             "spec": {
                 "links": [
@@ -52,80 +98,88 @@ def test_b2b_single_namespace():
                         "local_ip": "",
                         "peer_intf": "eth2",
                         "peer_ip": "",
-                        "peer_pod": "otg-port-eth2",
-                        "uid": 0
+                        "peer_pod": "arista1",
+                        "uid": 1
                     }
                 ]
-            },
-        },
-        {
-            "metadata": {
-                "name": "otg-port-eth2",
-                "namespace": "ixia-c",
-            },
-            "spec": {
-                "links": [
-                    {
-                        "local_intf": "eth2",
-                        "local_ip": "",
-                        "peer_intf": "eth1",
-                        "peer_ip": "",
-                        "peer_pod": "otg-port-eth1",
-                        "uid": 0
-                    }
-                ]
-            },
+            }
         }
     ]
 
     expected_ixiatgs = [
         {
             "metadata": {
-                "name": "otg",
-                "namespace": "ixia-c",
+                "name": "ixia-c-port1",
+                "namespace": "ixia-c"
             },
             "spec": {
                 "api_endpoint_map": {
-                    "gnmi": {
-                        "in": 50051
+                    "cp": {
+                        "in": 50071
                     },
-                    "grpc": {
-                        "in": 40051
-                    },
-                    "https": {
-                        "in": 443
+                    "dp": {
+                        "in": 5555
                     }
                 },
                 "desired_state": "DEPLOYED",
                 "interfaces": [
                     {
                         "name": "eth1"
-                    },
-                    {
-                        "name": "eth2"
                     }
                 ],
-                "release": "local-latest"
+                "release": "local-old"
             },
             "status": {
                 "api_endpoint": {
-                    "pod_name": "otg-controller",
+                    "pod_name": "ixia-c-port1",
                     "service_names": [
-                        "service-gnmi-otg-controller",
-                        "service-grpc-otg-controller",
-                        "service-https-otg-controller"
+                        "service-ixia-c-port1"
                     ]
                 },
                 "interfaces": [
                     {
                         "interface": "eth1",
                         "name": "eth1",
-                        "pod_name": "otg-port-eth1"
+                        "pod_name": "ixia-c-port1"
+                    }
+                ],
+                "state": "DEPLOYED"
+            }
+        },
+        {
+            "metadata": {
+                "name": "ixia-c-port2",
+                "namespace": "ixia-c"
+            },
+            "spec": {
+                "api_endpoint_map": {
+                    "cp": {
+                        "in": 50071
                     },
+                    "dp": {
+                        "in": 5555
+                    }
+                },
+                "desired_state": "DEPLOYED",
+                "interfaces": [
                     {
-                        "interface": "eth2",
-                        "name": "eth2",
-                        "pod_name": "otg-port-eth2"
+                        "name": "eth1"
+                    }
+                ],
+                "release": "local-old"
+            },
+            "status": {
+                "api_endpoint": {
+                    "pod_name": "ixia-c-port2",
+                    "service_names": [
+                        "service-ixia-c-port2"
+                    ]
+                },
+                "interfaces": [
+                    {
+                        "interface": "eth1",
+                        "name": "eth1",
+                        "pod_name": "ixia-c-port2"
                     }
                 ],
                 "state": "DEPLOYED"
@@ -133,8 +187,6 @@ def test_b2b_single_namespace():
         }
     ]
 
-    expected_topo_svcs = 'b2b_knecli_topo_service.txt'
-    expected_knecli_show = 'b2b_knecli_show.txt'
     try:
         op_rscount = utils.get_operator_restart_count()
         print("[Namespace:{}]Deploying KNE topology".format(
@@ -153,12 +205,6 @@ def test_b2b_single_namespace():
 
         svc_ingress_map = utils.get_ingress_mapping(namespace1, list(expected_svcs.keys()))
         utils.socket_alive(expected_svcs, svc_ingress_map)
-
-        out_topo_svc = utils.get_knecli_topology(namespace1_config)
-        utils.validate_expected_text(out_topo_svc, expected_topo_svcs)
-
-        out_show = utils.get_knecli_show(namespace1_config)
-        utils.validate_expected_text(out_show, expected_knecli_show)
 
         print("[Namespace:{}]Deleting KNE topology".format(
             namespace1

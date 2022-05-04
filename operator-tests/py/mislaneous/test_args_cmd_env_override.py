@@ -2,7 +2,6 @@ import pytest
 import utils
 
 
-@pytest.mark.sanity
 def test_args_cmd_env_override():
     """
     Deploy b2b kne topology with default version, but custom args, cmd and env
