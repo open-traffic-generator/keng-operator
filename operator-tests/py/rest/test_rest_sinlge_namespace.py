@@ -2,6 +2,7 @@ import utils
 import pytest
 
 
+@pytest.mark.sanity
 def test_rest_single_namespace(ixia_c_release):
     """
     Config Map will be fetched via REST call from Ixia-C Release
@@ -22,7 +23,7 @@ def test_rest_single_namespace(ixia_c_release):
     expected_svcs = [
         'service-arista1',
         'service-arista2',
-        'service-http-otg-controller',
+        'service-https-otg-controller',
         'service-gnmi-otg-controller',
         'service-grpc-otg-controller',
         'service-otg-port-eth1',
@@ -88,3 +89,4 @@ def test_rest_single_namespace(ixia_c_release):
             'topology deleted',
             timeout_seconds=30
         )
+        utils.delete_namespace(namespace1)

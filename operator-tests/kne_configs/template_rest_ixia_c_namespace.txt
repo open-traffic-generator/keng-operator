@@ -6,7 +6,7 @@ nodes: {
     services: {
         key: 443
         value: {
-            name: "http"
+            name: "https"
             inside: 443
             outside: 0
         }

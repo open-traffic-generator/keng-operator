@@ -1,5 +1,5 @@
 {
-    "http_server": "service-http-otg-controller.IXIA_C_NAMESPACE.svc.cluster.local:443",
+    "http_server": "service-https-otg-controller.IXIA_C_NAMESPACE.svc.cluster.local:443",
     "gnmi_server": "service-gnmi-otg-controller.IXIA_C_NAMESPACE.svc.cluster.local:50051",
     "grpc_server": "service-grpc-otg-controller.IXIA_C_NAMESPACE.svc.cluster.local:40051",
     "ixia_c_ports": [
