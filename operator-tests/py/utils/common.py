@@ -9,6 +9,7 @@ SUDO_USER = 'root'
 
 # path to dir containing kne configurations relative root dir
 CONFIGS_DIR = 'kne_configs'
+EXPECTED_DIR = 'expected_outputs'
 BAD_CONFIGMAP_FILE = 'bad-configmap.yaml'
 INIT_CONFIGMAP_FILE = 'init-configmap.yaml'
 IXIA_CONFIGMAP_FILE = 'ixia-configmap.yaml'
@@ -799,4 +800,46 @@ def delete_namespace(namespace):
         namespace
     )
     exec_shell(cmd, True, True)
+
+
+def get_knecli_topology(config_name):
+    print("Getting kne_cli topology service ...")
+    config_path = get_kne_config_path(config_name)
+    cmd = "$HOME/go/bin/kne_cli topology service ./{}".format(
+        config_path
+    )
+    out, _ = exec_shell(cmd, True, True)
+    out = out.strip()
+    return out
+
+def get_knecli_show(config_name):
+    print("Getting kne_cli topology service ...")
+    config_path = get_kne_config_path(config_name)
+    cmd = "$HOME/go/bin/kne_cli show ./{}".format(
+        config_path
+    )
+    out, _ = exec_shell(cmd, True, True)
+    out = out.strip()
+    return out
+
+def get_expected_file_path(filename):
+    sep = os.path.sep
+    return sep.join([
+        '.',
+        EXPECTED_DIR,
+        filename
+    ])
+
+
+def validate_expected_text(actual_text, exp_file):
+    exp_lines = []
+    exp_file_loc = get_expected_file_path(exp_file)
+    with open(exp_file_loc, 'r') as f:
+        exp_lines = f.readlines()
+    for exp_line in exp_lines:
+        if exp_line not in actual_text:
+            raise Exception("{} not found in output!!!".format(
+                exp_line
+            ))
+    
 

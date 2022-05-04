@@ -1,0 +1,61 @@
+name:  "ixia-c"
+nodes:  {
+  name:  "otg"
+  type:  IXIA_TG
+  services:  {
+    key:  443
+    value:  {
+      name:  "https"
+      inside:  443
+      outside:  443
+    }
+  }
+  services:  {
+    key:  40051
+    value:  {
+      name:  "grpc"
+      inside:  40051
+      outside:  40051
+    }
+  }
+  services:  {
+    key:  50051
+    value:  {
+      name:  "gnmi"
+      inside:  50051
+      outside:  50051
+    }
+  }
+  services:  {
+    key:  50071
+    value:  {
+      name:  "gnmi"
+      inside:  50051
+    }
+  }
+  version:  "local-latest"
+  interfaces:  {
+    key:  "eth1"
+    value:  {
+      name:  "eth1"
+      int_name:  "eth1"
+      peer_name:  "otg"
+      peer_int_name:  "eth2"
+    }
+  }
+  interfaces:  {
+    key:  "eth2"
+    value:  {
+      name:  "eth2"
+      int_name:  "eth2"
+      peer_name:  "otg"
+      peer_int_name:  "eth1"
+    }
+  }
+}
+links:  {
+  a_node:  "otg"
+  a_int:  "eth1"
+  z_node:  "otg"
+  z_int:  "eth2"
+}

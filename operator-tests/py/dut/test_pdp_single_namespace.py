@@ -21,6 +21,8 @@ def test_pdp_single_namespace():
     - socket connection
     - meshnet topologies
     - ixiatgs
+    TODO: 
+    - add proper way to parse output of kne_cli show & toplogy
     """
     namespace1 = 'ixia-c'
     namespace1_config = 'pdp_ixia_c_namespace.txt'
@@ -161,6 +163,8 @@ def test_pdp_single_namespace():
         }
     ]
 
+    expected_topo_svcs = 'pdp_knecli_topo_service.txt'
+    expected_knecli_show = 'pdp_knecli_show.txt'
     try:
         op_rscount = utils.get_operator_restart_count()
         print("[Namespace:{}]Deploying KNE topology".format(
@@ -179,6 +183,12 @@ def test_pdp_single_namespace():
 
         svc_ingress_map = utils.get_ingress_mapping(namespace1, list(expected_svcs.keys()))
         utils.socket_alive(expected_svcs, svc_ingress_map)
+
+        out_topo_svc = utils.get_knecli_topology(namespace1_config)
+        utils.validate_expected_text(out_topo_svc, expected_topo_svcs)
+
+        out_show = utils.get_knecli_show(namespace1_config)
+        utils.validate_expected_text(out_show, expected_knecli_show)
 
         print("[Namespace:{}]Deleting KNE topology".format(
             namespace1
