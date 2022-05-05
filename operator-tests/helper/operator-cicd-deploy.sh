@@ -477,7 +477,7 @@ deploy_ixia_c_test_client() {
 deploy_ixia_configmap() {
     LATEST_RELEASE=local-latest
     get_component_versions
-    cecho "Deploying ixia-configmap..."
+    cecho "Deploying local-latest ixia-configmap..."
     cat ./template-ixia-configmap.yaml | \
         sed "s/LATEST_RELEASE/${LATEST_RELEASE}/g" | \
         sed "s/IXIA_C_CONTROLLER_VERSION/${IXIA_C_CONTROLLER}/g" | \
@@ -500,13 +500,12 @@ deploy_minimal_topo() {
     cecho "Deleting minimal topology...."
     $HOME/go/bin/kne_cli delete minimal_topo.txt
     wait_for_pod_counts ixia-c 0
-    kubectl delete namespace ixia-c
 }
 
 deploy_old_topo_configmap() {
     OLD_RELEASE=local-old
     get_component_versions
-    cecho "Deploying ixia-configmap..."
+    cecho "Deploying local-old ixia-configmap..."
     cat ./template-ixia-configmap.yaml | \
         sed "s/LATEST_RELEASE/${OLD_RELEASE}/g" | \
         sed "s/IXIA_C_CONTROLLER_VERSION/${OLD_TOPO_SUPPORTED_VERSION}/g" | \
@@ -517,6 +516,7 @@ deploy_old_topo_configmap() {
         tee ./ixia-configmap.yaml > /dev/null
     kubectl apply -f ixia-configmap.yaml
     rm -rf ixia-configmap.yaml
+    kubectl delete namespace ixia-c 2> /dev/null || true
 }
 
 deploy() {
