@@ -22,10 +22,10 @@ jobs:
           sudo chmod u+x ./do.sh
           sudo ./do.sh cicd_build
 
-      - name: Running Sanity
-        run: |
-          sudo chmod u+x ./do.sh
-          sudo EXPECTED_SANITY_PASS_RATE=${{ secrets.EXPECTED_SANITY_PASS_RATE }} IXIA_C_ARTIFACTORY=${{ secrets.IXIA_C_ARTIFACTORY }} TESTBED=${{ secrets.TESTBED }} TESTBED_USERNAME=${{ secrets.TESTBED_USERNAME }} TESTBED_PASSWORD=${{ secrets.TESTBED_PASSWORD }} ./do.sh cicd_test
+      # - name: Running Sanity
+      #   run: |
+      #     sudo chmod u+x ./do.sh
+      #     sudo EXPECTED_SANITY_PASS_RATE=${{ secrets.EXPECTED_SANITY_PASS_RATE }} IXIA_C_ARTIFACTORY=${{ secrets.IXIA_C_ARTIFACTORY }} TESTBED=${{ secrets.TESTBED }} TESTBED_USERNAME=${{ secrets.TESTBED_USERNAME }} TESTBED_PASSWORD=${{ secrets.TESTBED_PASSWORD }} ./do.sh cicd_test
       
       - name: Get Branch
         id: get_branch
