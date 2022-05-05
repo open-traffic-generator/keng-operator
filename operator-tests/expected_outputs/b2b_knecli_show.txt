@@ -1,0 +1,156 @@
+Pods:
+Pod otg:
+Topologies:
+ixia-c:otg-port-eth1
+Spec:
+v1beta1.TopologySpec{
+    TypeMeta: v1.TypeMeta{},
+    Links:    {
+        {LocalIntf:"eth1", LocalIP:"", PeerIntf:"eth2", PeerIP:"", PeerPod:"otg-port-eth2", UID:0},
+    },
+}
+Status:
+v1beta1.TopologyStatus{
+    TypeMeta:   v1.TypeMeta{},
+    ObjectMeta: v1.ObjectMeta{},
+}
+ixia-c:otg-port-eth2
+Spec:
+v1beta1.TopologySpec{
+    TypeMeta: v1.TypeMeta{},
+    Links:    {
+        {LocalIntf:"eth2", LocalIP:"", PeerIntf:"eth1", PeerIP:"", PeerPod:"otg-port-eth1", UID:0},
+    },
+}
+Status:
+v1beta1.TopologyStatus{
+    TypeMeta:   v1.TypeMeta{},
+    ObjectMeta: v1.ObjectMeta{},
+}
+Services:
+ixia-c:service-gnmi-otg-controller
+Spec:
+v1.ServiceSpec{
+    Ports: {
+        {
+            Name:        "gnmi",
+            Protocol:    "TCP",
+            AppProtocol: (*string)(nil),
+            Port:        50051,
+            TargetPort:  intstr.IntOrString{Type:0, IntVal:50051, StrVal:""},
+        },
+    },
+    Selector:                      {"app":"otg-controller"},
+    Type:                          "LoadBalancer",
+    ExternalIPs:                   nil,
+    SessionAffinity:               "None",
+    LoadBalancerIP:                "",
+    LoadBalancerSourceRanges:      nil,
+    ExternalName:                  "",
+    ExternalTrafficPolicy:         "Cluster",
+    HealthCheckNodePort:           0,
+    PublishNotReadyAddresses:      false,
+    SessionAffinityConfig:         (*v1.SessionAffinityConfig)(nil),
+    TopologyKeys:                  nil,
+    IPFamilies:                    {"IPv4"},
+    IPFamilyPolicy:                &"SingleStack",
+    AllocateLoadBalancerNodePorts: (*bool)(nil),
+    LoadBalancerClass:             (*string)(nil),
+    InternalTrafficPolicy:         (*v1.ServiceInternalTrafficPolicyType)(nil),
+}
+Status:
+v1.ServiceStatus{
+    LoadBalancer: v1.LoadBalancerStatus{
+        Ingress: {
+            {
+                Hostname: "",
+                Ports:    nil,
+            },
+        },
+    },
+    Conditions: nil,
+}
+ixia-c:service-grpc-otg-controller
+Spec:
+v1.ServiceSpec{
+    Ports: {
+        {
+            Name:        "grpc",
+            Protocol:    "TCP",
+            AppProtocol: (*string)(nil),
+            Port:        40051,
+            TargetPort:  intstr.IntOrString{Type:0, IntVal:40051, StrVal:""},
+        },
+    },
+    Selector:                      {"app":"otg-controller"},
+    Type:                          "LoadBalancer",
+    ExternalIPs:                   nil,
+    SessionAffinity:               "None",
+    LoadBalancerIP:                "",
+    LoadBalancerSourceRanges:      nil,
+    ExternalName:                  "",
+    ExternalTrafficPolicy:         "Cluster",
+    HealthCheckNodePort:           0,
+    PublishNotReadyAddresses:      false,
+    SessionAffinityConfig:         (*v1.SessionAffinityConfig)(nil),
+    TopologyKeys:                  nil,
+    IPFamilies:                    {"IPv4"},
+    IPFamilyPolicy:                &"SingleStack",
+    AllocateLoadBalancerNodePorts: (*bool)(nil),
+    LoadBalancerClass:             (*string)(nil),
+    InternalTrafficPolicy:         (*v1.ServiceInternalTrafficPolicyType)(nil),
+}
+Status:
+v1.ServiceStatus{
+    LoadBalancer: v1.LoadBalancerStatus{
+        Ingress: {
+            {
+                Hostname: "",
+                Ports:    nil,
+            },
+        },
+    },
+    Conditions: nil,
+}
+ixia-c:service-https-otg-controller
+Spec:
+v1.ServiceSpec{
+    Ports: {
+        {
+            Name:        "https",
+            Protocol:    "TCP",
+            AppProtocol: (*string)(nil),
+            Port:        443,
+            TargetPort:  intstr.IntOrString{Type:0, IntVal:443, StrVal:""},
+        },
+    },
+    Selector:                      {"app":"otg-controller"},
+    Type:                          "LoadBalancer",
+    ExternalIPs:                   nil,
+    SessionAffinity:               "None",
+    LoadBalancerIP:                "",
+    LoadBalancerSourceRanges:      nil,
+    ExternalName:                  "",
+    ExternalTrafficPolicy:         "Cluster",
+    HealthCheckNodePort:           0,
+    PublishNotReadyAddresses:      false,
+    SessionAffinityConfig:         (*v1.SessionAffinityConfig)(nil),
+    TopologyKeys:                  nil,
+    IPFamilies:                    {"IPv4"},
+    IPFamilyPolicy:                &"SingleStack",
+    AllocateLoadBalancerNodePorts: (*bool)(nil),
+    LoadBalancerClass:             (*string)(nil),
+    InternalTrafficPolicy:         (*v1.ServiceInternalTrafficPolicyType)(nil),
+}
+Status:
+v1.ServiceStatus{
+    LoadBalancer: v1.LoadBalancerStatus{
+        Ingress: {
+            {
+                Hostname: "",
+                Ports:    nil,
+            },
+        },
+    },
+    Conditions: nil,
+}

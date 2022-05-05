@@ -1,8 +1,8 @@
 import pytest
 import utils
+import time
 
 
-@pytest.mark.sanity
 def test_b2b_default_config():
     """
     Deploy b2b kne topology with default version,
@@ -20,17 +20,16 @@ def test_b2b_default_config():
     namespace1 = 'ixia-c'
     namespace1_config = 'ixia_c_default_config.txt'
     expected_svcs = [
-        'ixia-c-service',
-        'gnmi-service',
-        'grpc-service',
-        'service-ixia-c-port1',
-        'service-ixia-c-port2'
+        'service-gnmi-otg-controller',
+        'service-grpc-otg-controller',
+        'service-otg-port-eth1',
+        'service-otg-port-eth2'
     ]
 
     expected_pods = [
-        'ixia-c',
-        'ixia-c-port1',
-        'ixia-c-port2'
+        'otg-controller',
+        'otg-port-eth1',
+        'otg-port-eth2'
     ]
     try:
         op_rscount = utils.get_operator_restart_count()
@@ -55,5 +54,9 @@ def test_b2b_default_config():
         utils.ixia_c_pods_ok(namespace1, [])
         utils.ixia_c_services_ok(namespace1, [])
 
-
-
+        utils.wait_for(
+            lambda: utils.topology_deleted(namespace1),
+            'topology deleted',
+            timeout_seconds=30
+        )
+        time.sleep(5)

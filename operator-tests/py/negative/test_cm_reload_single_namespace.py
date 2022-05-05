@@ -2,7 +2,7 @@ import pytest
 import utils
 import time
 
-@pytest.mark.sanity
+
 def test_cm_reload_single_namespace():
     """
     Deploy b2b kne topology with BAD config,
@@ -29,21 +29,21 @@ def test_cm_reload_single_namespace():
     namespace1 = 'ixia-c'
     namespace1_config = 'b2b_ixia_c_namespace.txt'
     expected_svcs = [
-        'ixia-c-service',
-        'gnmi-service',
-        'grpc-service',
-        'service-ixia-c-port1',
-        'service-ixia-c-port2'
+        'service-http-otg-controller',
+        'service-gnmi-otg-controller',
+        'service-grpc-otg-controller',
+        'service-otg-port-eth1',
+        'service-otg-port-eth2'
     ]
 
     expected_pods_bad_config = [
-        'ixia-c'
+        'otg-controller'
     ]
 
     expected_pods_good_config = [
-        'ixia-c',
-        'ixia-c-port1',
-        'ixia-c-port2'
+        'otg-controller',
+        'otg-port-eth1',
+        'otg-port-eth2'
     ]
     try:
         op_rscount = utils.get_operator_restart_count()
@@ -70,6 +70,7 @@ def test_cm_reload_single_namespace():
             namespace1
         ))
         utils.unload_bad_configmap()
+        time.sleep(2)
         utils.create_kne_config(namespace1_config, namespace1)
         utils.ixia_c_pods_ok(namespace1, expected_pods_good_config)
         utils.ixia_c_services_ok(namespace1, expected_svcs)
@@ -88,6 +89,9 @@ def test_cm_reload_single_namespace():
         utils.ixia_c_pods_ok(namespace1, [])
         utils.ixia_c_services_ok(namespace1, [])
         utils.unload_bad_configmap()
-
-
-
+        utils.wait_for(
+            lambda: utils.topology_deleted(namespace1),
+            'topology deleted',
+            timeout_seconds=30
+        )
+        time.sleep(5)

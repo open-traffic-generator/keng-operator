@@ -1,4 +1,4 @@
-apiVersion: operators.coreos.com/v1alpha1
+apiVersion: operators.coreos.com/v1beta1
 kind: ClusterServiceVersion
 metadata:
   annotations:
@@ -14,7 +14,7 @@ spec:
       displayName: Ixia TG
       kind: IxiaTG
       name: ixiatgs.network.keysight.com
-      version: v1alpha1
+      version: v1beta1
   description: Ixia operator to serve KNE requests
   displayName: ixia-operator
   icon:

@@ -12,22 +12,15 @@ SUDO_USER = 'root'
 
 SANITY_SETTINGS = {
     "required_artifacts": [
-        "ixia-c-controller.tar.gz",
-        "ixia-c-traffic-engine.tar.gz",
-        "ixia-c-protocol-engine.tar.gz",
-        "ixia-c-gnmi-server.tar.gz",
-        "ixia-c-grpc-server.tar.gz",
-        "ixia-c-operator.tar.gz",
         "ixia-c-operator.tar.gz",
         "ixiatg-operator.yaml",
-        "ixia-configmap.yaml",
-        "operator-deploy.sh",
+        "template-ixia-configmap.yaml",
+        "operator-cicd-deploy.sh",
         "operator-tests.tar.gz",
-        "ixia-c-test-client.yaml",
-        "ixia-c-test-client.tar.gz"
+        "template-ixia-c-test-client.yaml",
     ],
-    "deploy_cmd": "chmod u+x ./operator-deploy.sh && ./operator-deploy.sh get_kne && ./operator-deploy.sh load_images && ./operator-deploy.sh kind_deploy && ./operator-deploy.sh deploy_tests && echo success", # noqa
-    "cleanup_cmd": "chmod u+x ./operator-deploy.sh && ./operator-deploy.sh kind_delete && ./operator-deploy.sh delete_images && ./operator-deploy.sh delete_tests && echo success", # noqa
+    "deploy_cmd": "chmod u+x ./operator-cicd-deploy.sh && ./operator-cicd-deploy.sh load_images && ./operator-cicd-deploy.sh deploy && ./operator-cicd-deploy.sh deploy_operator_tests && echo success", # noqa
+    "cleanup_cmd": "chmod u+x ./operator-cicd-deploy.sh && ./operator-cicd-deploy.sh delete && ./operator-cicd-deploy.sh delete_images && echo success", # noqa
     "sanity_cmd": "{} -m pytest --html={} --self-contained-html --ixia_c_release={} ./py/ -m {} --capture sys --metadata-from-json '{}'", # noqa
 }
 

@@ -14,6 +14,6 @@ resources:
   domain: keysight.com
   group: network
   kind: IxiaTG
-  path: github.com/open-traffic-generator/ixia-c-operator/api/v1alpha1
-  version: v1alpha1
+  path: github.com/open-traffic-generator/ixia-c-operator
+  version: v1beta1
 version: "3"

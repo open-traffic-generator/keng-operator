@@ -1,7 +1,8 @@
-import pytest
 import utils
+import pytest
 
 
+@pytest.mark.sanity
 def test_rest_single_namespace(ixia_c_release):
     """
     Config Map will be fetched via REST call from Ixia-C Release
@@ -20,23 +21,23 @@ def test_rest_single_namespace(ixia_c_release):
     namespace1 = 'ixia-c-rest'
     namespace1_config = 'rest_ixia_c_namespace.txt'
     expected_svcs = [
-        'ixia-c-service',
-        'gnmi-service',
-        'grpc-service',
         'service-arista1',
         'service-arista2',
-        'service-ixia-c-port1',
-        'service-ixia-c-port2',
-        'service-ixia-c-port3'
+        'service-https-otg-controller',
+        'service-gnmi-otg-controller',
+        'service-grpc-otg-controller',
+        'service-otg-port-eth1',
+        'service-otg-port-eth2',
+        'service-otg-port-eth3'
     ]
 
     expected_pods = [
-        'ixia-c',
         'arista1',
         'arista2',
-        'ixia-c-port1',
-        'ixia-c-port2',
-        'ixia-c-port3'
+        'otg-controller',
+        'otg-port-eth1',
+        'otg-port-eth2',
+        'otg-port-eth3'
     ]
 
     utils.generate_rest_config_from_temaplate(
@@ -59,10 +60,15 @@ def test_rest_single_namespace(ixia_c_release):
         ]
         utils.arista_sshable_ok(arista_pods, namespace1)
 
-        print("[Namespace:{}]Checking E2E tests running fine or not ...".format(
-            namespace1
-        ))
-        utils.ixia_c_e2e_test_ok(namespace1, None, 'sanity', 90)
+        print("[Namespace:{}]Checking E2E tests "
+              "running fine or not ...".format(
+                  namespace1
+              ))
+        utils.ixia_c_e2e_test_ok(
+            namespace1,
+            'TestEbgpv4Routes',
+            'sanity'
+        )
 
         print("[Namespace:{}]Deleting KNE topology".format(
             namespace1
@@ -77,3 +83,10 @@ def test_rest_single_namespace(ixia_c_release):
         utils.ixia_c_pods_ok(namespace1, [])
         utils.ixia_c_services_ok(namespace1, [])
         utils.delete_config(namespace1_config)
+
+        utils.wait_for(
+            lambda: utils.topology_deleted(namespace1),
+            'topology deleted',
+            timeout_seconds=30
+        )
+        utils.delete_namespace(namespace1)
