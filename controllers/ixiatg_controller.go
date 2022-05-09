@@ -1135,6 +1135,15 @@ func (r *IxiaTGReconciler) containersForIxia(podName string, intfList []string, 
 		}
 		if cName == IMAGE_PROTOCOL_ENG {
 			compCopy.DefEnv["INTF_LIST"] = strings.Join(intfList, ",")
+			tcpSock := corev1.TCPSocketAction{Port: intstr.IntOrString{IntVal: 50071}}
+			pbHdlr := corev1.ProbeHandler{TCPSocket: &tcpSock}
+			probe := corev1.Probe{
+				ProbeHandler:                  pbHdlr,
+				InitialDelaySeconds:           10,
+				PeriodSeconds:                 1,
+				TerminationGracePeriodSeconds: pointer.Int64(1),
+			}
+			container.LivenessProbe = &probe
 		} else {
 			compCopy.DefEnv["ARG_IFACE_LIST"] = argIntfList
 		}

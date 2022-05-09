@@ -2,7 +2,7 @@
 
 export PATH=$PATH:/usr/local/go/bin/
 
-GO_VERSION=1.16.5
+GO_VERSION=1.17.9
 
 # Avoid warnings for non-interactive apt-get install
 export DEBIAN_FRONTEND=noninteractive
