@@ -1106,7 +1106,7 @@ func (r *IxiaTGReconciler) containersForController(ixia *networkv1beta1.IxiaTG, 
 
 func (r *IxiaTGReconciler) containersForIxia(podName string, intfList []string, ixia *networkv1beta1.IxiaTG) []corev1.Container {
 	log.Infof("Get containers for Ixia: %s", podName)
-	argIntfList := "virtual@af_packet," + intfList[0]
+	argIntfList := strings.Join(intfList, ",")
 	var containers []corev1.Container
 
 	conSecurityCtx := getDefaultSecurityContext()
@@ -1134,7 +1134,7 @@ func (r *IxiaTGReconciler) containersForIxia(podName string, intfList []string, 
 			compCopy.DefEnv[k] = v
 		}
 		if cName == IMAGE_PROTOCOL_ENG {
-			compCopy.DefEnv["INTF_LIST"] = strings.Join(intfList, ",")
+			compCopy.DefEnv["INTF_LIST"] = argIntfList
 			tcpSock := corev1.TCPSocketAction{Port: intstr.IntOrString{IntVal: 50071}}
 			pbHdlr := corev1.ProbeHandler{TCPSocket: &tcpSock}
 			probe := corev1.Probe{
@@ -1145,7 +1145,7 @@ func (r *IxiaTGReconciler) containersForIxia(podName string, intfList []string, 
 			}
 			container.LivenessProbe = &probe
 		} else {
-			compCopy.DefEnv["ARG_IFACE_LIST"] = argIntfList
+			compCopy.DefEnv["ARG_IFACE_LIST"] = "virtual@af_packet," + argIntfList
 		}
 		updateControllerContainer(&container, compCopy, false)
 		log.Infof("Adding to pod: %s, container: %s, Image: %s, Args: %v, Cmd: %v, Env: %v",
