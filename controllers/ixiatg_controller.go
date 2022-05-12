@@ -775,8 +775,11 @@ func (r *IxiaTGReconciler) deployController(ctx context.Context, podMap *map[str
 	tePort := ":" + strconv.Itoa(int(TRAFFIC_ENG_PORT))
 	for podName, intfs := range *podMap {
 		podSvc := "service-" + podName + "." + svcSuffix
-		svcLoc := podSvc + tePort + "+" + podSvc + pePort
-		for _, intf := range intfs {
+		for index, intf := range intfs {
+			svcLoc := podSvc + tePort + "+" + podSvc + pePort
+			if len(intfs) > 1 {
+				svcLoc = podSvc + tePort + ";" + strconv.Itoa(index) + "+" + podSvc + pePort
+			}
 			locations = append(locations, location{Location: intf, EndPoint: svcLoc})
 		}
 	}
