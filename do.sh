@@ -163,15 +163,13 @@ cicd_publish() {
 
     github_img="ghcr.io/open-traffic-generator/${IXIA_C_OPERATOR_IMAGE}:${version}"
     docker tag ${img} "${github_img}"
-    push_github_docker_image ${github_img}
-    verify_github_images ${github_img}
-    # if github_docker_image_exists ${github_img}; then
-    #     echo "${github_img} already exists..."
-    # else
-    #     echo "${github_img} does not exist..."
-    #     push_github_docker_image ${github_img}
-    #     verify_github_images ${github_img}
-    # fi
+    if github_docker_image_exists ${github_img}; then
+        echo "${github_img} already exists..."
+    else
+        echo "${github_img} does not exist..."
+        push_github_docker_image ${github_img}
+        verify_github_images ${github_img}
+    fi
 
     cicd_gen_release_art
 }
