@@ -108,6 +108,48 @@ gen_ixia_c_op_dep_yaml() {
     make yaml
 }
 
+github_docker_image_exists() {
+    img=${1}
+    docker login -p ${TOKEN_GITHUB} -u biplamal ghcr.io
+    if DOCKER_CLI_EXPERIMENTAL=enabled docker manifest inspect ${img} >/dev/null; then
+        docker logout ghcr.io
+        return 0
+    else
+        docker logout ghcr.io
+        return 1
+    fi
+}
+
+push_github_docker_image() {
+    img=${1}
+    echo "Pushing image ${img} in GitHub"
+    docker login -p ${TOKEN_GITHUB} -u biplamal ghcr.io \
+    && docker push "${img}" \
+    && docker logout ghcr.io \
+    && echo "${img} pushed in GitHub" \
+    && docker rmi "${img}" > /dev/null 2>&1 || true
+}
+
+verify_github_images() {
+    for var in "$@"
+    do
+        img=${var}
+        docker rmi -f $img > /dev/null 2>&1 || true
+        echo "pulling ${img} from GitHub"
+        docker login -p ${TOKEN_GITHUB} -u biplamal ghcr.io
+        docker pull $img
+        docker logout ghcr.io
+        if docker image inspect ${img} >/dev/null 2>&1; then
+            echo "${img} pulled successfully from GitHub"
+            docker rmi $img > /dev/null 2>&1 || true
+        else
+            echo "${img} not found locally!!!"
+            docker rmi $img > /dev/null 2>&1 || true
+            exit 1
+        fi
+    done
+}
+
 cicd_publish() {
     version=$(get_version)
     img="${IXIA_C_OPERATOR_IMAGE}:${version}"
@@ -118,6 +160,19 @@ cicd_publish() {
         cicd_push_dockerhub_image ${img}
         cicd_verify_dockerhub_images ${img}
     fi
+
+    github_img="ghcr.io/open-traffic-generator/${IXIA_C_OPERATOR_IMAGE}:${version}"
+    docker tag ${img} "${github_img}"
+    push_github_docker_image ${github_img}
+    verify_github_images ${github_img}
+    # if github_docker_image_exists ${github_img}; then
+    #     echo "${github_img} already exists..."
+    # else
+    #     echo "${github_img} does not exist..."
+    #     push_github_docker_image ${github_img}
+    #     verify_github_images ${github_img}
+    # fi
+
     cicd_gen_release_art
 }
 
