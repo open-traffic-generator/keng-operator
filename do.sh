@@ -96,7 +96,7 @@ get_docker_build() {
     export VERSION=$(get_version)
     export IMAGE_TAG_BASE=${IXIA_C_OPERATOR_IMAGE}
     make docker-build
-    docker rmi -f $(docker images | grep '<none>') 2> /dev/null || true
+    # docker rmi -f $(docker images | grep '<none>') 2> /dev/null || true
 }
 
 gen_ixia_c_op_dep_yaml() {
