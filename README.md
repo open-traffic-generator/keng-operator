@@ -9,12 +9,12 @@
 
 Kubernetes Operator is built on the basic Kubernetes resources and controller concepts and includes application specific knowledge to automate common tasks like create, configure and manage instances on behalf of a Kubernetes user. It extends the functionality of the Kubernetes API and is used to package, deploy and manage Kubernetes application.<br/>
     
-Ixia Operator defines CRD for Ixia network device (IxiaTG) and can be used to build up different network topologies possibly with network devices from other vendors. Network interconnects between the topology nodes can be setup with various container network interface (CNI) plugins for Kubernetes for attaching multiple network interfaces to the nodes.<br/>
+Ixia Operator defines CRD for Ixia network device (IxiaTG) and can be used to build up different network topologies with network devices from other vendors. Network interconnects between the topology nodes can be setup with various container network interface (CNI) plugins for Kubernetes for attaching multiple network interfaces to the nodes.<br/>
     
 [KNE](https://github.com/google/kne) automates this process and enables us to setup network topologies in Kubernetes. It uses [Meshnet](https://github.com/networkop/meshnet-cni) CNI to setup the network interconnects. Ixia Operator watches out for IxiaTG CRDs to be instantiated in Kubernetes environment and accordingly initiates Ixia specific resource management.<br/>
     
-The various Ixia component versions to be deployed is derived from the Ixia release version as specified in the IxiaTG config. These component mappings are captured in ixia-configmap.yaml for each Ixia release. Ixia operator first tries to access these details from Keysight published releases; in case of failure or in absence of internet connectivity, it tries to locate them in Kubernetes configmap. Thus, for the second scenario, the user is expected to separately download release specific ixia-configmap.yaml from published [releases](https://github.com/open-traffic-generator/ixia-c/releases/), and apply it locally.<br/>
-    
+The various Ixia component versions to be deployed is derived from the Ixia release version as specified in the IxiaTG config. These component mappings are captured in ixia-configmap.yaml for each Ixia release. Ixia Operator first tries to access these details from Keysight published releases; in case of failure or in absence of internet connectivity, it tries to locate them in Kubernetes configmap. Thus, for the second scenario, the user is expected to separately download release specific ixia-configmap.yaml from published [releases](https://github.com/open-traffic-generator/ixia-c/releases/), and apply it locally; after the operator is started.<br/>
+
 Below is a snippet of a ixia-configmap.yaml. Users can deploy custom versions by applying a configmap with custom updates and then specifying that custom version in KNE config file.<br/><br/>
 
 <kbd> <img src="ixia-configmap.jpg" title="Sample configmap"> </kbd><br/><br/>
@@ -23,13 +23,12 @@ Following customizations are supported for the image components:
 1. Specify a custom location ("path").
 2. Specify a custom version ("tag").
 3. Specify custom "command", "args" or "env" to override standard built-in ones.
-4. Specify custom init-container(s).<br/>
 
 If some of the required images are not publicly available and distributed under license, user would be required to create a secret with docker authorization details as supplied by Keysight. The operator would refer to this secret for deploying from private repository.<br/><br/>
 
 <kbd> <img src="Ixia_Operator.jpg"> </kbd><br/><br/>
 
-The operator deploys one single Controller pod with Ixia-c, gNMI and gRPC containers for user control, management and stats report of Ixia network devices; and Ixia network devices for control and data plane. The deployed Ixia resource release versions are anchored and dictated by the Ixia-c release as defined in the KNE config file.
+The operator deploys one single Controller pod with Ixia-c, gNMI and gRPC containers for user control, management and statistics reporting of Ixia network devices; and Ixia network devices for control and data plane. The deployed Ixia resource release versions are anchored and dictated by the Ixia-c release as defined in the KNE config file.
 
 ## Deployment
 
