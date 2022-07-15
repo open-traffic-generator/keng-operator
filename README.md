@@ -17,9 +17,33 @@ The various Ixia component versions to be deployed is derived from the Ixia rele
 
 Below is a snippet of a ixia-configmap.yaml. Users can deploy custom versions by applying a configmap with custom updates and then specifying that custom version in KNE config file.<br/><br/>
 
-<kbd> <img src="ixia-configmap.jpg" title="Sample configmap"> </kbd><br/><br/>
+```sh
+  "release": "local-latest",
+  "images": [
+      {
+          "name": "controller",
+          "path": "ixiacom/ixia-c-controller",
+          "tag": "0.0.1-2994",
+          "args": ["--accept-eula"]
+      },
+      {
+          "name": "gnmi-server",
+          "path": "ixiacom/ixia-c-gnmi-server",
+          "tag": "1.8.3",
+          "command": ["python3", "-m", "otg_gnmi"]
+      },
+      {
+          "name": "traffic-engine",
+          "path": "docker-local-ixvm-lbj.artifactorylbj.it.keysight.com/athena-traffic-engine",
+          "tag": "1.4.1.29",
+          "env": {
+              "OPT_LISTEN_PORT": "5556"
+          }
+      },
+      {
+```
 
-Following customizations are supported for the image components:
+Following customizations are supported for the image components; as shown in the sample configmap above:
 1. Specify a custom location ("path").
 2. Specify a custom version ("tag").
 3. Specify custom "command", "args" or "env" to override standard built-in ones.
