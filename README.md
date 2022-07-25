@@ -13,9 +13,7 @@ Ixia Operator defines CRD for Ixia network device ([IxiaTG](#ixiatg-crd)) and ca
 
 This process happens in two phases; in the first phase the operator identifies the network interconnects that needs to be setup externally. In the second phase, once the network interconnects are setup, the operator deploys the containers and services. This entire process has been much simplified with the use of [KNE](https://github.com/google/kne). It automates this process and enables us to setup network topologies in Kubernetes. KNE uses [Meshnet](https://github.com/networkop/meshnet-cni) CNI to setup the network interconnects. Ixia Operator watches out for IxiaTG CRDs to be instantiated in Kubernetes environment and accordingly initiates Ixia specific resource management.<br/>
     
-The various Ixia component versions to be deployed is derived from the Ixia release version as specified in the IxiaTG config. These component mappings are captured in ixia-configmap.yaml for each Ixia release. Ixia Operator first tries to access these details from Keysight published releases; in case of failure or in absence of internet connectivity, it tries to locate them in Kubernetes configmap. Thus, for the second scenario, the user is expected to separately download release specific ixia-configmap.yaml from published [releases](https://github.com/open-traffic-generator/ixia-c/releases/), and apply it locally; after the operator is started.<br/>
-
-Below is a snippet of a ixia-configmap.yaml. Users can deploy custom versions by applying a configmap with custom updates and then specifying that custom version in KNE config file.<br/><br/>
+The various Ixia component versions to be deployed is derived from the Ixia release version as specified in the IxiaTG config. These component mappings are captured in ixia-configmap.yaml for each Ixia release. The configmap, as shown in the snippet below, comprise of the Ixia release version ("release"), and the list of qualified component versions, for that release. Ixia Operator first tries to access these details from Keysight published releases; if unable to so, it tries to locate them in Kubernetes configmap. This allows users to have the operator load images from private repositories, by updating the configmap entries. Thus, for deployment with custom images, the user is expected to download release specific ixia-configmap.yaml from published [releases](https://github.com/open-traffic-generator/ixia-c/releases/). Then, in the configmap, update the specific container image "path" / "tag" fields and also update the "release" to some custom name. Start the operator first as specified in the deployment section below, before applying the configmap locally. After this the operator can be used to deploy the containers and services.<br/><br/>
 
 ```sh
   "release": "local-latest",
@@ -23,36 +21,26 @@ Below is a snippet of a ixia-configmap.yaml. Users can deploy custom versions by
       {
           "name": "controller",
           "path": "ixiacom/ixia-c-controller",
-          "tag": "0.0.1-2994",
-          "args": ["--accept-eula"]
+          "tag": "0.0.1-2994"
       },
       {
           "name": "gnmi-server",
           "path": "ixiacom/ixia-c-gnmi-server",
-          "tag": "1.8.3",
-          "command": ["python3", "-m", "otg_gnmi"]
+          "tag": "1.8.3"
       },
       {
           "name": "traffic-engine",
           "path": "docker-local-ixvm-lbj.artifactorylbj.it.keysight.com/athena-traffic-engine",
-          "tag": "1.4.1.29",
-          "env": {
-              "OPT_LISTEN_PORT": "5556"
-          }
+          "tag": "1.4.1.29"
       },
       {
 ```
-
-Following customizations are supported for the image components; as shown in the sample configmap above:
-1. Specify a custom location ("path").
-2. Specify a custom version ("tag").
-3. Specify custom "command", "args" or "env" to override standard built-in ones.
 
 If some of the required images are not publicly available and distributed under license, user would be required to create a secret with docker authorization details as supplied by Keysight. The operator would refer to this secret for deploying from private repository.<br/><br/>
 
 <kbd> <img src="Ixia_Operator.jpg"> </kbd><br/><br/>
 
-The operator deploys one single Controller pod with Ixia-c, gNMI and gRPC containers for user control, management and statistics reporting of Ixia network devices; and Ixia network devices for control and data plane. The deployed Ixia resource release versions are anchored and dictated by the Ixia-c release as defined in the KNE config file.
+The operator deploys one single Controller pod with Ixia-c, gNMI and gRPC containers for user control, management and statistics reporting of Ixia network devices. It also deploys Ixia network device nodes for control and data plane. The deployed Ixia resource release versions are anchored and dictated by the Ixia-c release as defined in the KNE config file.
 
 ## IxiaTG CRD
 
