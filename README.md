@@ -44,6 +44,57 @@ The operator deploys one single Controller pod with Ixia-c, gNMI and gRPC contai
 
 ## IxiaTG CRD
 
+The IxiaTG CRD instance specifies the list of Ixia components to be deployed. These deployment details are captured in the CRD "spec" and comprise of the following fields.
+- Release - Ixia release specific components version to deploy
+- Desired State - specify phase of deployment either INITIATED or DEPLOYED
+- Api Endpoint Map - service end points for control and management of all Ixia nodes in the topology
+- Interfaces - the Ixia list of interfaces and groups in the topology
+
+In the first phase of deployment (desired state set to INITIATED), the operator determines the pod names and their interfaces that it will deploy in the second phase. It updates these details in the "status" component of the CRD instance, the "state" is also updated as specified in the "spec" desired state. The CRD instance "status" comprise of the following fields.
+- State - status of the operation, either as specified in desired state or FAILED
+- Reason - error message on failure
+- Api Endpoint - generated service names for reference
+- Interfaces - list of interface mappings with pod name and interface name
+
+Based on these details, once the mesh of interconnects are setup, the Ixia CRD instance is updated with "spec" desired state set to DEPLOYED to trigger the pod and services deployment phase to start in the operator. On successful deployment the operator again updates the "status" state component to DEPLOYED. On failure state is set to FAILED and reason is updated with to error message. Below is an example of CRD instance.
+
+```sh
+spec:
+  api_endpoint_map:
+    gnmi:
+      in: 50051
+    grpc:
+      in: 40051
+    http:
+      in: 443
+  desired_state: DEPLOYED
+  interfaces:
+  - name: eth1
+  - group: lag
+    name: eth2
+  - group: lag
+    name: eth3
+  release: local-latest
+status:
+  api_endpoint:
+    pod_name: otg-controller
+    service_names:
+    - service-gnmi-otg-controller
+    - service-grpc-otg-controller
+    - service-http-otg-controller
+  interfaces:
+  - interface: eth1
+    name: eth1
+    pod_name: otg-port-eth1
+  - interface: eth2
+    name: eth2
+    pod_name: otg-port-group-lag
+  - interface: eth3
+    name: eth3
+    pod_name: otg-port-group-lag
+  state: DEPLOYED
+```
+
 ## Deployment
 
 Please make sure that the setup meets [Deployment Prerequisites](#deployment-prerequisites).
