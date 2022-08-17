@@ -1,7 +1,7 @@
 # Ixia-C Operator
 
 [![Project Status: Active – The project has reached a stable, usable state and is being actively developed.](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
-[![license](https://img.shields.io/badge/license-MIT-green.svg)](https://en.wikipedia.org/wiki/MIT_License)
+[![license](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![release)](https://img.shields.io/github/v/release/open-traffic-generator/ixia-c-operator)](https://github.com/open-traffic-generator/ixia-c-operator/releases/latest)
 [![Build](https://github.com/open-traffic-generator/ixia-c-operator/actions/workflows/publish.yaml/badge.svg)](https://github.com/open-traffic-generator/ixia-c-operator/actions)
 [![LGTM Grade](https://img.shields.io/lgtm/grade/python/github/open-traffic-generator/ixia-c-operator)](https://lgtm.com/projects/g/open-traffic-generator/ixia-c-operator/context:python)
