@@ -107,6 +107,7 @@ const (
 
 	GNMI_NEW_BASE_VERSION string = "1.7.9"
 	IXIA_C_OTG_VERSION    string = "0.0.1-2727"
+	IXIA_C_GRPC_VERSION   string = "0.0.1-3114"
 )
 
 var (
@@ -620,6 +621,20 @@ func (r *IxiaTGReconciler) loadRelInfo(release string, relData *[]byte, list boo
 			}
 		}
 
+		// From ixia-c release version IXIA_C_GRPC_VERSION, the gRPC container functionality has been merged
+		// into ixia-c container; so remove any gRPC release mapping and also update ixia-c default command.
+		if ctrl, ok := topoEntry.Controller.Containers[IMAGE_CONTROLLER]; ok {
+			noGRPC, err := versionLaterOrEqual(IXIA_C_GRPC_VERSION, ctrl.Tag)
+			if err != nil {
+				return err
+			}
+			if noGRPC {
+				// Remove any gRPC component
+				delete(topoEntry.Controller.Containers, IMAGE_GRPC_SERVER)
+				ctrl.DefArgs = []string{"--accept-eula", "--debug", "--grpc-port", "40051"}
+			}
+		}
+
 		componentDep[relEntry.Release] = topoEntry
 		if release == DEFAULT_VERSION {
 			latestVersion = relEntry.Release
@@ -1067,7 +1082,17 @@ func (r *IxiaTGReconciler) containersForController(ixia *networkv1beta1.IxiaTG, 
 	var newGNMI bool
 	var err error
 
-	if len(componentDep[release].Controller.Containers) < 3 {
+	ctrlContainers := 2
+	if ctrl, ok := componentDep[release].Controller.Containers[IMAGE_CONTROLLER]; ok {
+		noGRPC, err := versionLaterOrEqual(IXIA_C_GRPC_VERSION, ctrl.Tag)
+		if err != nil {
+			log.Error(err)
+		}
+		if !noGRPC {
+			ctrlContainers = 3
+		}
+	}
+	if len(componentDep[release].Controller.Containers) < ctrlContainers {
 		return nil, errors.New(fmt.Sprintf("Failed to find all container images for controller pod for release %s", release))
 	}
 	for _, comp := range componentDep[release].Controller.Containers {
