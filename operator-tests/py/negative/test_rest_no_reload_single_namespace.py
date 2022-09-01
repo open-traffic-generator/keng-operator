@@ -83,7 +83,7 @@ def test_rest_no_reload_single_namespace():
         utils.delete_kne_config(namespace1_config, namespace1)
         utils.ixia_c_pods_ok(namespace1, [])
         utils.ixia_c_services_ok(namespace1, [])
-        utils.unload_bad_configmap()
+        utils.reset_configmap()
         utils.wait_for(
             lambda: utils.topology_deleted(namespace1),
             'topology deleted',

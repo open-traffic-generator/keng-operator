@@ -69,7 +69,7 @@ def test_cm_reload_single_namespace():
         print("[Namespace:{}]Deploying KNE topology".format(
             namespace1
         ))
-        utils.unload_bad_configmap()
+        utils.reset_configmap()
         time.sleep(2)
         utils.create_kne_config(namespace1_config, namespace1)
         utils.ixia_c_pods_ok(namespace1, expected_pods_good_config)
@@ -88,7 +88,7 @@ def test_cm_reload_single_namespace():
         utils.delete_kne_config(namespace1_config, namespace1)
         utils.ixia_c_pods_ok(namespace1, [])
         utils.ixia_c_services_ok(namespace1, [])
-        utils.unload_bad_configmap()
+        utils.reset_configmap()
         utils.wait_for(
             lambda: utils.topology_deleted(namespace1),
             'topology deleted',

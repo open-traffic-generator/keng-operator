@@ -47,14 +47,14 @@ def test_args_cmd_env_override():
         utils.ixia_c_pods_ok(namespace1, [])
         utils.ixia_c_services_ok(namespace1, [])
         op_rscount = utils.ixia_c_operator_ok(op_rscount)
-        utils.unload_custom_configmap()
+        utils.reset_configmap()
         return
     finally:
         print("Done")
         utils.delete_kne_config(namespace1_config, namespace1)
         utils.ixia_c_pods_ok(namespace1, [])
         utils.ixia_c_services_ok(namespace1, [])
-        utils.unload_custom_configmap()
+        utils.reset_configmap()
 
 
 

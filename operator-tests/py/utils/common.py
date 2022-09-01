@@ -150,11 +150,6 @@ def apply_configmap(configmap):
         ))
 
 
-def unload_custom_configmap():
-    print("Unloading custom container config...")
-    apply_configmap(IXIA_CONFIGMAP_FILE)
-
-
 def load_custom_configmap():
     print("Loading custom container config...")
     cmd = "cat ./{}".format(
@@ -207,11 +202,6 @@ def ixia_c_custom_pods_ok(namespace):
             assert False, "Expected port custom env CUSTOM_ENV entry not found"
 
 
-def unload_init_configmap():
-    print("Unloading init container Config...")
-    apply_configmap(IXIA_CONFIGMAP_FILE)
-
-
 def load_init_configmap():
     print("Loading Init Container Config...")
     cmd = "cat {}".format(
@@ -232,8 +222,8 @@ def load_init_configmap():
     os.remove(init_configmap_path)
 
 
-def unload_bad_configmap():
-    print("Unloading Bad Config...")
+def reset_configmap():
+    print("Reset Configmap...")
     apply_configmap(IXIA_CONFIGMAP_FILE)
 
 
@@ -259,6 +249,38 @@ def load_bad_configmap(bad_component, update_release=False):
         yaml.dump(yaml_obj, yaml_file)
     apply_configmap(bad_configmap_path)
     os.remove(bad_configmap_path)
+
+
+def load_grpc_configmap(include_grpc=True, controller_version="default"):
+    print("Loading gRPC Config...")
+    cmd = "cat ./{}".format(
+        IXIA_CONFIGMAP_FILE
+    )
+    out, _ = exec_shell(cmd, False, True)
+    yaml_obj = yaml.safe_load(out)
+    json_obj = json.loads(yaml_obj["data"]["versions"])
+    grpc_found = False
+    for elem in json_obj["images"]:
+        if elem["name"] == "grpc-server":
+            if include_grpc:
+                grpc_found = True
+            else:
+                json_obj["images"].remove(elem)
+        elif elem["name"] == "controller" and controller_version != "default":
+            elem["tag"] = "0.0.1-3113"
+    if include_grpc and not grpc_found:
+        elem = {
+            "name": "grpc-server",
+            "path": "us-central1-docker.pkg.dev/kt-nts-athena-dev/keysight/ixia-c-grpc-server",
+            "tag": "0.8.9"
+        }
+        json_obj["images"].append(elem)
+    yaml_obj["data"]["versions"] = json.dumps(json_obj)
+    grpc_configmap_path = "{}".format(BAD_CONFIGMAP_FILE)
+    with open(grpc_configmap_path, "w") as yaml_file:
+        yaml.dump(yaml_obj, yaml_file)
+    apply_configmap(grpc_configmap_path)
+    os.remove(grpc_configmap_path)
 
 
 def seconds_elapsed(start_seconds):
@@ -321,6 +343,17 @@ def pods_count_ok(exp_pods, namespace):
 
     ))
     return exp_pods == actual_pods
+
+
+def containers_count_ok(num_containers, pod, namespace):
+    cmd = "kubectl get pod/{} -n {} | grep -v RESTARTS".format(
+        pod, namespace
+    )
+    out, _ = exec_shell(cmd, True, False)
+    out = out.split()
+    exp_containers = "{}/{}".format(num_containers, num_containers)
+    assert len(out) >= 5 and out[2] == "Running" and out[1] == exp_containers,
+             "Unexpected controller status or container count found"
 
 
 def svcs_count_ok(exp_svcs, namespace):
