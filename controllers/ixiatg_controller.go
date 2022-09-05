@@ -108,6 +108,9 @@ const (
 	GNMI_NEW_BASE_VERSION string = "1.7.9"
 	IXIA_C_OTG_VERSION    string = "0.0.1-2727"
 	IXIA_C_GRPC_VERSION   string = "0.0.1-3114"
+
+	LIVENESS_DELAY  int32 = 10
+	LIVENESS_PERIOD int32 = 1
 )
 
 var (
@@ -123,19 +126,22 @@ type IxiaTGReconciler struct {
 }
 
 type componentRel struct {
-	Args          []string `json:"args"`
-	Command       []string `json:"command"`
-	ContainerName string
-	DefArgs       []string
-	DefCmd        []string
-	DefEnv        map[string]string
-	Env           map[string]interface{} `json:"env"`
-	Name          string                 `json:"name"`
-	Path          string                 `json:"path"`
-	Port          int32
-	Tag           string `json:"tag"`
-	VolMntName    string
-	VolMntPath    string
+	Args           []string `json:"args"`
+	Command        []string `json:"command"`
+	ContainerName  string
+	DefArgs        []string
+	DefCmd         []string
+	DefEnv         map[string]string
+	Env            map[string]interface{} `json:"env"`
+	LiveNessEnable bool                   `json:"liveness-enable,omitempty"`
+	LiveNessDelay  int32                  `json:"liveness-initial-delay,omitempty"`
+	LiveNessPeriod int32                  `json:"liveness-period,omitempty"`
+	Name           string                 `json:"name"`
+	Path           string                 `json:"path"`
+	Port           int32
+	Tag            string `json:"tag"`
+	VolMntName     string
+	VolMntPath     string
 }
 
 type Node struct {
@@ -611,6 +617,16 @@ func (r *IxiaTGReconciler) loadRelInfo(release string, relData *[]byte, list boo
 				}
 			case IMAGE_PROTOCOL_ENG:
 				compRef.ContainerName = IMAGE_PROTOCOL_ENG
+				// For now, if both liveness delay and period is zero, and liveness enable is false, we take default values
+				if !compRef.LiveNessEnable && compRef.LiveNessDelay == 0 && compRef.LiveNessPeriod == 0 {
+					compRef.LiveNessEnable = true
+				}
+				if compRef.LiveNessDelay == 0 {
+					compRef.LiveNessDelay = LIVENESS_DELAY
+				}
+				if compRef.LiveNessPeriod == 0 {
+					compRef.LiveNessPeriod = LIVENESS_PERIOD
+				}
 			default:
 				compRef.ContainerName = compRef.Name
 			}
@@ -1167,15 +1183,17 @@ func (r *IxiaTGReconciler) containersForIxia(podName string, intfList []string, 
 		}
 		if cName == IMAGE_PROTOCOL_ENG {
 			compCopy.DefEnv["INTF_LIST"] = strings.Join(intfList, ",")
-			tcpSock := corev1.TCPSocketAction{Port: intstr.IntOrString{IntVal: 50071}}
-			pbHdlr := corev1.ProbeHandler{TCPSocket: &tcpSock}
-			probe := corev1.Probe{
-				ProbeHandler:                  pbHdlr,
-				InitialDelaySeconds:           10,
-				PeriodSeconds:                 1,
-				TerminationGracePeriodSeconds: pointer.Int64(1),
+			if compCopy.LiveNessEnable {
+				tcpSock := corev1.TCPSocketAction{Port: intstr.IntOrString{IntVal: 50071}}
+				pbHdlr := corev1.ProbeHandler{TCPSocket: &tcpSock}
+				probe := corev1.Probe{
+					ProbeHandler:                  pbHdlr,
+					InitialDelaySeconds:           compCopy.LiveNessDelay,
+					PeriodSeconds:                 compCopy.LiveNessPeriod,
+					TerminationGracePeriodSeconds: pointer.Int64(1),
+				}
+				container.LivenessProbe = &probe
 			}
-			container.LivenessProbe = &probe
 		} else {
 			compCopy.DefEnv["ARG_IFACE_LIST"] = argIntfList
 		}
