@@ -16,7 +16,7 @@ def test_args_cmd_env_override():
     namespace1 = 'ixia-c'
     namespace1_config = 'b2b_ixia_c_namespace.txt'
     expected_svcs = [
-        'service-http-otg-controller',
+        'service-https-otg-controller',
         'service-gnmi-otg-controller',
         'service-grpc-otg-controller',
         'service-otg-port-eth1',

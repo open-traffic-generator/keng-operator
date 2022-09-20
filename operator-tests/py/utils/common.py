@@ -352,7 +352,7 @@ def containers_count_ok(num_containers, pod, namespace):
     out, _ = exec_shell(cmd, True, False)
     out = out.split()
     exp_containers = "{}/{}".format(num_containers, num_containers)
-    assert len(out) >= 5 and out[2] == "Running" and out[1] == exp_containers,
+    assert len(out) >= 5 and out[2] == "Running" and out[1] == exp_containers, \
              "Unexpected controller status or container count found"
 
 
