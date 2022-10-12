@@ -109,8 +109,9 @@ const (
 	IXIA_C_OTG_VERSION    string = "0.0.1-2727"
 	IXIA_C_GRPC_VERSION   string = "0.0.1-3114"
 
-	LIVENESS_DELAY  int32 = 10
-	LIVENESS_PERIOD int32 = 1
+	LIVENESS_DELAY   int32 = 10
+	LIVENESS_PERIOD  int32 = 1
+	LIVENESS_FAILURE int32 = 3
 )
 
 var (
@@ -126,22 +127,23 @@ type IxiaTGReconciler struct {
 }
 
 type componentRel struct {
-	Args           []string `json:"args"`
-	Command        []string `json:"command"`
-	ContainerName  string
-	DefArgs        []string
-	DefCmd         []string
-	DefEnv         map[string]string
-	Env            map[string]interface{} `json:"env"`
-	LiveNessEnable bool                   `json:"liveness-enable,omitempty"`
-	LiveNessDelay  int32                  `json:"liveness-initial-delay,omitempty"`
-	LiveNessPeriod int32                  `json:"liveness-period,omitempty"`
-	Name           string                 `json:"name"`
-	Path           string                 `json:"path"`
-	Port           int32
-	Tag            string `json:"tag"`
-	VolMntName     string
-	VolMntPath     string
+	Args            []string `json:"args"`
+	Command         []string `json:"command"`
+	ContainerName   string
+	DefArgs         []string
+	DefCmd          []string
+	DefEnv          map[string]string
+	Env             map[string]interface{} `json:"env"`
+	LiveNessEnable  *bool                  `json:"liveness-enable,omitempty"`
+	LiveNessDelay   int32                  `json:"liveness-initial-delay,omitempty"`
+	LiveNessPeriod  int32                  `json:"liveness-period,omitempty"`
+	LiveNessFailure int32                  `json:"liveness-failure,omitempty"`
+	Name            string                 `json:"name"`
+	Path            string                 `json:"path"`
+	Port            int32
+	Tag             string `json:"tag"`
+	VolMntName      string
+	VolMntPath      string
 }
 
 type Node struct {
@@ -279,7 +281,7 @@ func (r *IxiaTGReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 			} else if !otgCtrl && len(ixia.Spec.Interfaces) > 1 {
 				err = errors.New(fmt.Sprintf("Multiple interfaces (%d) specified for node %s", len(ixia.Spec.Interfaces), ixia.Name))
 			} else if !otgCtrl && ixia.Spec.Interfaces[0].Name != DEFAULT_INTF {
-				err = errors.New(fmt.Sprintf("Unsupported interface %s for Controller version", ixia.Spec.Interfaces[0].Name))
+				err = errors.New(fmt.Sprintf("Unsupported interface %s for Controller version; interface must be eth1", ixia.Spec.Interfaces[0].Name))
 			} else if !otgCtrl && ixia.Name == CONTROLLER_NAME {
 				err = errors.New(fmt.Sprintf("Node name %s is reserved for Controller pod, use some other name", CONTROLLER_NAME))
 			} else {
@@ -287,7 +289,7 @@ func (r *IxiaTGReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 					specVer := crdList.Items[0].Spec.Release
 					for _, node := range crdList.Items {
 						if node.Spec.Release != specVer {
-							err = errors.New("IxiaTG node versions are not consistent")
+							err = errors.New(fmt.Sprintf("IxiaTG node versions are not consistent; found %s for one and %s for another", node.Spec.Release, specVer))
 							break
 						}
 					}
@@ -304,7 +306,7 @@ func (r *IxiaTGReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 						}
 						if intf.Group != "" {
 							if !otgCtrl {
-								err = errors.New("Group not supported for old KNE configs")
+								err = errors.New(fmt.Sprintf("Group, in config, is not supported for version older than %s", IXIA_C_OTG_VERSION))
 								break
 							}
 							podName = ixia.Name + PORT_GROUP_NAME_INFIX + intf.Group
@@ -529,7 +531,7 @@ func (r *IxiaTGReconciler) getRelInfo(ctx context.Context, release string) error
 		if _, ok := componentDep[release]; !ok {
 			log.Infof("Version specific information could not be located; ensure a valid version is used")
 			log.Infof("Also ensure the version specific ConfigMap yaml is applied if working in offline mode")
-			return errors.New(fmt.Sprintf("Dependency info could not be located for release version %s", release))
+			return errors.New(fmt.Sprintf("Dependency info for version %s could not be located; ensure configmap with that version is loaded", release))
 		}
 
 		return nil
@@ -548,8 +550,10 @@ func (r *IxiaTGReconciler) loadRelInfo(release string, relData *[]byte, list boo
 		err = json.Unmarshal(*relData, &relList)
 	} else {
 		err = json.Unmarshal(*relData, &rel)
-		relList = pubReleases{}
-		relList.Releases = append(relList.Releases, rel)
+		if err == nil {
+			relList = pubReleases{}
+			relList.Releases = append(relList.Releases, rel)
+		}
 	}
 	if err != nil {
 		log.Error(err, "Failed to unmarshall release dependency json")
@@ -617,15 +621,14 @@ func (r *IxiaTGReconciler) loadRelInfo(release string, relData *[]byte, list boo
 				}
 			case IMAGE_PROTOCOL_ENG:
 				compRef.ContainerName = IMAGE_PROTOCOL_ENG
-				// For now, if both liveness delay and period is zero, and liveness enable is false, we take default values
-				if !compRef.LiveNessEnable && compRef.LiveNessDelay == 0 && compRef.LiveNessPeriod == 0 {
-					compRef.LiveNessEnable = true
-				}
 				if compRef.LiveNessDelay == 0 {
 					compRef.LiveNessDelay = LIVENESS_DELAY
 				}
 				if compRef.LiveNessPeriod == 0 {
 					compRef.LiveNessPeriod = LIVENESS_PERIOD
+				}
+				if compRef.LiveNessFailure == 0 {
+					compRef.LiveNessFailure = LIVENESS_FAILURE
 				}
 			default:
 				compRef.ContainerName = compRef.Name
@@ -669,7 +672,7 @@ func (r *IxiaTGReconciler) loadRelInfo(release string, relData *[]byte, list boo
 
 	if _, ok := componentDep[release]; !ok {
 		log.Errorf("Release %s related dependency could not be located", release)
-		return errors.New(fmt.Sprintf("Dependency info could not be located for release version %s", release))
+		return errors.New(fmt.Sprintf("Dependency info for version %s could not be located; ensure configmap with that version is loaded", release))
 	}
 
 	return nil
@@ -775,7 +778,7 @@ func (r *IxiaTGReconciler) deployController(ctx context.Context, podMap *map[str
 		}
 	}
 	if !found || err != nil {
-		return isOtgCtrl, errors.New(fmt.Sprintf("Failed to determine Controller release for version %s", depVersion))
+		return isOtgCtrl, errors.New(fmt.Sprintf("Failed to locate Controller entry for version %s in configmap", depVersion))
 	}
 	if checkOtgOnly {
 		return isOtgCtrl, nil
@@ -1109,7 +1112,14 @@ func (r *IxiaTGReconciler) containersForController(ixia *networkv1beta1.IxiaTG, 
 		}
 	}
 	if len(componentDep[release].Controller.Containers) < ctrlContainers {
-		return nil, errors.New(fmt.Sprintf("Failed to find all container images for controller pod for release %s", release))
+		errStr := "Failed to find required container entries; "
+		if ctrlContainers > 2 {
+			errStr = errStr + "expect Controller, gNMI and gRPC "
+		} else {
+			errStr = errStr + "expect Controller and gNMI "
+		}
+		errStr = errStr + fmt.Sprintf("entries to be present in configmap for release %s", release)
+		return nil, errors.New(errStr)
 	}
 	for _, comp := range componentDep[release].Controller.Containers {
 		name := comp.ContainerName
@@ -1183,13 +1193,14 @@ func (r *IxiaTGReconciler) containersForIxia(podName string, intfList []string, 
 		}
 		if cName == IMAGE_PROTOCOL_ENG {
 			compCopy.DefEnv["INTF_LIST"] = strings.Join(intfList, ",")
-			if compCopy.LiveNessEnable {
+			if compCopy.LiveNessEnable == nil || *compCopy.LiveNessEnable {
 				tcpSock := corev1.TCPSocketAction{Port: intstr.IntOrString{IntVal: 50071}}
 				pbHdlr := corev1.ProbeHandler{TCPSocket: &tcpSock}
 				probe := corev1.Probe{
 					ProbeHandler:                  pbHdlr,
 					InitialDelaySeconds:           compCopy.LiveNessDelay,
 					PeriodSeconds:                 compCopy.LiveNessPeriod,
+					FailureThreshold:              compCopy.LiveNessFailure,
 					TerminationGracePeriodSeconds: pointer.Int64(1),
 				}
 				container.LivenessProbe = &probe
