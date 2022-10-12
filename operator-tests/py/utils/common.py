@@ -283,6 +283,32 @@ def load_grpc_configmap(include_grpc=True, controller_version="default"):
     os.remove(grpc_configmap_path)
 
 
+def load_liveness_configmap(enabled=True, delay=0, period=0, failure=0):
+    print("Loading custom liveness config...")
+    cmd = "cat ./{}".format(
+        IXIA_CONFIGMAP_FILE
+    )
+    out, _ = exec_shell(cmd, False, True)
+    yaml_obj = yaml.safe_load(out)
+    json_obj = json.loads(yaml_obj["data"]["versions"])
+    for elem in json_obj["images"]:
+        if elem["name"] == "protocol-engine":
+            elem["liveness-enable"] = enabled
+            if delay != 0:
+                elem["liveness-initial-delay"] = delay
+            if period != 0:
+                elem["liveness-period"] = period
+            if failure != 0:
+                elem["liveness-failure"] = failure
+    yaml_obj["data"]["versions"] = json.dumps(json_obj)
+    custom_configmap_path = "{}".format(CUSTOM_CONFIGMAP_FILE)
+    with open(custom_configmap_path, "w") as yaml_file:
+        yaml.dump(yaml_obj, yaml_file)
+
+    apply_configmap(custom_configmap_path)
+    os.remove(custom_configmap_path)
+
+
 def seconds_elapsed(start_seconds):
     return int(round(time.time() - start_seconds))
 
@@ -490,6 +516,31 @@ def ixia_c_operator_ok(prev_op_rscount):
             total_restarts
         )
     return op_rscount
+
+
+def check_liveness_data(pod, namespace, enabled=True, delay=0, period=0, failure=0):
+    base_cmd = "{}-protocol-engine".format(pod)
+    base_cmd = "'jsonpath={.spec.containers[?(@.name==\"" + base_cmd + "\")].livenessProbe"
+    base_cmd = "kubectl get pod/{} -n {} -o ".format(pod, namespace) + base_cmd
+    cmd = base_cmd + "}'"
+    out, _ = exec_shell(cmd, True, True)
+    if enabled:
+        assert out != "", "Expected liveness to be enabled; no liveness data found"
+    else:
+        assert out == "", "Expected liveness to be disabled; liveness data non-empty"
+        return
+    if delay != 0:
+        cmd = base_cmd + ".initialDelaySeconds}'"
+        out, _ = exec_shell(cmd, True, True)
+        assert str(delay) == out, "InitialDelaySeconds mismatch, expected {}, found {}".format(delay, out)
+    if period != 0:
+        cmd = base_cmd + ".periodSeconds}'"
+        out, _ = exec_shell(cmd, True, True)
+        assert str(period) == out, "PeriodSeconds mismatch, expected {}, found {}".format(period, out)
+    if failure != 0:
+        cmd = base_cmd + ".failureThreshold}'"
+        out, _ = exec_shell(cmd, True, True)
+        assert str(failure) == out, "FailureThreshold mismatch, expected {}, found {}".format(failure, out)
 
 
 def generate_rest_config_from_temaplate(config, ixia_c_release):
