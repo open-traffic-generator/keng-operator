@@ -894,33 +894,44 @@ func (r *IxiaTGReconciler) podForIxia(ctx context.Context, podName string, intfL
 	}
 	contPodMap := componentDep[versionToDeploy].Ixia.Containers
 	args := []string{strconv.Itoa(len(intfList) + 1), "10"}
-	for _, cont := range contPodMap {
-		if strings.HasPrefix(cont.Name, INIT_CONT_NAME_PREFIX) {
-			initCont := corev1.Container{
-				Name:            cont.ContainerName,
-				Image:           cont.Path + ":" + cont.Tag,
-				ImagePullPolicy: "IfNotPresent",
+	initImage := "networkop/init-wait:latest"
+	initContainerMsg := "Added default init container"
+	if ixia.Spec.InitContainer.Image == "" {
+		for _, cont := range contPodMap {
+			if strings.HasPrefix(cont.Name, INIT_CONT_NAME_PREFIX) {
+				initContainerMsg = "Added custom init container from configmap"
+				initCont := corev1.Container{
+					Name:            cont.ContainerName,
+					Image:           cont.Path + ":" + cont.Tag,
+					ImagePullPolicy: "IfNotPresent",
+				}
+				updateControllerContainer(&initCont, cont, false)
+				// Since the args are dynamic based on topology deployment, we verify if args
+				// are applied based on configmap spec; otherwise apply default args
+				if len(initCont.Args) == 0 {
+					initCont.Args = args
+				}
+				log.Infof("Adding init container image: %+v", initCont)
+				initContainers = append(initContainers, initCont)
 			}
-			updateControllerContainer(&initCont, cont, false)
-			// Since the args are dynamic based on topology deployment, we verify if args
-			// are applied based on configmap spec; otherwise apply default args
-			if len(initCont.Args) == 0 {
-				initCont.Args = args
-			}
-			log.Infof("Adding init container image: %+v", initCont)
-			initContainers = append(initContainers, initCont)
 		}
+	} else {
+		initContainerMsg = "Added custom init container from config spec"
+		if ixia.Spec.InitContainer.Sleep != 0 {
+			args[1] = fmt.Sprintf("%d", ixia.Spec.InitContainer.Sleep)
+		}
+		initImage = ixia.Spec.InitContainer.Image
 	}
 	if len(initContainers) == 0 {
-		log.Infof("Adding default init container")
 		defaultInitCont := corev1.Container{
 			Name:            "init-container",
-			Image:           "networkop/init-wait:latest",
+			Image:           initImage,
 			Args:            args,
 			ImagePullPolicy: "IfNotPresent",
 		}
 		initContainers = append(initContainers, defaultInitCont)
 	}
+	log.Info(initContainerMsg)
 	imagePullSecrets := getImgPullSctSecret(secret)
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
