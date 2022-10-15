@@ -51,6 +51,12 @@ type IxiaTGSvcEP struct {
 	ServiceName []string `json:"service_names,omitempty"`
 }
 
+// IxiaTGInitContainer defines the init container parameters
+type IxiaTGInitContainer struct {
+	Image string `json:"image,omitempty"`
+	Sleep uint32 `json:"sleep,omitempty"`
+}
+
 // IxiaTGSpec defines the desired state of IxiaTG
 type IxiaTGSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
@@ -64,6 +70,8 @@ type IxiaTGSpec struct {
 	ApiEndPoint map[string]IxiaTGSvcPort `json:"api_endpoint_map,omitempty"`
 	// Interfaces with DUT
 	Interfaces []IxiaTGIntf `json:"interfaces,omitempty"`
+	// Init container image of the node
+	InitContainer IxiaTGInitContainer `json:"init_container,omitempty"`
 }
 
 // IxiaTGStatus defines the observed state of IxiaTG
