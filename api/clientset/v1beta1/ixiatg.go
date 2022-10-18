@@ -18,12 +18,13 @@ package v1beta1
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -198,14 +199,27 @@ func (i *IxiaTGClient) Update(
 ) (*typesv1beta1.IxiaTG, error) {
 	result := typesv1beta1.IxiaTG{}
 
-	obj, err := i.dInterface.Namespace(i.ns).UpdateStatus(ctx, obj, opts)
+	err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), &result)
 	if err != nil {
 		return nil, err
 	}
 
-	err = runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), &result)
+	crdBytes, err := json.Marshal(result)
 	if err != nil {
-		return nil, fmt.Errorf("Operation update failed")
+		return nil, err
+	}
+
+	err = i.restClient.
+		Patch(types.MergePatchType).
+		Namespace(i.ns).
+		Resource(GVR().Resource).
+		VersionedParams(&opts, scheme.ParameterCodec).
+		Name(result.Name).
+		Body(crdBytes).
+		Do(ctx).
+		Error()
+	if err != nil {
+		return nil, err
 	}
 
 	return &result, nil
