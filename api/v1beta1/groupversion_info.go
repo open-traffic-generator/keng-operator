@@ -24,12 +24,17 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/scheme"
 )
 
+const (
+	GroupName    = "network.keysight.com"
+	GroupVersion = "v1beta1"
+)
+
 var (
 	// GroupVersion is group version used to register these objects
-	GroupVersion = schema.GroupVersion{Group: "network.keysight.com", Version: "v1beta1"}
+	SchemaGroupVersion = schema.GroupVersion{Group: GroupName, Version: GroupVersion}
 
 	// SchemeBuilder is used to add go types to the GroupVersionKind scheme
-	SchemeBuilder = &scheme.Builder{GroupVersion: GroupVersion}
+	SchemeBuilder = &scheme.Builder{GroupVersion: SchemaGroupVersion}
 
 	// AddToScheme adds the types in this group-version to the given scheme.
 	AddToScheme = SchemeBuilder.AddToScheme
