@@ -20,6 +20,8 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"log"
+	"net/http"
 	"os"
 	"strings"
 
@@ -51,64 +53,103 @@ func init() {
 	//+kubebuilder:scaffold:scheme
 }
 
+func HandleConfig(w http.ResponseWriter, req *http.Request) {
+	ctrl := controllers.IxiaTGReconciler{}
+	err := ctrl.ProcessConfigmap(req)
+	if err != nil {
+		fmt.Fprintf(w, "Error: %v\n", err)
+		return
+	}
+	fmt.Fprintf(w, "Successfully processed configmap\n")
+}
+
+func HandleCreate(w http.ResponseWriter, req *http.Request) {
+	ctrl := controllers.IxiaTGReconciler{}
+	resp, err := ctrl.ManageDockerContainers(req, true)
+	if err != nil {
+		fmt.Fprintf(w, "Error: %v\n", err)
+		return
+	}
+	fmt.Fprintf(w, "Successfully created topology\n%s\n", resp)
+}
+
+func HandleDelete(w http.ResponseWriter, req *http.Request) {
+	ctrl := controllers.IxiaTGReconciler{}
+	resp, err := ctrl.ManageDockerContainers(req, false)
+	if err != nil {
+		fmt.Fprintf(w, "Error: %v\n", err)
+		return
+	}
+	fmt.Fprintf(w, "Successfully deleted topology\n%s\n", resp)
+}
+
 func main() {
 	var metricsAddr string
 	var enableLeaderElection bool
 	var probeAddr string
+	var serverAddr string
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
+	flag.StringVar(&serverAddr, "server-bind-address", ":30000", "server binding address")
 	opts := zap.Options{
 		Development: false,
 	}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
 
-	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
-
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:                 scheme,
-		MetricsBindAddress:     metricsAddr,
-		Port:                   9443,
-		HealthProbeBindAddress: probeAddr,
-		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       "b867187a.keysight.com",
-	})
-	if err != nil {
-		setupLog.Error(err, "unable to start manager")
-		os.Exit(1)
-	}
-
-	if err = (&controllers.IxiaTGReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("IxiaTG"),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "IxiaTG")
-		os.Exit(1)
-	}
-	//+kubebuilder:scaffold:builder
-
-	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
-		setupLog.Error(err, "unable to set up health check")
-		os.Exit(1)
-	}
-	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
-		setupLog.Error(err, "unable to set up ready check")
-		os.Exit(1)
-	}
-
-	if buf, err := ioutil.ReadFile("version"); err != nil {
-		setupLog.Error(err, "unable to read build version")
-		setupLog.Info("starting manager")
+	if _, err := os.Stat("/var/run/docker.sock"); err == nil {
+		http.HandleFunc("/config", HandleConfig)
+		http.HandleFunc("/create", HandleCreate)
+		http.HandleFunc("/delete", HandleDelete)
+		log.Fatal(http.ListenAndServe(serverAddr, nil))
 	} else {
-		setupLog.Info(fmt.Sprintf("starting manager - version %s", strings.TrimSuffix(string(buf), "\n")))
-	}
+		ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-		setupLog.Error(err, "problem running manager")
-		os.Exit(1)
+		mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+			Scheme:                 scheme,
+			MetricsBindAddress:     metricsAddr,
+			Port:                   9443,
+			HealthProbeBindAddress: probeAddr,
+			LeaderElection:         enableLeaderElection,
+			LeaderElectionID:       "b867187a.keysight.com",
+		})
+		if err != nil {
+			setupLog.Error(err, "unable to start manager")
+			os.Exit(1)
+		}
+
+		if err = (&controllers.IxiaTGReconciler{
+			Client: mgr.GetClient(),
+			Log:    ctrl.Log.WithName("controllers").WithName("IxiaTG"),
+			Scheme: mgr.GetScheme(),
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "IxiaTG")
+			os.Exit(1)
+		}
+		//+kubebuilder:scaffold:builder
+
+		if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
+			setupLog.Error(err, "unable to set up health check")
+			os.Exit(1)
+		}
+		if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
+			setupLog.Error(err, "unable to set up ready check")
+			os.Exit(1)
+		}
+
+		if buf, err := ioutil.ReadFile("version"); err != nil {
+			setupLog.Error(err, "unable to read build version")
+			setupLog.Info("starting manager")
+		} else {
+			setupLog.Info(fmt.Sprintf("starting manager - version %s", strings.TrimSuffix(string(buf), "\n")))
+		}
+
+		if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+			setupLog.Error(err, "problem running manager")
+			os.Exit(1)
+		}
 	}
 }
