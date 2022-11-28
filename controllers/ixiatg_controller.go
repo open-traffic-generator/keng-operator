@@ -25,7 +25,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -222,7 +221,7 @@ type ctrlContData struct {
 // dockerContInfo denotes docker container related data that is successfully deployed for non-K8s
 type dockerContInfo struct {
 	Id     string
-	Pid    string
+	Pid    int
 	MgmtIP string
 }
 
@@ -1433,9 +1432,9 @@ func deployDockerContainer(ctx context.Context, cli *dockerclient.Client, cfg *c
 		return response, err
 	}
 
-	response.Pid = fmt.Sprintf("%v", containerData.ContainerJSONBase.State.Pid)
+	response.Pid = containerData.ContainerJSONBase.State.Pid
 	response.MgmtIP = containerData.NetworkSettings.DefaultNetworkSettings.IPAddress
-	log.Infof("Successfully deployed docker container %s (id %s), PID %s IP %s", name, resp.ID, response.Pid, response.MgmtIP)
+	log.Infof("Successfully deployed docker container %s (id %s), PID %d IP %s", name, resp.ID, response.Pid, response.MgmtIP)
 
 	return response, nil
 }
@@ -1471,13 +1470,6 @@ func (r *IxiaTGReconciler) deployCpDpNode(ctx context.Context, release string, n
 	}
 	(*node).MgmtIP = response.MgmtIP
 
-	sourceDir := fmt.Sprintf("/proc/%s/ns/net", response.Pid)
-	targetDir := fmt.Sprintf("/host/var/run/netns/%s", response.Pid)
-	if err = os.Symlink(sourceDir, targetDir); err != nil {
-		return err
-	}
-	log.Infof("Symlink created (pid %s)", response.Pid)
-
 	// Make macvlan and push into CP netns
 	for _, intf := range node.Interfaces {
 		if intf.PeerIntf == "" {
@@ -1486,7 +1478,6 @@ func (r *IxiaTGReconciler) deployCpDpNode(ctx context.Context, release string, n
 		if intf.Peer != "localhost" {
 			return errors.New("Peer should be localhost")
 		}
-
 		parentLink, err := netlink.LinkByName(intf.PeerIntf)
 		if err != nil {
 			return err
@@ -1497,16 +1488,13 @@ func (r *IxiaTGReconciler) deployCpDpNode(ctx context.Context, release string, n
 		if err = netlink.LinkAdd(macvlan); err != nil {
 			return err
 		}
-
 		log.Infof("Created macvlan network interface on %s", intf.Name)
-		cmdStr := fmt.Sprintf("sudo ip link set %s netns %s", macvlanName, response.Pid)
-		if err = os.WriteFile("/hostpipe", []byte(cmdStr), 0644); err != nil {
-			netlink.LinkDel(macvlan)
+
+		if err = netlink.LinkSetNsPid(macvlan, response.Pid); err != nil {
 			return err
 		}
-
 		log.Infof("Macvlan interface pushed into container (id %s) network namespace", response.Id)
-		time.Sleep(1 * time.Second)
+
 		cmdExecOnCont := fmt.Sprintf("ip link set %s name %s", macvlanName, intf.Name)
 		cmdIntfUp := fmt.Sprintf("ifconfig %s up", intf.Name)
 		err = execOnTargetContainer(ctx, cli, []string{cmdExecOnCont, cmdIntfUp}, response.Id)
@@ -1556,26 +1544,12 @@ func (r *IxiaTGReconciler) deleteTopoContainers(ctx context.Context, contMap map
 			if _, ok := contMap[name]; ok {
 				log.Infof("Deleting container: %s", name)
 				d := time.Second * 3
-				containerData, err := cli.ContainerInspect(ctx, cont.ID)
-				if err != nil {
-					return err
-				}
-
-				pid := fmt.Sprintf("%v", containerData.ContainerJSONBase.State.Pid)
 				if err = cli.ContainerStop(ctx, cont.ID, &d); err != nil {
 					return err
 				}
 
 				if err = cli.ContainerRemove(ctx, cont.ID, dockertypes.ContainerRemoveOptions{}); err != nil {
 					return err
-				}
-
-				dirPath := fmt.Sprintf("/host/var/run/netns/%s", pid)
-				if _, err = os.Lstat(dirPath); err == nil {
-					if err = os.Remove(dirPath); err != nil {
-						// Just log error
-						log.Errorf("Failed to remove symlink %s", dirPath)
-					}
 				}
 				contMap[name] = false
 			}
@@ -1798,13 +1772,6 @@ func (r *IxiaTGReconciler) ManageDockerContainers(req *http.Request, setup bool)
 				return "", errors.New(fmt.Sprintf("Failed to get release information for version %s", DEFAULT_VERSION))
 			} else {
 				depVersion = latestVersion
-			}
-		}
-
-		netnsDir := "/host/var/run/netns"
-		if _, err = os.Stat(netnsDir); os.IsNotExist(err) {
-			if err = os.Mkdir(netnsDir, os.ModeDir|0755); err != nil {
-				return "", errors.New(fmt.Sprintf("Error in create directory %v\n", err))
 			}
 		}
 	}
