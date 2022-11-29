@@ -144,7 +144,7 @@ spec:
                 securityContext:
                   allowPrivilegeEscalation: false
               securityContext:
-                runAsNonRoot: false
+                runAsNonRoot: true
               serviceAccountName: ixiatg-op-controller-manager
               terminationGracePeriodSeconds: 10
       permissions:
