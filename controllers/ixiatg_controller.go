@@ -56,7 +56,7 @@ const (
 
 	SERVER_URL        string = "https://github.com/open-traffic-generator/ixia-c/releases/download/v"
 	SERVER_LATEST_URL string = "https://github.com/open-traffic-generator/ixia-c/releases/latest/download"
-	RELEASE_FILE      string = "/ixia-configmap.yaml"
+	RELEASE_FILE      string = "/ixiatg-configmap.yaml"
 
 	CONTROLLER_NAME string = "ixia-c"
 	GRPC_NAME       string = "grpc"
@@ -85,7 +85,7 @@ const (
 
 	SERVICE_NAME_SUFFIX string = ".svc.cluster.local"
 
-	CTRL_HTTPS_PORT   int32 = 443
+	CTRL_HTTPS_PORT   int32 = 8443
 	CTRL_GNMI_PORT    int32 = 50051
 	CTRL_GRPC_PORT    int32 = 40051
 	PROTOCOL_ENG_PORT int32 = 50071
@@ -1075,7 +1075,7 @@ func updateControllerContainer(cont *corev1.Container, pubRel componentRel, newG
 	if len(pubRel.Args) > 0 {
 		cont.Args = pubRel.Args
 	} else if newGNMI {
-		cont.Args = []string{"-http-server", "https://localhost:443", "--debug"}
+		cont.Args = []string{"-http-server", "https://localhost:8443", "--debug"}
 	} else if len(pubRel.DefArgs) > 0 {
 		cont.Args = pubRel.DefArgs
 	}
