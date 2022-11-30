@@ -90,7 +90,7 @@ const (
 	CTRL_CFG_MAP_NAME   string = "controller-config"
 	CTRL_MAP_VOL_NAME   string = "config"
 	CTRL_MAP_FILE_NAME  string = "config.yaml"
-	CTRL_MAP_MOUNT_PATH string = "/home/keysight/ixia-c/controller/config"
+	CTRL_MAP_MOUNT_PATH string = "/home/ixia-c/controller/config"
 
 	SERVICE_NAME_SUFFIX string = ".svc.cluster.local"
 
