@@ -91,6 +91,8 @@ const (
 	CTRL_MAP_VOL_NAME   string = "config"
 	CTRL_MAP_FILE_NAME  string = "config.yaml"
 	CTRL_MAP_MOUNT_PATH string = "/home/ixia-c/controller/config"
+	CTRL_USER_NAME      string = "ixia-c"
+	CTRL_USER_GROUP     string = "root"
 
 	SERVICE_NAME_SUFFIX string = ".svc.cluster.local"
 
@@ -657,7 +659,6 @@ func (r *IxiaTGReconciler) loadRelInfo(release string, relData *[]byte, list boo
 				compRef.DefEnv = map[string]string{
 					"OPT_LISTEN_PORT":  strconv.Itoa(int(TRAFFIC_ENG_PORT)),
 					"ARG_CORE_LIST":    "2 3 4",
-					"ARG_IFACE_LIST":   "virtual@af_packet,eth1",
 					"OPT_NO_HUGEPAGES": "Yes",
 				}
 			case IMAGE_PROTOCOL_ENG:
@@ -1414,8 +1415,40 @@ func execOnTargetContainer(ctx context.Context, cli *dockerclient.Client, cmdLis
 	return nil
 }
 
-func deployDockerContainer(ctx context.Context, cli *dockerclient.Client, cfg *container.Config, hostCfg *container.HostConfig, name string) (dockerContInfo, error) {
+func deployDockerContainer(ctx context.Context, cli *dockerclient.Client, cfg *container.Config, hostCfg *container.HostConfig, comp componentRel, name string) (dockerContInfo, error) {
 	response := dockerContInfo{}
+	log.Infof("Start deploy container %s", name)
+	// Add component image
+	(*cfg).Image = comp.Path + ":" + comp.Tag
+	// Update component env var
+	cfgMapEnv := make(map[string]string)
+	for ek, ev := range comp.DefEnv {
+		cfgMapEnv[ek] = ev
+	}
+	for ek, ev := range comp.Env {
+		cfgMapEnv[ek] = ev.(string)
+	}
+	env := (*cfg).Env
+	for key, value := range cfgMapEnv {
+		env = append(env, fmt.Sprintf("%v=%v", key, value))
+	}
+	(*cfg).Env = env
+	// Update component command
+	command := comp.DefCmd
+	if len(comp.Command) > 0 {
+		command = comp.Command
+	}
+	if len(command) > 0 {
+		(*cfg).Cmd = command
+	}
+	// Update component args
+	args := comp.DefArgs
+	if len(comp.Args) > 0 {
+		args = comp.Args
+	}
+	if len(args) > 0 {
+		(*cfg).Entrypoint = append((*cfg).Entrypoint, args...)
+	}
 
 	resp, err := cli.ContainerCreate(ctx, cfg, hostCfg, nil, nil, name)
 	if err != nil {
@@ -1446,12 +1479,10 @@ func (r *IxiaTGReconciler) deployCpDpNode(ctx context.Context, release string, n
 		return err
 	}
 
-	var cpImage, dpImage string
 	var cpIntfList, dpIntfList []string
-	if ctrl, ok := componentDep[release].Ixia.Containers[IMAGE_PROTOCOL_ENG]; !ok {
+	component, ok := componentDep[release].Ixia.Containers[IMAGE_PROTOCOL_ENG]
+	if !ok {
 		return fmt.Errorf("Failed to find protocol engine image for release %s", release)
-	} else {
-		cpImage = ctrl.Path + ":" + ctrl.Tag
 	}
 
 	for index, intf := range node.Interfaces {
@@ -1461,16 +1492,16 @@ func (r *IxiaTGReconciler) deployCpDpNode(ctx context.Context, release string, n
 	}
 
 	envIntf := "INTF_LIST=" + strings.Join(cpIntfList, ",")
-	config := container.Config{Image: cpImage, Env: []string{envIntf}}
+	config := container.Config{Env: []string{envIntf}}
 	hostConfig := container.HostConfig{Privileged: true}
 
 	var response dockerContInfo
-	if response, err = deployDockerContainer(ctx, cli, &config, &hostConfig, node.CpName); err != nil {
+	if response, err = deployDockerContainer(ctx, cli, &config, &hostConfig, component, node.CpName); err != nil {
 		return err
 	}
 	(*node).MgmtIP = response.MgmtIP
 
-	// Make macvlan and push into CP netns
+	// Make macvtap and push into CP netns
 	for _, intf := range node.Interfaces {
 		if intf.PeerIntf == "" {
 			continue
@@ -1482,55 +1513,58 @@ func (r *IxiaTGReconciler) deployCpDpNode(ctx context.Context, release string, n
 		if err != nil {
 			return err
 		}
-
-		macvlanName := "macvlan" + intf.Name
-		macvlan := &netlink.Macvlan{LinkAttrs: netlink.LinkAttrs{Name: macvlanName, ParentIndex: parentLink.Attrs().Index}, Mode: netlink.MACVLAN_MODE_PASSTHRU}
-		if err = netlink.LinkAdd(macvlan); err != nil {
+		if err = netlink.SetPromiscOn(parentLink); err != nil {
 			return err
 		}
-		log.Infof("Created macvlan network interface on %s", intf.Name)
 
-		if err = netlink.LinkSetNsPid(macvlan, response.Pid); err != nil {
+		macvtapName := "macvtap" + intf.Name
+		macvlan := netlink.Macvlan{LinkAttrs: netlink.LinkAttrs{Name: macvtapName, ParentIndex: parentLink.Attrs().Index}, Mode: netlink.MACVLAN_MODE_PASSTHRU}
+		macvtap := &netlink.Macvtap{Macvlan: macvlan}
+		if err = netlink.LinkAdd(macvtap); err != nil {
 			return err
 		}
-		log.Infof("Macvlan interface pushed into container (id %s) network namespace", response.Id)
+		log.Infof("Created macvtap network interface on %s", intf.Name)
 
-		cmdExecOnCont := fmt.Sprintf("ip link set %s name %s", macvlanName, intf.Name)
+		if err = netlink.LinkSetNsPid(macvtap, response.Pid); err != nil {
+			return err
+		}
+		log.Infof("Macvtap interface pushed into container (id %s) network namespace", response.Id)
+
+		cmdExecOnCont := fmt.Sprintf("ip link set %s name %s", macvtapName, intf.Name)
 		cmdIntfUp := fmt.Sprintf("ifconfig %s up", intf.Name)
 		err = execOnTargetContainer(ctx, cli, []string{cmdExecOnCont, cmdIntfUp}, response.Id)
 		if err != nil {
-			netlink.LinkDel(macvlan)
+			netlink.LinkDel(macvtap)
 			return err
 		}
 	}
 
-	// TODO: Start with dummy container, add intf, then add cp dp
 	// DP docker container deploy
-	if ctrl, ok := componentDep[release].Ixia.Containers[IMAGE_TRAFFIC_ENG]; !ok {
+	component, ok = componentDep[release].Ixia.Containers[IMAGE_TRAFFIC_ENG]
+	if !ok {
 		return fmt.Errorf("Failed to find traffic engine image for release %s", release)
-	} else {
-		dpImage = ctrl.Path + ":" + ctrl.Tag
 	}
 
 	argIntfList := "ARG_IFACE_LIST=" + strings.Join(dpIntfList, " ")
-	envArgs := []string{"OPT_LISTEN_PORT=5555", "ARG_CORE_LIST=2 3 4", argIntfList, "OPT_NO_HUGEPAGES=Yes"}
-	config = container.Config{Image: dpImage, Env: envArgs}
+	envArgs := []string{argIntfList}
+	config = container.Config{Env: envArgs}
 	networkMode := container.NetworkMode(fmt.Sprintf("container:%s", response.Id))
 	hostConfig = container.HostConfig{NetworkMode: networkMode, Privileged: true}
 
-	_, err = deployDockerContainer(ctx, cli, &config, &hostConfig, node.DpName)
+	_, err = deployDockerContainer(ctx, cli, &config, &hostConfig, component, node.DpName)
 
 	return err
 }
 
 func (r *IxiaTGReconciler) deleteTopoContainers(ctx context.Context, contMap map[string]bool) error {
 	// CP docker container delete
+	var ret error
 	cli, err := dockerclient.NewEnvClient()
 	if err != nil {
 		return err
 	}
 
-	containers, err := cli.ContainerList(ctx, dockertypes.ContainerListOptions{})
+	containers, err := cli.ContainerList(ctx, dockertypes.ContainerListOptions{All: true})
 	if err != nil {
 		return err
 	}
@@ -1545,39 +1579,44 @@ func (r *IxiaTGReconciler) deleteTopoContainers(ctx context.Context, contMap map
 				log.Infof("Deleting container: %s", name)
 				d := time.Second * 3
 				if err = cli.ContainerStop(ctx, cont.ID, &d); err != nil {
-					return err
+					ret = errors.New(fmt.Sprintf("Failed to stop container: %s", name))
+					log.Errorf("%v", ret)
+					continue
 				}
 
 				if err = cli.ContainerRemove(ctx, cont.ID, dockertypes.ContainerRemoveOptions{}); err != nil {
-					return err
+					ret = errors.New(fmt.Sprintf("Failed to remove container: %s", name))
+					log.Errorf("%v", ret)
+					continue
 				}
 				contMap[name] = false
 			}
 		}
 	}
 
-	return nil
+	return ret
 }
 
 func (r *IxiaTGReconciler) deployCtrlNode(ctx context.Context, release string, nList []cpdpNode, ctrlParam ctrlContData) (string, error) {
 	// Controller docker container deploy
+	httpStr := fmt.Sprintf("%v/tcp", CTRL_HTTPS_PORT)
+	grpcStr := fmt.Sprintf("%v/tcp", CTRL_GRPC_PORT)
+	gnmiStr := fmt.Sprintf("%v/tcp", CTRL_GNMI_PORT)
 	cli, err := dockerclient.NewEnvClient()
 	if err != nil {
 		return "", err
 	}
 
-	var ctrlImage, gnmiImage string
-	if ctrl, ok := componentDep[release].Controller.Containers[IMAGE_CONTROLLER]; !ok {
+	component, ok := componentDep[release].Controller.Containers[IMAGE_CONTROLLER]
+	if !ok {
 		return "", fmt.Errorf("Failed to find Controller image for release %s", release)
-	} else {
-		ctrlImage = ctrl.Path + ":" + ctrl.Tag
 	}
 
-	entryPoint := []string{"./bin/controller", "--accept-eula", "--debug", "--disable-app-usage-reporter"}
+	entryPoint := []string{"./bin/controller"}
 	gnmiExposedPort := nat.PortSet{
-		"50051/tcp": struct{}{},
+		nat.Port(gnmiStr): struct{}{},
 	}
-	config := container.Config{Image: ctrlImage, Entrypoint: entryPoint, ExposedPorts: gnmiExposedPort}
+	config := container.Config{Entrypoint: entryPoint, ExposedPorts: gnmiExposedPort}
 	httpOut := ctrlParam.HttpOut
 	if httpOut == 0 {
 		httpOut = 31000 // default
@@ -1601,19 +1640,19 @@ func (r *IxiaTGReconciler) deployCtrlNode(ctx context.Context, release string, n
 	}
 
 	binding := nat.PortMap{
-		"443/tcp": []nat.PortBinding{
+		nat.Port(httpStr): []nat.PortBinding{
 			{
 				HostIP:   "0.0.0.0",
 				HostPort: fmt.Sprintf("%v", httpOut),
 			},
 		},
-		"40051/tcp": []nat.PortBinding{
+		nat.Port(grpcStr): []nat.PortBinding{
 			{
 				HostIP:   "0.0.0.0",
 				HostPort: fmt.Sprintf("%v", grpcOut),
 			},
 		},
-		"50051/tcp": []nat.PortBinding{
+		nat.Port(gnmiStr): []nat.PortBinding{
 			{
 				HostIP:   "0.0.0.0",
 				HostPort: fmt.Sprintf("%v", gnmiOut),
@@ -1625,7 +1664,7 @@ func (r *IxiaTGReconciler) deployCtrlNode(ctx context.Context, release string, n
 	baseName := ctrlParam.Namespace + "_" + ctrlParam.Name + "-controller_"
 	containerName := baseName + "ixia-c"
 
-	response, err := deployDockerContainer(ctx, cli, &config, &hostConfig, containerName)
+	response, err := deployDockerContainer(ctx, cli, &config, &hostConfig, component, containerName)
 	if err != nil {
 		return "", err
 	}
@@ -1652,12 +1691,17 @@ func (r *IxiaTGReconciler) deployCtrlNode(ctx context.Context, release string, n
 		return "", err
 	}
 
+	lastIndex := strings.LastIndex(CTRL_MAP_MOUNT_PATH, "/") + 1
+	baseDir := CTRL_MAP_MOUNT_PATH[:lastIndex]
 	buf := new(bytes.Buffer)
 	tw := tar.NewWriter(buf)
-	name, content := "config/config.yaml", string(yamlObj)
+	name, content := fmt.Sprintf("%s/%s", CTRL_MAP_MOUNT_PATH[lastIndex:], CTRL_MAP_FILE_NAME), string(yamlObj)
 	hdr := &tar.Header{
-		Name: name,
-		Size: int64(len(content)),
+		Name:  name,
+		Size:  int64(len(content)),
+		Mode:  0755,
+		Uname: CTRL_USER_NAME,
+		Gname: CTRL_USER_GROUP,
 	}
 	if err = tw.WriteHeader(hdr); err != nil {
 		return "", err
@@ -1669,28 +1713,32 @@ func (r *IxiaTGReconciler) deployCtrlNode(ctx context.Context, release string, n
 		return "", err
 	}
 
-	err = cli.CopyToContainer(ctx, response.Id, "/home/keysight/ixia-c/controller/", buf, dockertypes.CopyToContainerOptions{})
+	err = cli.CopyToContainer(ctx, response.Id, baseDir, buf, dockertypes.CopyToContainerOptions{})
 	if err != nil {
 		return "", err
 	}
 	log.Infof("Successfully copied location map in controller container: %v", mappings)
 
 	// gNMI docker container deploy
-	if ctrl, ok := componentDep[release].Controller.Containers[IMAGE_GNMI_SERVER]; !ok {
+	component, ok = componentDep[release].Controller.Containers[IMAGE_GNMI_SERVER]
+	if !ok {
 		return "", fmt.Errorf("Failed to find gNMI server image for release %s", release)
-	} else {
-		gnmiImage = ctrl.Path + ":" + ctrl.Tag
 	}
 
-	config = container.Config{Image: gnmiImage}
+	// Override default args and cmd for newer gnmi
+	component.DefArgs = []string{"-http-server", "https://localhost:8443", "--debug"}
+	component.DefCmd = []string{}
+
+	entryPoint = []string{"bin/gnmid"}
+	config = container.Config{Entrypoint: entryPoint}
 	networkMode := container.NetworkMode(fmt.Sprintf("container:%s", response.Id))
 	hostConfig = container.HostConfig{NetworkMode: networkMode}
 	containerName = baseName + "gnmi"
 
-	_, err = deployDockerContainer(ctx, cli, &config, &hostConfig, containerName)
+	_, err = deployDockerContainer(ctx, cli, &config, &hostConfig, component, containerName)
 	out := fmt.Sprintf("HTTPS: %s:%d (0.0.0.0:%d)\n", mgmtIp, CTRL_HTTPS_PORT, httpOut)
-	out += fmt.Sprintf("GRPC:  %s:%d (0.0.0.0:%d)\n", mgmtIp, CTRL_GRPC_PORT, grpcOut)
 	out += fmt.Sprintf("GNMI:  %s:%d (0.0.0.0:%d)\n", mgmtIp, CTRL_GNMI_PORT, gnmiOut)
+	out += fmt.Sprintf("GRPC:  %s:%d (0.0.0.0:%d)\n", mgmtIp, CTRL_GRPC_PORT, grpcOut)
 
 	return out, err
 }
