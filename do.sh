@@ -34,6 +34,8 @@ APPROX_SANITY_TIME=1200
 
 TESTBED_CICD_DIR=operator_cicd
 
+GITHUB_REPO="ghcr.io/open-traffic-generator"
+
 art=./art
 release=./release
 
@@ -161,8 +163,8 @@ cicd_publish() {
         cicd_verify_dockerhub_images ${img}
     fi
 
-    github_img="ghcr.io/open-traffic-generator/${IXIA_C_OPERATOR_IMAGE}:${version}"
-    github_img_latest="ghcr.io/open-traffic-generator/${IXIA_C_OPERATOR_IMAGE}:latest"
+    github_img="${GITHUB_REPO}/${IXIA_C_OPERATOR_IMAGE}:${version}"
+    github_img_latest="${GITHUB_REPO}/${IXIA_C_OPERATOR_IMAGE}:latest"
     docker tag ${img} "${github_img}"
     docker tag "${github_img}" "${github_img_latest}"
     if github_docker_image_exists ${github_img}; then
@@ -183,7 +185,7 @@ cicd_gen_release_art() {
     mkdir -p ${release}
     rm -rf ./ixiatg-operator.yaml
     rm -rf ${release}/*.yaml
-    gen_ixia_c_op_dep_yaml "${DOCKERHUB_REPO}/${IXIA_C_OPERATOR_IMAGE}"
+    gen_ixia_c_op_dep_yaml "${GITHUB_REPO}/${IXIA_C_OPERATOR_IMAGE}"
     mv ./ixiatg-operator.yaml ${release}/
      echo "Files in ./release: $(ls -lht ${release})"
 }
