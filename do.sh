@@ -155,14 +155,6 @@ verify_github_images() {
 cicd_publish() {
     version=$(get_version)
     img="${IXIA_C_OPERATOR_IMAGE}:${version}"
-    if cicd_dockerhub_image_exists ${img}; then
-        echo "${img} already exists..."
-    else
-        echo "${img} does not exist..."
-        cicd_push_dockerhub_image ${img}
-        cicd_verify_dockerhub_images ${img}
-    fi
-
     github_img="${GITHUB_REPO}/${IXIA_C_OPERATOR_IMAGE}:${version}"
     github_img_latest="${GITHUB_REPO}/${IXIA_C_OPERATOR_IMAGE}:latest"
     docker tag ${img} "${github_img}"
@@ -384,43 +376,6 @@ cicd_build() {
     version=$(get_version)
     echo "Build Version: $version"
     echo "Files in ./art: $(ls -lht ${art})"
-}
-
-cicd_dockerhub_image_exists() {
-    img=${1}
-    if DOCKER_CLI_EXPERIMENTAL=enabled docker manifest inspect ${DOCKERHUB_REPO}/${img} >/dev/null; then
-        return 0
-    else
-        return 1
-    fi
-}
-
-cicd_push_dockerhub_image() {
-    img=${1}
-    docker tag ${img} ${DOCKERHUB_REPO}/${img}
-    docker login -p ${DOCKERHUB_KEY} -u ${DOCKERHUB_USER} \
-    && docker push "${DOCKERHUB_REPO}/${img}" \
-    && docker logout ${DOCKERHUB_USER} \
-    && echo "${img} pushed in Docker Hub" \
-    && docker rmi "${DOCKERHUB_REPO}/${img}" > /dev/null 2>&1 || true
-}
-
-cicd_verify_dockerhub_images() {
-    for var in "$@"
-    do
-        img=${var}
-        dockerhub_image=${DOCKERHUB_REPO}/${img}
-        echo "pulling ${dockerhub_image} from Docker Hub"
-        docker pull $dockerhub_image
-        if docker image inspect ${dockerhub_image} >/dev/null 2>&1; then
-            echo "${dockerhub_image} pulled successfully from Docker Hub"
-            docker rmi $dockerhub_image > /dev/null 2>&1 || true
-        else
-            echo "${dockerhub_image} not found locally!!!"
-            docker rmi $dockerhub_image > /dev/null 2>&1 || true
-            exit 1
-        fi
-    done
 }
 
 cicd_test() {
