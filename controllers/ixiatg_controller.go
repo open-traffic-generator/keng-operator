@@ -1639,28 +1639,27 @@ func (r *IxiaTGReconciler) deployCtrlNode(ctx context.Context, release string, n
 		}
 	}
 
-	binding := nat.PortMap{
-		nat.Port(httpStr): []nat.PortBinding{
-			{
-				HostIP:   "0.0.0.0",
-				HostPort: fmt.Sprintf("%v", httpOut),
-			},
-		},
-		nat.Port(grpcStr): []nat.PortBinding{
-			{
-				HostIP:   "0.0.0.0",
-				HostPort: fmt.Sprintf("%v", grpcOut),
-			},
-		},
-		nat.Port(gnmiStr): []nat.PortBinding{
-			{
-				HostIP:   "0.0.0.0",
-				HostPort: fmt.Sprintf("%v", gnmiOut),
-			},
-		},
+	bindingMap := make(map[nat.Port][]nat.PortBinding)
+	if httpOut != -1 {
+		bindingMap[nat.Port(httpStr)] = []nat.PortBinding{{
+			HostIP:   "0.0.0.0",
+			HostPort: fmt.Sprintf("%v", httpOut),
+		}}
+	}
+	if grpcOut != -1 {
+		bindingMap[nat.Port(grpcStr)] = []nat.PortBinding{{
+			HostIP:   "0.0.0.0",
+			HostPort: fmt.Sprintf("%v", grpcOut),
+		}}
+	}
+	if gnmiOut != -1 {
+		bindingMap[nat.Port(gnmiStr)] = []nat.PortBinding{{
+			HostIP:   "0.0.0.0",
+			HostPort: fmt.Sprintf("%v", gnmiOut),
+		}}
 	}
 
-	hostConfig := container.HostConfig{PortBindings: binding}
+	hostConfig := container.HostConfig{PortBindings: nat.PortMap(bindingMap)}
 	baseName := ctrlParam.Namespace + "_" + ctrlParam.Name + "-controller_"
 	containerName := baseName + "ixia-c"
 
@@ -1736,9 +1735,16 @@ func (r *IxiaTGReconciler) deployCtrlNode(ctx context.Context, release string, n
 	containerName = baseName + "gnmi"
 
 	_, err = deployDockerContainer(ctx, cli, &config, &hostConfig, component, containerName)
-	out := fmt.Sprintf("HTTPS: %s:%d (0.0.0.0:%d)\n", mgmtIp, CTRL_HTTPS_PORT, httpOut)
-	out += fmt.Sprintf("GNMI:  %s:%d (0.0.0.0:%d)\n", mgmtIp, CTRL_GNMI_PORT, gnmiOut)
-	out += fmt.Sprintf("GRPC:  %s:%d (0.0.0.0:%d)\n", mgmtIp, CTRL_GRPC_PORT, grpcOut)
+	out := ""
+	if httpOut != -1 {
+		out += fmt.Sprintf("HTTPS: %s:%d (0.0.0.0:%d)\n", mgmtIp, CTRL_HTTPS_PORT, httpOut)
+	}
+	if gnmiOut != -1 {
+		out += fmt.Sprintf("GNMI:  %s:%d (0.0.0.0:%d)\n", mgmtIp, CTRL_GNMI_PORT, gnmiOut)
+	}
+	if grpcOut != -1 {
+		out += fmt.Sprintf("GRPC:  %s:%d (0.0.0.0:%d)\n", mgmtIp, CTRL_GRPC_PORT, grpcOut)
+	}
 
 	return out, err
 }
@@ -1832,7 +1838,7 @@ func (r *IxiaTGReconciler) ManageDockerContainers(req *http.Request, setup bool)
 			}
 		}
 		// Deploy ixia-c, grpc and gnmi
-		ctrlParam := ctrlContData{Name: name, Namespace: namespace}
+		ctrlParam := ctrlContData{Name: name, Namespace: namespace, HttpOut: -1, GrpcOut: -1, GnmiOut: -1}
 		if val, ok := jsonSpec.Spec.ApiEndPoint["https"]; ok {
 			ctrlParam.HttpOut = val.Out
 		}
