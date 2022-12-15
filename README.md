@@ -124,6 +124,152 @@ Please make sure that the setup meets [Deployment Prerequisites](#deployment-pre
 
 - Please make sure you have kubernetes cluster up in your setup.
 
+## Deployment in Hybrid Mode
+
+To test networking hardware devices with Ixia-c software, the operator allows you to deploy Ixia-c software components and required interconnects with host network interfaces. As a minimum user would require a server with sudo permissions, docker and go version 1.18 or later installed.
+
+The following steps outline a simple topology deployment in hybrid mode and run featureprofiles test.
+1. Pull the required docker images
+
+    ```Shell
+    docker pull ghcr.io/open-traffic-generator/licensed/ixia-c-controller:0.0.1-3662
+    docker pull ghcr.io/open-traffic-generator/ixia-c-gnmi-server:1.9.9
+    docker pull ghcr.io/open-traffic-generator/ixia-c-traffic-engine:1.6.0.19
+    docker pull ghcr.io/open-traffic-generator/licensed/ixia-c-protocol-engine:1.00.0.243
+    docker pull ghcr.io/open-traffic-generator/ixia-c-operator:0.3.2
+    ```
+    
+    
+2. Deploy the operator container:
+
+    ```Shell
+    docker run -d --name=ixia-c-operator -v /var/run/docker.sock:/var/run/docker.sock --cap-add CAP_NET_ADMIN --net=host --pid=host --user=root ixia-c-operator:0.3.2 --server-bind-address=:35000
+    ```  
+   The server-bind-address is optional to custom bind to user specified port, default is **30000**.
+
+
+3. Load the configmap in operator (Optional):
+
+    In case there is absence of internet connectivity the operator would require the configmap to be loaded.
+
+    ```Shell
+    curl --data-binary @ixiatg-configmap.yaml http://localhost:35000/config
+    ```
+
+
+4. Deploy the topology:
+
+    For our example here we will use a port-dut-port deployment configuration file as shown below. Note in this example our two dut ports, *Ethernet1* and *Ethernet2*, are wire connected to our server interface, *enp0s8* and *enp0s9*. For our test we would require otg interface *eth1* and *eth2* to be connected to dut *Ethernet1* and *Ethernet2* respectively.
+
+    ```Shell
+    {
+        "metadata": {
+            "name": "otg",
+            "namespace": "ixia-c"
+        },
+        "spec": {
+            "api_endpoint_map": {
+                "https": {
+                    "in": 8443
+                },
+                "grpc": {
+                    "in": 40051
+                },
+                "gnmi": {
+                    "in": 50051
+                }
+            },
+            "interfaces": [
+                {
+                    "name": "eth1",
+                    "peer": "localhost",
+                    "peer_interface": "enp0s8"
+                },
+                {
+                    "name": "eth2",
+                    "peer": "localhost",
+                    "peer_interface": "enp0s9"
+                }
+            ],
+            "release": "0.0.1-3662"
+        }
+    }
+    ```
+
+    ```Shell
+    curl -d @port-dut-port http://localhost:35000/create
+    ```
+
+
+5. Clone FeatureProfiles repository:
+
+    ```Shell
+    git clone https://github.com/open-traffic-generator/featureprofiles.git
+    ```
+    
+    
+6. Update the binding file:
+
+    Update the corresponding file for the test, for this example we will update otgdut_2.binding with the correct Controller and DUT address.
+    
+    ```Shell
+    options {
+      username: "admin"
+      password: ""
+    }
+
+    duts {
+      id: "dut"
+      name: "172.17.0.2"
+      gnmi {
+        target: "172.17.0.2:6030"
+      }
+      ports {
+        id: "port1"
+        name: "Ethernet1"
+      }
+      ports {
+        id: "port2"
+        name: "Ethernet2"
+      }
+    }
+
+    ates {
+      id: "ate"
+      name: "172.17.0.5"
+      gnmi {
+        target: "172.17.0.5:50051"
+        skip_verify: true
+        timeout: 30
+      }
+      ports {
+        id: "port1"
+        name: "eth1"
+      }
+      ports {
+        id: "port2"
+        name: "eth2"
+      }
+    }
+    ```
+    
+    
+7. Run FeatureProfile test:
+
+    ```Shell
+    go test -v feature/bgp/policybase/otg_tests/route_installation_test/route_installation_test.go -testbed /home/athena/featureprofiles/topologies/atedut_2.testbed -binding /home/athena/featureprofiles/topologies/otgdut_2.binding  --deviation_interface_enabled --deviation_default_network_instance=default
+    ```
+
+
+8. Cleanup:
+
+    ```Shell
+    curl -d @port-dut-port http://localhost:35000/delete
+    docker stop ixia-c-operator
+    docker rm ixia-c-operator
+    ```
+    
+    
 ## Build
 
 - **Clone this project**
