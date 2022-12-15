@@ -38,6 +38,7 @@ type IxiaTGIntf struct {
 	Group    string `json:"group,omitempty"`
 	Peer     string `json:"peer,omitempty"`
 	PeerIntf string `json:"peer_interface,omitempty"`
+	UseRaw   bool   `json:"use_raw,omitempty"`
 }
 
 // IxiaTGIntfStatus defines the mapping between endpoint ports and encasing pods

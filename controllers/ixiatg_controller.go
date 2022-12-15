@@ -200,6 +200,7 @@ type cpdpIntf struct {
 	Name     string
 	Peer     string
 	PeerIntf string
+	Create   bool
 	Index    int
 }
 
@@ -1509,6 +1510,7 @@ func (r *IxiaTGReconciler) deployCpDpNode(ctx context.Context, release string, n
 		if intf.Peer != "localhost" {
 			return errors.New("Peer should be localhost")
 		}
+		var link netlink.Link
 		parentLink, err := netlink.LinkByName(intf.PeerIntf)
 		if err != nil {
 			return err
@@ -1516,25 +1518,30 @@ func (r *IxiaTGReconciler) deployCpDpNode(ctx context.Context, release string, n
 		if err = netlink.SetPromiscOn(parentLink); err != nil {
 			return err
 		}
+		if intf.Create {
+			macvtapName := "macvtap" + intf.Name
+			macvlan := netlink.Macvlan{LinkAttrs: netlink.LinkAttrs{Name: macvtapName, ParentIndex: parentLink.Attrs().Index}, Mode: netlink.MACVLAN_MODE_PASSTHRU}
+			link = &netlink.Macvtap{Macvlan: macvlan}
+			if err = netlink.LinkAdd(link); err != nil {
+				return err
+			}
+			log.Infof("Created macvtap network interface %s on %s", link.Attrs().Name, intf.Name)
+		} else {
+			link = parentLink
+		}
 
-		macvtapName := "macvtap" + intf.Name
-		macvlan := netlink.Macvlan{LinkAttrs: netlink.LinkAttrs{Name: macvtapName, ParentIndex: parentLink.Attrs().Index}, Mode: netlink.MACVLAN_MODE_PASSTHRU}
-		macvtap := &netlink.Macvtap{Macvlan: macvlan}
-		if err = netlink.LinkAdd(macvtap); err != nil {
+		if err = netlink.LinkSetNsPid(link, response.Pid); err != nil {
 			return err
 		}
-		log.Infof("Created macvtap network interface on %s", intf.Name)
+		log.Infof("%s interface pushed into container (id %s) network namespace", link.Attrs().Name, response.Id)
 
-		if err = netlink.LinkSetNsPid(macvtap, response.Pid); err != nil {
-			return err
-		}
-		log.Infof("Macvtap interface pushed into container (id %s) network namespace", response.Id)
-
-		cmdExecOnCont := fmt.Sprintf("ip link set %s name %s", macvtapName, intf.Name)
+		cmdExecOnCont := fmt.Sprintf("ip link set %s name %s", link.Attrs().Name, intf.Name)
 		cmdIntfUp := fmt.Sprintf("ifconfig %s up", intf.Name)
 		err = execOnTargetContainer(ctx, cli, []string{cmdExecOnCont, cmdIntfUp}, response.Id)
 		if err != nil {
-			netlink.LinkDel(macvtap)
+			if intf.Create {
+				netlink.LinkDel(link)
+			}
 			return err
 		}
 	}
@@ -1788,7 +1795,10 @@ func (r *IxiaTGReconciler) ManageDockerContainers(req *http.Request, setup bool)
 	groupMap := make(map[string][]cpdpIntf)
 	depVersion := DEFAULT_VERSION
 	for _, intf := range jsonSpec.Spec.Interfaces {
-		nodeIntf := cpdpIntf{Name: intf.Name, Peer: intf.Peer, PeerIntf: intf.PeerIntf, Index: 0}
+		nodeIntf := cpdpIntf{Name: intf.Name, Peer: intf.Peer, PeerIntf: intf.PeerIntf, Create: true, Index: 0}
+		if intf.UseRaw {
+			nodeIntf.Create = false
+		}
 		if intf.Group != "" {
 			groupMap[intf.Group] = append(groupMap[intf.Group], nodeIntf)
 		} else {
@@ -1828,8 +1838,6 @@ func (r *IxiaTGReconciler) ManageDockerContainers(req *http.Request, setup bool)
 				depVersion = latestVersion
 			}
 		}
-	}
-	if setup {
 		for index, node := range nodeList {
 			log.Infof("Node: %s %s %v\n", node.CpName, node.DpName, node.Interfaces)
 			err = r.deployCpDpNode(ctx, depVersion, &nodeList[index])
