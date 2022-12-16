@@ -136,7 +136,7 @@ The following steps outline a simple topology deployment in hybrid mode and run 
     docker pull ghcr.io/open-traffic-generator/ixia-c-gnmi-server:1.9.9
     docker pull ghcr.io/open-traffic-generator/ixia-c-traffic-engine:1.6.0.19
     docker pull ghcr.io/open-traffic-generator/licensed/ixia-c-protocol-engine:1.00.0.243
-    docker pull ghcr.io/open-traffic-generator/ixia-c-operator:0.3.2
+    docker pull ghcr.io/open-traffic-generator/ixia-c-operator:0.3.3
     ```
     
     
