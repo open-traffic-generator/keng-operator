@@ -143,7 +143,7 @@ The following steps outline a simple topology deployment in hybrid mode and run 
 2. Deploy the operator container:
 
     ```Shell
-    docker run -d --name=ixia-c-operator -v /var/run/docker.sock:/var/run/docker.sock --cap-add CAP_NET_ADMIN --net=host --pid=host --user=root ixia-c-operator:0.3.2 --server-bind-address=:35000
+    docker run -d --name=ixia-c-operator -v /var/run/docker.sock:/var/run/docker.sock --cap-add CAP_NET_ADMIN --net=host --pid=host --user=root ghcr.io/open-traffic-generator/ixia-c-operator:0.3.3 --server-bind-address=:35000
     ```  
    The server-bind-address is optional to custom bind to user specified port, default is **30000**.
 
