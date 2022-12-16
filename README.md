@@ -237,10 +237,13 @@ The following steps outline a simple topology deployment in hybrid mode and run 
     ates {
       id: "ate"
       name: "172.17.0.5"
+      otg {
+        target: "172.17.0.5:40051"
+        insecure: true
+      }
       gnmi {
         target: "172.17.0.5:50051"
         skip_verify: true
-        timeout: 30
       }
       ports {
         id: "port1"
