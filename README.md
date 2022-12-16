@@ -210,7 +210,7 @@ The following steps outline a simple topology deployment in hybrid mode and run 
     
 6. Update the binding file:
 
-    Update the corresponding file for the test, for this example we will update otgdut_2.binding with the correct Controller and DUT address.
+    Update the corresponding binding file for the test, for this example we will update otgdut_2.binding with the correct Controller and DUT addresses. Also ensure the required basic configuration is set on the hardware DUT, examples of these can be found as config files under topologies/kne directory.
     
     ```Shell
     options {
