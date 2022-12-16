@@ -9,24 +9,23 @@ jobs:
       max-parallel: 1
 
     steps:
-
       - name: Give Permission
         run: |
           sudo chown -R $USER:$USER /home/$USER/actions-runner/_work/ixia-c-operator
-      
+
       - name: Checkout
         uses: actions/checkout@v2
-      
+
       - name: Building Artifacts
         run: |
           sudo chmod u+x ./do.sh
           sudo ./do.sh cicd_build
 
-#       - name: Running Sanity
-#         run: |
-#           sudo chmod u+x ./do.sh
-#           sudo EXPECTED_SANITY_PASS_RATE=${{ secrets.EXPECTED_SANITY_PASS_RATE }} IXIA_C_ARTIFACTORY=${{ secrets.IXIA_C_ARTIFACTORY }} TESTBED=${{ secrets.TESTBED }} TESTBED_USERNAME=${{ secrets.TESTBED_USERNAME }} TESTBED_PASSWORD=${{ secrets.TESTBED_PASSWORD }} ./do.sh cicd_test
-      
+      #       - name: Running Sanity
+      #         run: |
+      #           sudo chmod u+x ./do.sh
+      #           sudo EXPECTED_SANITY_PASS_RATE=${{ secrets.EXPECTED_SANITY_PASS_RATE }} IXIA_C_ARTIFACTORY=${{ secrets.IXIA_C_ARTIFACTORY }} TESTBED=${{ secrets.TESTBED }} TESTBED_USERNAME=${{ secrets.TESTBED_USERNAME }} TESTBED_PASSWORD=${{ secrets.TESTBED_PASSWORD }} ./do.sh cicd_test
+
       - name: Get Branch
         id: get_branch
         run: |
@@ -49,8 +48,8 @@ jobs:
         if: steps.check_tag.outputs.exists == 'false' && steps.get_branch.outputs.branch == 'main'
         run: |
           sudo chmod u+x ./do.sh
-          sudo TOKEN_GITHUB=${{ secrets.TOKEN_GITHUB }} DOCKERHUB_KEY=${{ secrets.DOCKERHUB_KEY }} DOCKERHUB_REPO=${{ secrets.DOCKERHUB_REPO }} DOCKERHUB_USER=${{ secrets.DOCKERHUB_USER }} ./do.sh cicd_publish
-      
+          sudo TOKEN_GITHUB=${{ secrets.TOKEN_GITHUB }} ./do.sh cicd_publish
+
       - name: Create Release
         if: steps.check_tag.outputs.exists == 'false' && steps.get_branch.outputs.branch == 'main'
         uses: ncipollo/release-action@v1
