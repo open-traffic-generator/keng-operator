@@ -261,7 +261,7 @@ func (r *IxiaTGReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 
 	// First we verify if the desired state is already reached; otherwise handle accordingly
 	otgCtrlName := ixia.Name + CTRL_POD_NAME_SUFFIX
-	log.Infof("IXIA DS %v CS %v", ixia.Spec.DesiredState, ixia.Status.State)
+	log.Infof("Desired State: %v, Current State: %v", ixia.Spec.DesiredState, ixia.Status.State)
 	if ixia.Spec.DesiredState == ixia.Status.State {
 		return ctrl.Result{}, nil
 	} else if ixia.Spec.DesiredState == STATE_INITED {
@@ -441,8 +441,11 @@ func (r *IxiaTGReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 			if err == nil {
 				for _, c := range contStatus {
 					if c.State.Waiting != nil && c.State.Waiting.Reason == "ErrImagePull" {
-						err = errors.New(fmt.Sprintf("Container %s failed - %s", c.Name, c.State.Waiting.Message))
-						break
+						msg := c.State.Waiting.Message
+						if strings.Contains(msg, "repository does not exist") || strings.Contains(msg, "access to the resource is denied") {
+							err = errors.New(fmt.Sprintf("Container %s failed - %s", c.Name, c.State.Waiting.Message))
+							break
+						}
 					}
 				}
 			}
