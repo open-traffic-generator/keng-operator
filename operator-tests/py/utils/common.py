@@ -371,6 +371,19 @@ def pods_count_ok(exp_pods, namespace):
     return exp_pods == actual_pods
 
 
+def pod_status_ok(namespace, pod, status):
+    cmd = "kubectl get pod/{} -n {} | grep {} | wc -l".format(
+        pod, namespace, status
+    )
+    out, _ = exec_shell(cmd, True, False)
+    out = out.split('\n')
+    actual_pods = int(out[0])
+    print("Actual pods: {} - Expected: 1".format(
+        actual_pods
+    ))
+    return actual_pods == 1
+
+
 def containers_count_ok(num_containers, pod, namespace):
     cmd = "kubectl get pod/{} -n {} | grep -v RESTARTS".format(
         pod, namespace
@@ -505,6 +518,17 @@ def ixia_c_pods_ok(namespace, exp_pods=[], count=True,
             ), "Pod {} - not found!!!".format(
                 exp_pod
             )
+
+
+def ixia_c_pod_status_match(namespace, pod, status='Running'):
+    print("[Namespace:{}]Verifying pod {} status {} in KNE topology".format(
+        namespace, pod, status
+    ))
+    wait_for(
+        lambda: pod_status_ok(namespace, pod, status),
+        'pod status to be as expected',
+        timeout_seconds=300
+    )
 
 
 def ixia_c_operator_ok(prev_op_rscount):
