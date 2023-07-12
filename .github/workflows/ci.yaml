@@ -19,7 +19,7 @@ jobs:
 
       - name: Build
         run: |
-          echo $pwd
+          pwd
           sudo chmod u+x ./ci.sh
           sudo ./ci.sh build
 
