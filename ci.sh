@@ -44,7 +44,7 @@ install_deps() {
 get_go() {
     echo "Installing Go ..."
     # install golang per https://golang.org/doc/install#tarball
-    # curl -kL https://dl.google.com/go/${GO_TARGZ} | tar -C /usr/local/ -xzf -
+    curl -kL https://dl.google.com/go/${GO_TARGZ} | tar -C /usr/local/ -xzf -
     go version
 }
 
@@ -172,8 +172,7 @@ gen_operator_artifacts() {
 
 build() {
     mkdir -p ${art}
-    install_deps \
-    && gen_ixia_c_op_dep_yaml ${IXIA_C_OPERATOR_IMAGE} \
+    gen_ixia_c_op_dep_yaml ${IXIA_C_OPERATOR_IMAGE} \
     && get_docker_build \
     && gen_operator_artifacts ${art}
     version=$(get_version)
