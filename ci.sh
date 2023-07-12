@@ -45,6 +45,7 @@ get_go() {
     echo "Installing Go ..."
     # install golang per https://golang.org/doc/install#tarball
     curl -kL https://dl.google.com/go/${GO_TARGZ} | tar -C /usr/local/ -xzf -
+    go version
 }
 
 get_go_deps() {
