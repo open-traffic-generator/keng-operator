@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          submodules: "true"
+          token: ${{ secrets.CI_TOKEN }}
+
+      - name: Setup Docker
+        uses: docker-practice/actions-setup-docker@master
+
+      - name: Build
+        run: |
+          chmod u+x ./ci.sh
+          ./ci.sh build
+
+      - name: Get Branch
+        id: get_branch
+        run: |
+          echo "::set-output name=branch::$(git rev-parse --abbrev-ref HEAD)"
+
+      - name: Get Version
+        id: get_version
+        run: |
+          echo "::set-output name=version::v$(head ./version | cut -d' ' -f1)"
+
+      - name: Check tag for current version
+        uses: mukunku/tag-exists-action@v1.0.0
+        id: check_tag
+        with:
+          tag: ${{ steps.get_version.outputs.version }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publishing Artifacts
+        if: steps.check_tag.outputs.exists == 'false' && steps.get_branch.outputs.branch == 'main'
+        run: |
+          chmod u+x ./do.sh
+          TOKEN_GITHUB=${{ secrets.TOKEN_GITHUB }} ./ci.sh publish
+
+      - name: Create Release
+        if: steps.check_tag.outputs.exists == 'false' && steps.get_branch.outputs.branch == 'main'
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: "release/*"
+          tag: ${{ steps.get_version.outputs.version }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit: ${{ github.sha }}
