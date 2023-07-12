@@ -56,7 +56,7 @@ jobs:
       - name: Publishing Artifacts
         if: steps.check_tag.outputs.exists == 'false' && steps.get_branch.outputs.branch == 'main'
         run: |
-          chmod u+x ./do.sh
+          chmod u+x ./ci.sh
           TOKEN_GITHUB=${{ secrets.TOKEN_GITHUB }} ./ci.sh publish
 
       - name: Create Release
