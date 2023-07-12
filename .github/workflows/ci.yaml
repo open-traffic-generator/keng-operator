@@ -25,8 +25,8 @@ jobs:
       - name: Build
         run: |
           pwd
-          sudo chmod u+x ./ci.sh
-          sudo ./ci.sh build
+          chmod u+x ./ci.sh
+          ./ci.sh build
 
       - name: Get Branch
         id: get_branch
@@ -49,8 +49,8 @@ jobs:
       - name: Publishing Artifacts
         if: steps.check_tag.outputs.exists == 'false' && steps.get_branch.outputs.branch == 'main'
         run: |
-          sudo chmod u+x ./do.sh
-          sudo TOKEN_GITHUB=${{ secrets.TOKEN_GITHUB }} ./ci.sh publish
+          chmod u+x ./do.sh
+          TOKEN_GITHUB=${{ secrets.TOKEN_GITHUB }} ./ci.sh publish
 
       - name: Create Release
         if: steps.check_tag.outputs.exists == 'false' && steps.get_branch.outputs.branch == 'main'

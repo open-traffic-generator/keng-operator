@@ -34,9 +34,9 @@ fi
 install_deps() {
 	# Dependencies required by this project
     echo "Installing Dependencies ..."
-    apt-get update \
-	&& apt-get -y install --no-install-recommends apt-utils dialog 2>&1 \
-    && apt-get -y install curl git openssh-server vim unzip tar make bash wget sshpass build-essential \
+    sudo apt-get update \
+	&& sudo apt-get -y install --no-install-recommends apt-utils dialog 2>&1 \
+    && sudo apt-get -y install curl make build-essential \
     && get_go \
     && get_go_deps
 }
