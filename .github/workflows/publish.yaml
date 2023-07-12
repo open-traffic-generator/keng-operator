@@ -1,66 +1,66 @@
-name: Build
+# name: Build
 
-on: [push, pull_request, workflow_dispatch, repository_dispatch]
+# on: [push, pull_request, workflow_dispatch, repository_dispatch]
 
-jobs:
-  cicd:
-    runs-on: [self-hosted, linux, Ubuntu, x64, docker]
-    strategy:
-      max-parallel: 1
+# jobs:
+#   cicd:
+#     runs-on: [self-hosted, linux, Ubuntu, x64, docker]
+#     strategy:
+#       max-parallel: 1
 
-    steps:
-      - name: Give Permission
-        run: |
-          sudo chown -R $USER:$USER /home/$USER/actions-runner/_work/ixia-c-operator
+#     steps:
+#       - name: Give Permission
+#         run: |
+#           sudo chown -R $USER:$USER /home/$USER/actions-runner/_work/ixia-c-operator
 
-      - name: Checkout
-        uses: actions/checkout@v2
+#       - name: Checkout
+#         uses: actions/checkout@v2
 
-      - name: Building Artifacts
-        run: |
-          sudo chmod u+x ./do.sh
-          sudo ./do.sh cicd_build
+#       - name: Building Artifacts
+#         run: |
+#           sudo chmod u+x ./do.sh
+#           sudo ./do.sh cicd_build
 
-      #       - name: Running Sanity
-      #         run: |
-      #           sudo chmod u+x ./do.sh
-      #           sudo EXPECTED_SANITY_PASS_RATE=${{ secrets.EXPECTED_SANITY_PASS_RATE }} IXIA_C_ARTIFACTORY=${{ secrets.IXIA_C_ARTIFACTORY }} TESTBED=${{ secrets.TESTBED }} TESTBED_USERNAME=${{ secrets.TESTBED_USERNAME }} TESTBED_PASSWORD=${{ secrets.TESTBED_PASSWORD }} ./do.sh cicd_test
+#       #       - name: Running Sanity
+#       #         run: |
+#       #           sudo chmod u+x ./do.sh
+#       #           sudo EXPECTED_SANITY_PASS_RATE=${{ secrets.EXPECTED_SANITY_PASS_RATE }} IXIA_C_ARTIFACTORY=${{ secrets.IXIA_C_ARTIFACTORY }} TESTBED=${{ secrets.TESTBED }} TESTBED_USERNAME=${{ secrets.TESTBED_USERNAME }} TESTBED_PASSWORD=${{ secrets.TESTBED_PASSWORD }} ./do.sh cicd_test
 
-      - name: Get Branch
-        id: get_branch
-        run: |
-          echo "::set-output name=branch::$(git rev-parse --abbrev-ref HEAD)"
+#       - name: Get Branch
+#         id: get_branch
+#         run: |
+#           echo "::set-output name=branch::$(git rev-parse --abbrev-ref HEAD)"
 
-      - name: Get Version
-        id: get_version
-        run: |
-          echo "::set-output name=version::v$(head ./version | cut -d' ' -f1)"
+#       - name: Get Version
+#         id: get_version
+#         run: |
+#           echo "::set-output name=version::v$(head ./version | cut -d' ' -f1)"
 
-      - name: Check tag for current version
-        uses: mukunku/tag-exists-action@v1.0.0
-        id: check_tag
-        with:
-          tag: ${{ steps.get_version.outputs.version }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#       - name: Check tag for current version
+#         uses: mukunku/tag-exists-action@v1.0.0
+#         id: check_tag
+#         with:
+#           tag: ${{ steps.get_version.outputs.version }}
+#         env:
+#           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Publishing Artifacts
-        if: steps.check_tag.outputs.exists == 'false' && steps.get_branch.outputs.branch == 'main'
-        run: |
-          sudo chmod u+x ./do.sh
-          sudo TOKEN_GITHUB=${{ secrets.TOKEN_GITHUB }} ./do.sh cicd_publish
+#       - name: Publishing Artifacts
+#         if: steps.check_tag.outputs.exists == 'false' && steps.get_branch.outputs.branch == 'main'
+#         run: |
+#           sudo chmod u+x ./do.sh
+#           sudo TOKEN_GITHUB=${{ secrets.TOKEN_GITHUB }} ./do.sh cicd_publish
 
-      - name: Create Release
-        if: steps.check_tag.outputs.exists == 'false' && steps.get_branch.outputs.branch == 'main'
-        uses: ncipollo/release-action@v1
-        with:
-          artifacts: "release/*"
-          tag: ${{ steps.get_version.outputs.version }}
-          token: ${{ secrets.GITHUB_TOKEN }}
-          commit: ${{ github.sha }}
+#       - name: Create Release
+#         if: steps.check_tag.outputs.exists == 'false' && steps.get_branch.outputs.branch == 'main'
+#         uses: ncipollo/release-action@v1
+#         with:
+#           artifacts: "release/*"
+#           tag: ${{ steps.get_version.outputs.version }}
+#           token: ${{ secrets.GITHUB_TOKEN }}
+#           commit: ${{ github.sha }}
 
-      - name: Cleaning-Up Testbed
-        if: always()
-        run: |
-          sudo chmod u+x ./do.sh
-          sudo TESTBED=${{ secrets.TESTBED }} TESTBED_USERNAME=${{ secrets.TESTBED_USERNAME }} TESTBED_PASSWORD=${{ secrets.TESTBED_PASSWORD }} ./do.sh unlock
+#       - name: Cleaning-Up Testbed
+#         if: always()
+#         run: |
+#           sudo chmod u+x ./do.sh
+#           sudo TESTBED=${{ secrets.TESTBED }} TESTBED_USERNAME=${{ secrets.TESTBED_USERNAME }} TESTBED_PASSWORD=${{ secrets.TESTBED_PASSWORD }} ./do.sh unlock
