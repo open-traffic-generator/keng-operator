@@ -624,18 +624,21 @@ func (r *IxiaTGReconciler) loadRelInfo(release string, relData *[]byte, list boo
 				}
 			case IMAGE_PROTOCOL_ENG:
 				compRef.ContainerName = IMAGE_PROTOCOL_ENG
-				if compRef.LiveNessDelay == 0 {
-					compRef.LiveNessDelay = LIVENESS_DELAY
-				}
-				if compRef.LiveNessPeriod == 0 {
-					compRef.LiveNessPeriod = LIVENESS_PERIOD
-				}
-				if compRef.LiveNessFailure == 0 {
-					compRef.LiveNessFailure = LIVENESS_FAILURE
-				}
 			default:
 				compRef.ContainerName = compRef.Name
 			}
+
+			// For all components update health check parameters
+			if compRef.LiveNessDelay == 0 {
+				compRef.LiveNessDelay = LIVENESS_DELAY
+			}
+			if compRef.LiveNessPeriod == 0 {
+				compRef.LiveNessPeriod = LIVENESS_PERIOD
+			}
+			if compRef.LiveNessFailure == 0 {
+				compRef.LiveNessFailure = LIVENESS_FAILURE
+			}
+
 			if ctrlComponent {
 				topoEntry.Controller.Containers[contKeyName] = compRef
 			} else {
@@ -1114,6 +1117,7 @@ func (r *IxiaTGReconciler) containersForController(ixia *networkv1beta1.IxiaTG, 
 	var containers []corev1.Container
 	var newGNMI bool
 	var err error
+	var pbHdlr corev1.ProbeHandler
 
 	ctrlContainers := 2
 	if ctrl, ok := componentDep[release].Controller.Containers[IMAGE_CONTROLLER]; ok {
@@ -1156,11 +1160,27 @@ func (r *IxiaTGReconciler) containersForController(ixia *networkv1beta1.IxiaTG, 
 		newGNMI = false
 		err = nil
 		if name == GNMI_NAME {
+			tcpSock := corev1.TCPSocketAction{Port: intstr.IntOrString{IntVal: CTRL_GNMI_PORT}}
+			pbHdlr = corev1.ProbeHandler{TCPSocket: &tcpSock}
 			newGNMI, err = versionLaterOrEqual(GNMI_NEW_BASE_VERSION, comp.Tag)
 			if err != nil {
 				log.Error(err)
 			}
+		} else if name == CONTROLLER_NAME {
+			tcpSock := corev1.TCPSocketAction{Port: intstr.IntOrString{IntVal: CTRL_GRPC_PORT}}
+			pbHdlr = corev1.ProbeHandler{TCPSocket: &tcpSock}
 		}
+		if comp.LiveNessEnable == nil || *comp.LiveNessEnable {
+			probe := corev1.Probe{
+				ProbeHandler:                  pbHdlr,
+				InitialDelaySeconds:           comp.LiveNessDelay,
+				PeriodSeconds:                 comp.LiveNessPeriod,
+				FailureThreshold:              comp.LiveNessFailure,
+				TerminationGracePeriodSeconds: pointer.Int64(1),
+			}
+			container.LivenessProbe = &probe
+		}
+
 		updateControllerContainer(&container, comp, newGNMI)
 		log.Infof("Adding to pod: %s, container: %s, Image: %s, Args: %v, Cmd: %v, Env: %v, Port: %v, Vol: %v",
 			CONTROLLER_NAME, name, image, container.Args, container.Command, container.Env,
@@ -1187,6 +1207,7 @@ func (r *IxiaTGReconciler) containersForIxia(podName string, intfList []string, 
 		versionToDeploy = ixia.Spec.Release
 	}
 	for cName, comp := range componentDep[versionToDeploy].Ixia.Containers {
+		var tcpSock corev1.TCPSocketAction
 		if strings.HasPrefix(comp.Name, INIT_CONT_NAME_PREFIX) {
 			continue
 		}
@@ -1207,20 +1228,21 @@ func (r *IxiaTGReconciler) containersForIxia(podName string, intfList []string, 
 		}
 		if cName == IMAGE_PROTOCOL_ENG {
 			compCopy.DefEnv["INTF_LIST"] = strings.Join(intfList, ",")
-			if compCopy.LiveNessEnable == nil || *compCopy.LiveNessEnable {
-				tcpSock := corev1.TCPSocketAction{Port: intstr.IntOrString{IntVal: 50071}}
-				pbHdlr := corev1.ProbeHandler{TCPSocket: &tcpSock}
-				probe := corev1.Probe{
-					ProbeHandler:                  pbHdlr,
-					InitialDelaySeconds:           compCopy.LiveNessDelay,
-					PeriodSeconds:                 compCopy.LiveNessPeriod,
-					FailureThreshold:              compCopy.LiveNessFailure,
-					TerminationGracePeriodSeconds: pointer.Int64(1),
-				}
-				container.LivenessProbe = &probe
-			}
+			tcpSock = corev1.TCPSocketAction{Port: intstr.IntOrString{IntVal: PROTOCOL_ENG_PORT}}
 		} else {
 			compCopy.DefEnv["ARG_IFACE_LIST"] = argIntfList
+			tcpSock = corev1.TCPSocketAction{Port: intstr.IntOrString{IntVal: TRAFFIC_ENG_PORT}}
+		}
+		if compCopy.LiveNessEnable == nil || *compCopy.LiveNessEnable {
+			pbHdlr := corev1.ProbeHandler{TCPSocket: &tcpSock}
+			probe := corev1.Probe{
+				ProbeHandler:                  pbHdlr,
+				InitialDelaySeconds:           compCopy.LiveNessDelay,
+				PeriodSeconds:                 compCopy.LiveNessPeriod,
+				FailureThreshold:              compCopy.LiveNessFailure,
+				TerminationGracePeriodSeconds: pointer.Int64(1),
+			}
+			container.LivenessProbe = &probe
 		}
 		updateControllerContainer(&container, compCopy, false)
 		log.Infof("Adding to pod: %s, container: %s, Image: %s, Args: %v, Cmd: %v, Env: %v",
