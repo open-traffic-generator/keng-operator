@@ -111,7 +111,7 @@ const (
 
 	LIVENESS_DELAY   int32 = 10
 	LIVENESS_PERIOD  int32 = 1
-	LIVENESS_FAILURE int32 = 3
+	LIVENESS_FAILURE int32 = 10
 )
 
 var (
