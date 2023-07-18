@@ -283,7 +283,7 @@ def load_grpc_configmap(include_grpc=True, controller_version="default"):
     os.remove(grpc_configmap_path)
 
 
-def load_liveness_configmap(enabled=True, delay=0, period=0, failure=0):
+def load_liveness_configmap(probe):
     print("Loading custom liveness config...")
     cmd = "cat ./{}".format(
         IXIA_CONFIGMAP_FILE
@@ -292,14 +292,9 @@ def load_liveness_configmap(enabled=True, delay=0, period=0, failure=0):
     yaml_obj = yaml.safe_load(out)
     json_obj = json.loads(yaml_obj["data"]["versions"])
     for elem in json_obj["images"]:
-        if elem["name"] == "protocol-engine":
-            elem["liveness-enable"] = enabled
-            if delay != 0:
-                elem["liveness-initial-delay"] = delay
-            if period != 0:
-                elem["liveness-period"] = period
-            if failure != 0:
-                elem["liveness-failure"] = failure
+        if elem["name"] in probe.keys():
+            for key in probe[elem["name"]]:
+                elem[key] = probe[elem["name"]][key]
     yaml_obj["data"]["versions"] = json.dumps(json_obj)
     custom_configmap_path = "{}".format(CUSTOM_CONFIGMAP_FILE)
     with open(custom_configmap_path, "w") as yaml_file:
@@ -542,9 +537,8 @@ def ixia_c_operator_ok(prev_op_rscount):
     return op_rscount
 
 
-def check_liveness_data(pod, namespace, enabled=True, delay=0, period=0, failure=0):
-    base_cmd = "{}-protocol-engine".format(pod)
-    base_cmd = "'jsonpath={.spec.containers[?(@.name==\"" + base_cmd + "\")].livenessProbe"
+def check_liveness_data(cont, pod, namespace, enabled=True, delay=0, period=0, failure=0):
+    base_cmd = "'jsonpath={.spec.containers[?(@.name==\"" + cont + "\")].livenessProbe"
     base_cmd = "kubectl get pod/{} -n {} -o ".format(pod, namespace) + base_cmd
     cmd = base_cmd + "}'"
     out, _ = exec_shell(cmd, True, True)
@@ -553,18 +547,16 @@ def check_liveness_data(pod, namespace, enabled=True, delay=0, period=0, failure
     else:
         assert out == "", "Expected liveness to be disabled; liveness data non-empty"
         return
+    res = json.loads(out)
     if delay != 0:
-        cmd = base_cmd + ".initialDelaySeconds}'"
-        out, _ = exec_shell(cmd, True, True)
-        assert str(delay) == out, "InitialDelaySeconds mismatch, expected {}, found {}".format(delay, out)
+        key = 'initialDelaySeconds'
+        assert key in res.keys() and delay == res[key], "InitialDelaySeconds mismatch, expected {}, found {}".format(delay, res[key])
     if period != 0:
-        cmd = base_cmd + ".periodSeconds}'"
-        out, _ = exec_shell(cmd, True, True)
-        assert str(period) == out, "PeriodSeconds mismatch, expected {}, found {}".format(period, out)
+        key = 'periodSeconds'
+        assert key in res.keys() and period == res[key], "PeriodSeconds mismatch, expected {}, found {}".format(period, res[key])
     if failure != 0:
-        cmd = base_cmd + ".failureThreshold}'"
-        out, _ = exec_shell(cmd, True, True)
-        assert str(failure) == out, "FailureThreshold mismatch, expected {}, found {}".format(failure, out)
+        key = 'failureThreshold'
+        assert key in res.keys() and failure == res[key], "FailureThreshold mismatch, expected {}, found {}".format(failure, res[key])
 
 
 def generate_rest_config_from_temaplate(config, ixia_c_release):

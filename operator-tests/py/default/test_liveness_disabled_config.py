@@ -19,16 +19,18 @@ def test_liveness_disabled_config():
         'otg-port-eth1',
         'otg-port-eth2'
     ]
+    container_extension = '-traffic-engine'
+    probe_params = {'traffic-engine':{'liveness-enable': False}}
     try:
         op_rscount = utils.get_operator_restart_count()
         print("[Namespace:{}]Deploying KNE topology".format(
             namespace1
         ))
-        utils.load_liveness_configmap(False, 0, 0, 0)
+        utils.load_liveness_configmap(probe_params)
         utils.create_kne_config(namespace1_config, namespace1)
         utils.ixia_c_pods_ok(namespace1, expected_pods)
-        utils.check_liveness_data(expected_pods[1], namespace1, False, 0, 0, 0)
-        utils.check_liveness_data(expected_pods[2], namespace1, False, 0, 0, 0)
+        utils.check_liveness_data(expected_pods[1]+container_extension, expected_pods[1], namespace1, False)
+        utils.check_liveness_data(expected_pods[2]+container_extension, expected_pods[2], namespace1, False)
         op_rscount = utils.ixia_c_operator_ok(op_rscount)
 
         print("[Namespace:{}]Deleting KNE topology".format(

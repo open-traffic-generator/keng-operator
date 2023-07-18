@@ -19,6 +19,10 @@ def test_liveness_default_config():
         'otg-port-eth1',
         'otg-port-eth2'
     ]
+    container_extensions = [
+        '-protocol-engine',
+        '-traffic-engine'
+    ]
     try:
         op_rscount = utils.get_operator_restart_count()
         print("[Namespace:{}]Deploying KNE topology".format(
@@ -26,8 +30,12 @@ def test_liveness_default_config():
         ))
         utils.create_kne_config(namespace1_config, namespace1)
         utils.ixia_c_pods_ok(namespace1, expected_pods)
-        utils.check_liveness_data(expected_pods[1], namespace1, True, 10, 1, 3)
-        utils.check_liveness_data(expected_pods[2], namespace1, True, 10, 1, 3)
+        utils.check_liveness_data('ixia-c', expected_pods[0], namespace1, True, 10, 1, 10)
+        utils.check_liveness_data('gnmi', expected_pods[0], namespace1, True, 10, 1, 10)
+        utils.check_liveness_data(expected_pods[1]+container_extensions[0], expected_pods[1], namespace1, True, 10, 1, 10)
+        utils.check_liveness_data(expected_pods[1]+container_extensions[1], expected_pods[1], namespace1, True, 10, 1, 10)
+        utils.check_liveness_data(expected_pods[2]+container_extensions[0], expected_pods[2], namespace1, True, 10, 1, 10)
+        utils.check_liveness_data(expected_pods[2]+container_extensions[1], expected_pods[2], namespace1, True, 10, 1, 10)
         op_rscount = utils.ixia_c_operator_ok(op_rscount)
 
         print("[Namespace:{}]Deleting KNE topology".format(
