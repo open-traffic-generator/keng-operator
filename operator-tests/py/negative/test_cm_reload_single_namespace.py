@@ -40,6 +40,8 @@ def test_cm_reload_single_namespace():
         'otg-controller'
     ]
 
+    expected_bad_pod_status = 'ImagePullBackOff'
+
     expected_pods_good_config = [
         'otg-controller',
         'otg-port-eth1',
@@ -52,6 +54,8 @@ def test_cm_reload_single_namespace():
         ))
         utils.load_bad_configmap("protocol-engine")
         utils.create_kne_config(namespace1_config, namespace1)
+        utils.ixia_c_pod_status_match(namespace1, expected_pods_good_config[1], expected_bad_pod_status)
+        utils.ixia_c_pod_status_match(namespace1, expected_pods_good_config[2], expected_bad_pod_status)
         utils.ixia_c_pods_ok(namespace1, expected_pods_bad_config, False)
         utils.ixia_c_services_ok(namespace1, expected_svcs)
         op_rscount = utils.ixia_c_operator_ok(op_rscount)
