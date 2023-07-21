@@ -139,6 +139,7 @@ publish() {
     docker tag "${github_img}" "${github_img_latest}"
     if github_docker_image_exists ${github_img}; then
         echo "${github_img} already exists..."
+	exit 1
     else
         echo "${github_img} does not exist..."
         push_github_docker_image ${github_img}
