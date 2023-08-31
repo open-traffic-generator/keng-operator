@@ -114,12 +114,12 @@ const (
 	LIVENESS_PERIOD  int32 = 10
 	LIVENESS_FAILURE int32 = 6
 
-	MIN_MEM_CONTROLLER int64 = 30
-	MIN_MEM_GNMI       int64 = 20
-	MIN_CPU_PROTOCOL   int64 = 200
-	MIN_CPU_TRAFFIC    int64 = 200
-	MIN_CPU_CONTROLLER int64 = 10
-	MIN_CPU_GNMI       int64 = 10
+	MIN_MEM_CONTROLLER string = "30Mi"
+	MIN_MEM_GNMI       string = "20Mi"
+	MIN_CPU_PROTOCOL   string = "200m"
+	MIN_CPU_TRAFFIC    string = "200m"
+	MIN_CPU_CONTROLLER string = "10m"
+	MIN_CPU_GNMI       string = "10m"
 )
 
 var (
@@ -146,8 +146,7 @@ type componentRel struct {
 	LiveNessDelay   int32                  `json:"liveness-initial-delay,omitempty"`
 	LiveNessPeriod  int32                  `json:"liveness-period,omitempty"`
 	LiveNessFailure int32                  `json:"liveness-failure,omitempty"`
-	Cpu             int64                  `json:"cpu,omitempty"`
-	Memory          int64                  `json:"memory,omitempty"`
+	MinResource     map[string]string      `json:"min-resource"`
 	Name            string                 `json:"name"`
 	Path            string                 `json:"path"`
 	Port            int32
@@ -1170,11 +1169,11 @@ func (r *IxiaTGReconciler) containersForController(ixia *networkv1beta1.IxiaTG, 
 		newGNMI = false
 		err = nil
 		resRequest := corev1.ResourceList{}
-		if comp.Cpu != 0 {
-			resRequest["cpu"] = *resource.NewMilliQuantity(comp.Cpu, resource.DecimalSI)
+		if r, ok := comp.MinResource["cpu"]; ok {
+			resRequest["cpu"] = resource.MustParse(r)
 		}
-		if comp.Memory != 0 {
-			resRequest["memory"] = *resource.NewQuantity(comp.Memory, resource.BinarySI)
+		if r, ok := comp.MinResource["memory"]; ok {
+			resRequest["memory"] = resource.MustParse(r)
 		}
 		if name == GNMI_NAME {
 			tcpSock := corev1.TCPSocketAction{Port: intstr.IntOrString{IntVal: CTRL_GNMI_PORT}}
@@ -1184,19 +1183,19 @@ func (r *IxiaTGReconciler) containersForController(ixia *networkv1beta1.IxiaTG, 
 				log.Error(err)
 			}
 			if _, ok := resRequest["cpu"]; !ok {
-				resRequest["cpu"] = *resource.NewMilliQuantity(MIN_CPU_GNMI, resource.DecimalSI)
+				resRequest["cpu"] = resource.MustParse(MIN_CPU_GNMI)
 			}
 			if _, ok := resRequest["memory"]; !ok {
-				resRequest["memory"] = *resource.NewQuantity(MIN_MEM_GNMI, resource.BinarySI)
+				resRequest["memory"] = resource.MustParse(MIN_MEM_GNMI)
 			}
 		} else if name == CONTROLLER_NAME {
 			tcpSock := corev1.TCPSocketAction{Port: intstr.IntOrString{IntVal: CTRL_GRPC_PORT}}
 			pbHdlr = corev1.ProbeHandler{TCPSocket: &tcpSock}
 			if _, ok := resRequest["cpu"]; !ok {
-				resRequest["cpu"] = *resource.NewMilliQuantity(MIN_CPU_CONTROLLER, resource.DecimalSI)
+				resRequest["cpu"] = resource.MustParse(MIN_CPU_CONTROLLER)
 			}
 			if _, ok := resRequest["memory"]; !ok {
-				resRequest["memory"] = *resource.NewQuantity(MIN_MEM_CONTROLLER, resource.BinarySI)
+				resRequest["memory"] = resource.MustParse(MIN_MEM_CONTROLLER)
 			}
 		}
 		container.Resources.Requests = resRequest
@@ -1258,17 +1257,17 @@ func (r *IxiaTGReconciler) containersForIxia(podName string, intfList []string, 
 			compCopy.DefEnv[k] = v
 		}
 		resRequest := corev1.ResourceList{}
-		if comp.Cpu != 0 {
-			resRequest["cpu"] = *resource.NewMilliQuantity(comp.Cpu, resource.DecimalSI)
+		if r, ok := comp.MinResource["cpu"]; ok {
+			resRequest["cpu"] = resource.MustParse(r)
 		}
-		if comp.Memory != 0 {
-			resRequest["memory"] = *resource.NewQuantity(comp.Memory, resource.BinarySI)
+		if r, ok := comp.MinResource["memory"]; ok {
+			resRequest["memory"] = resource.MustParse(r)
 		}
 		if cName == IMAGE_PROTOCOL_ENG {
 			compCopy.DefEnv["INTF_LIST"] = strings.Join(intfList, ",")
 			tcpSock = corev1.TCPSocketAction{Port: intstr.IntOrString{IntVal: PROTOCOL_ENG_PORT}}
 			if _, ok := resRequest["cpu"]; !ok {
-				resRequest["cpu"] = *resource.NewMilliQuantity(MIN_CPU_PROTOCOL, resource.DecimalSI)
+				resRequest["cpu"] = resource.MustParse(MIN_CPU_PROTOCOL)
 			}
 			if _, ok := resRequest["memory"]; !ok {
 				min_mem := 350
@@ -1281,7 +1280,7 @@ func (r *IxiaTGReconciler) containersForIxia(podName string, intfList []string, 
 			compCopy.DefEnv["ARG_IFACE_LIST"] = argIntfList
 			tcpSock = corev1.TCPSocketAction{Port: intstr.IntOrString{IntVal: TRAFFIC_ENG_PORT}}
 			if _, ok := resRequest["cpu"]; !ok {
-				resRequest["cpu"] = *resource.NewMilliQuantity(MIN_CPU_TRAFFIC, resource.DecimalSI)
+				resRequest["cpu"] = resource.MustParse(MIN_CPU_TRAFFIC)
 			}
 			if _, ok := resRequest["memory"]; !ok {
 				min_mem := 48 + (11 * len(intfList))
