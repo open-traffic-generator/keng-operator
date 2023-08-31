@@ -1274,7 +1274,7 @@ func (r *IxiaTGReconciler) containersForIxia(podName string, intfList []string, 
 				if len(intfList) > 1 {
 					min_mem = 380 + (15 * len(intfList))
 				}
-				resRequest["memory"] = *resource.NewQuantity(int64(min_mem), resource.BinarySI)
+				resRequest["memory"] = resource.MustParse(fmt.Sprintf("%vMi", min_mem))
 			}
 		} else {
 			compCopy.DefEnv["ARG_IFACE_LIST"] = argIntfList
@@ -1284,7 +1284,7 @@ func (r *IxiaTGReconciler) containersForIxia(podName string, intfList []string, 
 			}
 			if _, ok := resRequest["memory"]; !ok {
 				min_mem := 48 + (11 * len(intfList))
-				resRequest["memory"] = *resource.NewQuantity(int64(min_mem), resource.BinarySI)
+				resRequest["memory"] = resource.MustParse(fmt.Sprintf("%vMi", min_mem))
 			}
 		}
 		container.Resources.Requests = resRequest
