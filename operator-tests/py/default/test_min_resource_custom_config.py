@@ -50,6 +50,7 @@ def test_min_resource_custom_config():
     finally:
         utils.delete_kne_config(namespace1_config, namespace1)
         utils.ixia_c_pods_ok(namespace1, [])
+        utils.reset_configmap()
 
         utils.wait_for(
             lambda: utils.topology_deleted(namespace1),
