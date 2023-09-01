@@ -1288,6 +1288,7 @@ func (r *IxiaTGReconciler) containersForIxia(podName string, intfList []string, 
 			}
 		}
 		container.Resources.Requests = resRequest
+
 		if compCopy.LiveNessEnable == nil || *compCopy.LiveNessEnable {
 			pbHdlr := corev1.ProbeHandler{TCPSocket: &tcpSock}
 			probe := corev1.Probe{
