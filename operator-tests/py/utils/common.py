@@ -304,6 +304,28 @@ def load_liveness_configmap(probe):
     os.remove(custom_configmap_path)
 
 
+def load_min_resource_configmap(resource):
+    print("Loading custom min resource config...")
+    cmd = "cat ./{}".format(
+        IXIA_CONFIGMAP_FILE
+    )
+    out, _ = exec_shell(cmd, False, True)
+    yaml_obj = yaml.safe_load(out)
+    json_obj = json.loads(yaml_obj["data"]["versions"])
+    for elem in json_obj["images"]:
+        if elem["name"] in resource.keys():
+            elem["min-resource"] = dict()
+            for key in resource[elem["name"]]:
+                elem["min-resource"][key] = resource[elem["name"]][key]
+    yaml_obj["data"]["versions"] = json.dumps(json_obj)
+    custom_configmap_path = "{}".format(CUSTOM_CONFIGMAP_FILE)
+    with open(custom_configmap_path, "w") as yaml_file:
+        yaml.dump(yaml_obj, yaml_file)
+
+    apply_configmap(custom_configmap_path)
+    os.remove(custom_configmap_path)
+
+
 def seconds_elapsed(start_seconds):
     return int(round(time.time() - start_seconds))
 
@@ -557,6 +579,21 @@ def check_liveness_data(cont, pod, namespace, enabled=True, delay=0, period=0, f
     if failure != 0:
         key = 'failureThreshold'
         assert key in res.keys() and failure == res[key], "FailureThreshold mismatch, expected {}, found {}".format(failure, res[key])
+
+
+def check_min_resource_data(cont, pod, namespace, memory="", cpu=""):
+    base_cmd = "'jsonpath={.spec.containers[?(@.name==\"" + cont + "\")].resources.requests"
+    base_cmd = "kubectl get pod/{} -n {} -o ".format(pod, namespace) + base_cmd
+    cmd = base_cmd + "}'"
+    out, _ = exec_shell(cmd, True, True)
+    print(out)
+    res = json.loads(out)
+    if memory != "":
+        key = 'memory'
+        assert key in res.keys() and memory == res[key], "Memory resource mismatch, expected {}, found {}".format(memory, res[key])
+    if cpu != "":
+        key = 'cpu'
+        assert key in res.keys() and cpu == res[key], "Cpu resource mismatch, expected {}, found {}".format(cpu, res[key])
 
 
 def generate_rest_config_from_temaplate(config, ixia_c_release):
