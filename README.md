@@ -97,7 +97,7 @@ status:
 
 ## Minimum resource requirement
 
-The minimum memory and cpu requirements for each ixia-c components are captured in the following table. Kubernetes metrics server has been used to collect resource usage data. The memory represents the minimum working set memory required, and for protocol and traffic engines, varies depending on the number of colocated ports. The figures are in Mi or MB.
+The minimum memory and cpu requirements for each ixia-c components are captured in the following table. Kubernetes metrics server has been used to collect resource usage data. The memory represents the minimum working set memory required, and for protocol and traffic engines, varies depending on the number of co-located ports e.g. when multiple ports are added to a 'group' for LAG use-cases when a single test container has more than one test NIC connected to the DUT. The figures are in Mi or MB per container and does not include shared or cached memory across multiple containers/pods in a system.
 
                 | --------------- | ------- | ------- | ------- | ------- | ------- |
                 | Component       | 1 Port  | 2 Port  | 4 Port  | 6 Port  | 8 Port  |
@@ -107,11 +107,12 @@ The minimum memory and cpu requirements for each ixia-c components are captured 
                 | --------------- | ------- | ------- | ------- | ------- | ------- |
                 | Traffic Engine  |    60   |    70   |    90   |   110   |   130   |
                 | --------------- | ------- | ------- | ------- | ------- | ------- |
-                | Controller      |    25   |         |         |         |         |
+                | Controller      |    25*  |         |         |         |         |
                 | --------------- | ------- | ------- | ------- | ------- | ------- |
-                | gNMI            |    15   |         |         |         |         |
+                | gNMI            |    15*  |         |         |         |         |
                 | --------------- | ------- | ------- | ------- | ------- | ------- |
-                
+
+* Controller and gNMI have a fixed minimum memory requirement and is currently not dependent on number of test ports for the topology.
 The cpu resource figures are in millicores.
 
                 | ---------- | -------- | ------- | ---------- | ----- |
@@ -121,11 +122,11 @@ The cpu resource figures are in millicores.
                 | Min CPU    |   200    |   200   |     10     |   10  |
                 | ---------- | -------- | ------- | ---------- | ----- |
 
-The operator sets the minimum memory requirement for each ixia-c component depending on the port configuration. The minimum cpu requirement is set to a default value for each component.
+The operator sets the minimum memory requirement to the default value for each component, depending on the port configuration similar to what is shown in the table above, showing minimum memory requirements in different deployment configurations. The minimum cpu requirement is set to a default value for each component.
 
-### Minimum resource usage based on various test configurations
+### Minimum and maximum resource usage based on various test configurations
 
-Depending on the nature of test run, the memory and cpu resource requirements may vary across all ixia-c components. The following tables capture the memory usage for lag scenarios with varying numbers of member ports. The minimum value represents initial memory on topology deployment and maximum value indicates the peak memory usage during the test run. Figures are in Mi or MB.
+Depending on the nature of test run, the memory and cpu resource requirements may vary across all ixia-c components. The following table captures the memory usage for LAG scenarios with varying numbers of member ports. The minimum value represents initial memory on topology deployment and maximum value indicates the peak memory usage during the test run. Figures are in Mi or MB.
 
                 | ---------- | ------- | ------ | ------ | ------ | ------ | ------ |
                 | Component  | Min/Max | 1 Port | 2 Port | 4 Port | 6 Port | 8 Port |
