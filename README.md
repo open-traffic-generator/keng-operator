@@ -112,7 +112,8 @@ The minimum memory and cpu requirements for each ixia-c components are captured 
                 | gNMI            |    15*  |         |         |         |         |
                 | --------------- | ------- | ------- | ------- | ------- | ------- |
 
-* Controller and gNMI have a fixed minimum memory requirement and is currently not dependent on number of test ports for the topology.
+Note: Controller and gNMI have a fixed minimum memory requirement and is currently not dependent on number of test ports for the topology.
+
 The cpu resource figures are in millicores.
 
                 | ---------- | -------- | ------- | ---------- | ----- |
