@@ -32,6 +32,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	errapi "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -115,6 +116,13 @@ const (
 	LIVENESS_DELAY   int32 = 1
 	LIVENESS_PERIOD  int32 = 10
 	LIVENESS_FAILURE int32 = 6
+
+	MIN_MEM_CONTROLLER string = "30Mi"
+	MIN_MEM_GNMI       string = "20Mi"
+	MIN_CPU_PROTOCOL   string = "200m"
+	MIN_CPU_TRAFFIC    string = "200m"
+	MIN_CPU_CONTROLLER string = "10m"
+	MIN_CPU_GNMI       string = "10m"
 )
 
 var (
@@ -141,6 +149,7 @@ type componentRel struct {
 	LiveNessDelay   int32                  `json:"liveness-initial-delay,omitempty"`
 	LiveNessPeriod  int32                  `json:"liveness-period,omitempty"`
 	LiveNessFailure int32                  `json:"liveness-failure,omitempty"`
+	MinResource     map[string]string      `json:"min-resource"`
 	Name            string                 `json:"name"`
 	Path            string                 `json:"path"`
 	Port            int32
@@ -1168,6 +1177,13 @@ func (r *IxiaTGReconciler) containersForController(ixia *networkv1beta1.IxiaTG, 
 		}
 		newGNMI = false
 		err = nil
+		resRequest := corev1.ResourceList{}
+		if r, ok := comp.MinResource["cpu"]; ok {
+			resRequest["cpu"] = resource.MustParse(r)
+		}
+		if r, ok := comp.MinResource["memory"]; ok {
+			resRequest["memory"] = resource.MustParse(r)
+		}
 		if name == GNMI_NAME {
 			tcpSock := corev1.TCPSocketAction{Port: intstr.IntOrString{IntVal: CTRL_GNMI_PORT}}
 			pbHdlr = corev1.ProbeHandler{TCPSocket: &tcpSock}
@@ -1175,10 +1191,24 @@ func (r *IxiaTGReconciler) containersForController(ixia *networkv1beta1.IxiaTG, 
 			if err != nil {
 				log.Error(err)
 			}
+			if _, ok := resRequest["cpu"]; !ok {
+				resRequest["cpu"] = resource.MustParse(MIN_CPU_GNMI)
+			}
+			if _, ok := resRequest["memory"]; !ok {
+				resRequest["memory"] = resource.MustParse(MIN_MEM_GNMI)
+			}
 		} else if name == CONTROLLER_NAME {
 			tcpSock := corev1.TCPSocketAction{Port: intstr.IntOrString{IntVal: CTRL_GRPC_PORT}}
 			pbHdlr = corev1.ProbeHandler{TCPSocket: &tcpSock}
+			if _, ok := resRequest["cpu"]; !ok {
+				resRequest["cpu"] = resource.MustParse(MIN_CPU_CONTROLLER)
+			}
+			if _, ok := resRequest["memory"]; !ok {
+				resRequest["memory"] = resource.MustParse(MIN_MEM_CONTROLLER)
+			}
 		}
+		container.Resources.Requests = resRequest
+
 		if comp.LiveNessEnable == nil || *comp.LiveNessEnable {
 			probe := corev1.Probe{
 				ProbeHandler:                  pbHdlr,
@@ -1235,13 +1265,39 @@ func (r *IxiaTGReconciler) containersForIxia(podName string, intfList []string, 
 		for k, v := range comp.DefEnv {
 			compCopy.DefEnv[k] = v
 		}
+		resRequest := corev1.ResourceList{}
+		if r, ok := comp.MinResource["cpu"]; ok {
+			resRequest["cpu"] = resource.MustParse(r)
+		}
+		if r, ok := comp.MinResource["memory"]; ok {
+			resRequest["memory"] = resource.MustParse(r)
+		}
 		if cName == IMAGE_PROTOCOL_ENG {
 			compCopy.DefEnv["INTF_LIST"] = strings.Join(intfList, ",")
 			tcpSock = corev1.TCPSocketAction{Port: intstr.IntOrString{IntVal: PROTOCOL_ENG_PORT}}
+			if _, ok := resRequest["cpu"]; !ok {
+				resRequest["cpu"] = resource.MustParse(MIN_CPU_PROTOCOL)
+			}
+			if _, ok := resRequest["memory"]; !ok {
+				min_mem := 350
+				if len(intfList) > 1 {
+					min_mem = 380 + (15 * len(intfList))
+				}
+				resRequest["memory"] = resource.MustParse(fmt.Sprintf("%vMi", min_mem))
+			}
 		} else {
 			compCopy.DefEnv["ARG_IFACE_LIST"] = argIntfList
 			tcpSock = corev1.TCPSocketAction{Port: intstr.IntOrString{IntVal: TRAFFIC_ENG_PORT}}
+			if _, ok := resRequest["cpu"]; !ok {
+				resRequest["cpu"] = resource.MustParse(MIN_CPU_TRAFFIC)
+			}
+			if _, ok := resRequest["memory"]; !ok {
+				min_mem := 48 + (11 * len(intfList))
+				resRequest["memory"] = resource.MustParse(fmt.Sprintf("%vMi", min_mem))
+			}
 		}
+		container.Resources.Requests = resRequest
+
 		if compCopy.LiveNessEnable == nil || *compCopy.LiveNessEnable {
 			pbHdlr := corev1.ProbeHandler{TCPSocket: &tcpSock}
 			probe := corev1.Probe{
