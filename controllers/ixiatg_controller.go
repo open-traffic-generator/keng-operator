@@ -1137,25 +1137,22 @@ func (r *IxiaTGReconciler) containersForController(ixia *networkv1beta1.IxiaTG, 
 	var err error
 	var pbHdlr corev1.ProbeHandler
 
-	ctrlContainers := 3
+	if _, ok := componentDep[release].Controller.Containers[IMAGE_CONTROLLER]; !ok {
+		return nil, fmt.Errorf("Failed to find controller entry in configmap for release %s", release)
+	}
+	if _, ok := componentDep[release].Controller.Containers[IMAGE_GNMI_SERVER]; !ok {
+		return nil, fmt.Errorf("Failed to find gNMI entry in configmap for release %s", release)
+	}
 	if ctrl, ok := componentDep[release].Controller.Containers[IMAGE_CONTROLLER]; ok {
 		noGRPC, err := versionLaterOrEqual(IXIA_C_GRPC_VERSION, ctrl.Tag)
 		if err != nil {
 			log.Error(err)
 		}
 		if !noGRPC {
-			ctrlContainers = 4
+			if _, ok := componentDep[release].Controller.Containers[IMAGE_GRPC_SERVER]; !ok {
+				return nil, fmt.Errorf("Failed to find gRPC entry in configmap for release %s", release)
+			}
 		}
-	}
-	if len(componentDep[release].Controller.Containers) < ctrlContainers {
-		errStr := "Failed to find required container entries; "
-		if ctrlContainers > 2 {
-			errStr = errStr + "expect Controller, gNMI and gRPC "
-		} else {
-			errStr = errStr + "expect Controller and gNMI "
-		}
-		errStr = errStr + fmt.Sprintf("entries to be present in configmap for release %s", release)
-		return nil, errors.New(errStr)
 	}
 	for _, comp := range componentDep[release].Controller.Containers {
 		name := comp.ContainerName
