@@ -62,6 +62,7 @@ const (
 	CONTROLLER_NAME string = "ixia-c"
 	GRPC_NAME       string = "grpc"
 	GNMI_NAME       string = "gnmi"
+	LICENSE_NAME    string = "license"
 
 	CONFIG_MAP_NAME      string = "ixiatg-release-config"
 	CONFIG_MAP_NAMESPACE string = "ixiatg-op-system"
@@ -89,6 +90,7 @@ const (
 	CTRL_HTTPS_PORT   int32 = 8443
 	CTRL_GNMI_PORT    int32 = 50051
 	CTRL_GRPC_PORT    int32 = 40051
+	CTRL_LICENSE_PORT int32 = 7443
 	PROTOCOL_ENG_PORT int32 = 50071
 	TRAFFIC_ENG_PORT  int32 = 5555
 
@@ -96,11 +98,12 @@ const (
 	STATE_DEPLOYED string = "DEPLOYED"
 	STATE_FAILED   string = "FAILED"
 
-	IMAGE_CONTROLLER   string = "controller"
-	IMAGE_GNMI_SERVER  string = "gnmi-server"
-	IMAGE_GRPC_SERVER  string = "grpc-server"
-	IMAGE_TRAFFIC_ENG  string = "traffic-engine"
-	IMAGE_PROTOCOL_ENG string = "protocol-engine"
+	IMAGE_CONTROLLER     string = "controller"
+	IMAGE_GNMI_SERVER    string = "gnmi-server"
+	IMAGE_GRPC_SERVER    string = "grpc-server"
+	IMAGE_LICENSE_SERVER string = "license-server"
+	IMAGE_TRAFFIC_ENG    string = "traffic-engine"
+	IMAGE_PROTOCOL_ENG   string = "protocol-engine"
 
 	TERMINATION_TIMEOUT_SEC int64 = 5
 
@@ -587,6 +590,8 @@ func (r *IxiaTGReconciler) loadRelInfo(release string, relData *[]byte, list boo
 				fallthrough
 			case IMAGE_GNMI_SERVER:
 				fallthrough
+			case IMAGE_LICENSE_SERVER:
+				fallthrough
 			case IMAGE_GRPC_SERVER:
 				topoEntry.Controller.Containers[contKeyName] = image
 				compRef = topoEntry.Controller.Containers[contKeyName]
@@ -623,6 +628,10 @@ func (r *IxiaTGReconciler) loadRelInfo(release string, relData *[]byte, list boo
 				compRef.ContainerName = GRPC_NAME
 				compRef.DefCmd = []string{"python3", "-m", "grpc_server", "--app-mode", "athena", "--target-host", "localhost", "--target-port", strconv.Itoa(int(CTRL_HTTPS_PORT)), "--log-stdout", "--log-debug"}
 				compRef.Port = CTRL_GRPC_PORT
+			case IMAGE_LICENSE_SERVER:
+				compRef.ContainerName = LICENSE_NAME
+				compRef.DefArgs = []string{"--accept-eula", "--debug"}
+				compRef.Port = CTRL_LICENSE_PORT
 			case IMAGE_TRAFFIC_ENG:
 				compRef.ContainerName = IMAGE_TRAFFIC_ENG
 				compRef.DefEnv = map[string]string{
@@ -1128,25 +1137,22 @@ func (r *IxiaTGReconciler) containersForController(ixia *networkv1beta1.IxiaTG, 
 	var err error
 	var pbHdlr corev1.ProbeHandler
 
-	ctrlContainers := 2
+	if _, ok := componentDep[release].Controller.Containers[IMAGE_CONTROLLER]; !ok {
+		return nil, fmt.Errorf("Failed to find controller entry in configmap for release %s", release)
+	}
+	if _, ok := componentDep[release].Controller.Containers[IMAGE_GNMI_SERVER]; !ok {
+		return nil, fmt.Errorf("Failed to find gNMI entry in configmap for release %s", release)
+	}
 	if ctrl, ok := componentDep[release].Controller.Containers[IMAGE_CONTROLLER]; ok {
 		noGRPC, err := versionLaterOrEqual(IXIA_C_GRPC_VERSION, ctrl.Tag)
 		if err != nil {
 			log.Error(err)
 		}
 		if !noGRPC {
-			ctrlContainers = 3
+			if _, ok := componentDep[release].Controller.Containers[IMAGE_GRPC_SERVER]; !ok {
+				return nil, fmt.Errorf("Failed to find gRPC entry in configmap for release %s", release)
+			}
 		}
-	}
-	if len(componentDep[release].Controller.Containers) < ctrlContainers {
-		errStr := "Failed to find required container entries; "
-		if ctrlContainers > 2 {
-			errStr = errStr + "expect Controller, gNMI and gRPC "
-		} else {
-			errStr = errStr + "expect Controller and gNMI "
-		}
-		errStr = errStr + fmt.Sprintf("entries to be present in configmap for release %s", release)
-		return nil, errors.New(errStr)
 	}
 	for _, comp := range componentDep[release].Controller.Containers {
 		name := comp.ContainerName
