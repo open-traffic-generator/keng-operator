@@ -32,9 +32,9 @@ def test_lag_min_resource():
         ))
         utils.create_kne_config(namespace1_config, namespace1)
         utils.ixia_c_pods_ok(namespace1, expected_pods)
-        utils.check_min_resource_data('ixia-c', expected_pods[0], namespace1, '30Mi', '10m')
-        utils.check_min_resource_data('gnmi', expected_pods[0], namespace1, '20Mi', '10m')
-        utils.check_min_resource_data(expected_pods[4]+container_extensions[0], expected_pods[4], namespace1, '410Mi', '200m')
+        utils.check_min_resource_data('ixia-c', expected_pods[0], namespace1, '25Mi', '10m')
+        utils.check_min_resource_data('gnmi', expected_pods[0], namespace1, '15Mi', '10m')
+        utils.check_min_resource_data(expected_pods[4]+container_extensions[0], expected_pods[4], namespace1, '420Mi', '200m')
         utils.check_min_resource_data(expected_pods[4]+container_extensions[1], expected_pods[4], namespace1, '70Mi', '200m')
         op_rscount = utils.ixia_c_operator_ok(op_rscount)
 

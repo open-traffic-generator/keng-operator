@@ -117,8 +117,8 @@ const (
 	LIVENESS_PERIOD  int32 = 10
 	LIVENESS_FAILURE int32 = 6
 
-	MIN_MEM_CONTROLLER string = "30Mi"
-	MIN_MEM_GNMI       string = "20Mi"
+	MIN_MEM_CONTROLLER string = "25Mi"
+	MIN_MEM_GNMI       string = "15Mi"
 	MIN_CPU_PROTOCOL   string = "200m"
 	MIN_CPU_TRAFFIC    string = "200m"
 	MIN_CPU_CONTROLLER string = "10m"
@@ -1278,7 +1278,7 @@ func (r *IxiaTGReconciler) containersForIxia(podName string, intfList []string, 
 			if _, ok := resRequest["memory"]; !ok {
 				min_mem := 350
 				if len(intfList) > 1 {
-					min_mem = 380 + (15 * len(intfList))
+					min_mem = 400 + (10 * len(intfList))
 				}
 				resRequest["memory"] = resource.MustParse(fmt.Sprintf("%vMi", min_mem))
 			}
@@ -1289,7 +1289,7 @@ func (r *IxiaTGReconciler) containersForIxia(podName string, intfList []string, 
 				resRequest["cpu"] = resource.MustParse(MIN_CPU_TRAFFIC)
 			}
 			if _, ok := resRequest["memory"]; !ok {
-				min_mem := 48 + (11 * len(intfList))
+				min_mem := 50 + (10 * len(intfList))
 				resRequest["memory"] = resource.MustParse(fmt.Sprintf("%vMi", min_mem))
 			}
 		}
