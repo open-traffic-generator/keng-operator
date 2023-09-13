@@ -95,7 +95,7 @@ status:
   state: DEPLOYED
 ```
 
-Note: The operator sets the minimum cpu and memory requirement to the default value for each component, depending on the port configuration, based on the data captured [here](https://github.com/open-traffic-generator/ixia-c/blob/mkdocs/docs/prerequisites.md).
+Note: The operator sets the minimum cpu and memory requirement to the default value for each component, depending on the port configuration, based on the data captured [here](https://github.com/open-traffic-generator/ixia-c/blob/mkdocs/docs/reference_advanced_deployments.md).
 
 ## Deployment
 
