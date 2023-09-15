@@ -62,7 +62,7 @@ const (
 	CONTROLLER_NAME string = "ixia-c"
 	GRPC_NAME       string = "grpc"
 	GNMI_NAME       string = "gnmi"
-	LICENSE_NAME    string = "license"
+	LICENSE_NAME    string = "license-server"
 
 	CONFIG_MAP_NAME      string = "ixiatg-release-config"
 	CONFIG_MAP_NAMESPACE string = "ixiatg-op-system"
