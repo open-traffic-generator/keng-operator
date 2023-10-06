@@ -8,7 +8,7 @@ GO_VERSION=1.17.9
 export DEBIAN_FRONTEND=noninteractive
 
 
-IXIA_C_OPERATOR_IMAGE=ixia-c-operator
+IXIA_C_OPERATOR_IMAGE=keng-operator
 GO_TARGZ=""
 
 GITHUB_REPO="ghcr.io/open-traffic-generator"
