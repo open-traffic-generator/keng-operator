@@ -322,7 +322,7 @@ load_ceos_image() {
 
 load_ixia_c_operator_image() {
     cecho "Loading ixia-c operator image ..."
-    img="ixia-c-operator.tar"
+    img="keng-operator.tar"
     cecho "Loading ${img} ..."
     if [ ! -f "$img" ]
     then
