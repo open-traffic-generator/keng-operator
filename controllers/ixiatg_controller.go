@@ -55,8 +55,7 @@ const (
 	CURRENT_NAMESPACE string = "ixiatg-op-system"
 	SECRET_NAME       string = "ixia-pull-secret"
 
-	LIC_ADDR_SECRET   string = "license-server"
-	LIC_SERVER_SECRET string = "license-server-image"
+	LIC_SERVER_SECRET string = "license-server"
 	LIC_ENV_VAR       string = "LICENSE_SERVERS"
 
 	SERVER_URL        string = "https://github.com/open-traffic-generator/ixia-c/releases/download/v"
@@ -692,7 +691,7 @@ func (r *IxiaTGReconciler) loadRelInfo(ctx context.Context, release string, relD
 		if secret, err := r.GetSecret(ctx, LIC_SERVER_SECRET, ns); err != nil {
 			return fmt.Errorf("Failed to determine secret %s - %v", LIC_SERVER_SECRET, err)
 		} else if secret != nil {
-			if licImage, ok := secret.Data["image_path"]; ok {
+			if licImage, ok := secret.Data["image"]; ok {
 				compRef := componentRel{Name: IMAGE_LICENSE_SERVER, Path: string(licImage)}
 				compRef.ContainerName = LICENSE_NAME
 				compRef.DefArgs = []string{"--accept-eula", "--debug"}
@@ -1161,6 +1160,7 @@ func (r *IxiaTGReconciler) containersForController(ctx context.Context, ixia *ne
 	var pbHdlr corev1.ProbeHandler
 	lic_found := false
 	lic_container := corev1.Container{}
+	var lic_server_image, lic_server_secret bool
 
 	if _, ok := componentDep[release].Controller.Containers[IMAGE_CONTROLLER]; !ok {
 		return nil, fmt.Errorf("Failed to find controller entry in configmap for release %s", release)
@@ -1179,9 +1179,15 @@ func (r *IxiaTGReconciler) containersForController(ctx context.Context, ixia *ne
 			}
 		}
 	}
+	if _, ok := componentDep[release].Controller.Containers[IMAGE_LICENSE_SERVER]; ok {
+		lic_server_image = true
+	}
+	if _, ok := componentDep[release].Controller.Containers[IMAGE_LICENSE_SECRET]; ok {
+		lic_server_secret = true
+	}
 	for key, comp := range componentDep[release].Controller.Containers {
-		if key == IMAGE_LICENSE_SERVER && len(lic_container.Name) > 0 {
-			// Already found from secrets
+		if key == IMAGE_LICENSE_SERVER && lic_server_secret {
+			// Secrets based image takes precedence
 			continue
 		}
 		name := comp.ContainerName
@@ -1254,10 +1260,10 @@ func (r *IxiaTGReconciler) containersForController(ctx context.Context, ixia *ne
 		if name == CONTROLLER_NAME {
 			// First check is corresponding secret is present
 			licAddr := ""
-			if secret, err := r.GetSecret(ctx, LIC_ADDR_SECRET, ixia.Namespace); err != nil {
-				return nil, fmt.Errorf("Failed to determine secret %s - %v", LIC_ADDR_SECRET, err)
+			if secret, err := r.GetSecret(ctx, LIC_SERVER_SECRET, ixia.Namespace); err != nil {
+				return nil, fmt.Errorf("Failed to determine secret %s - %v", LIC_SERVER_SECRET, err)
 			} else if secret != nil {
-				if data, ok := secret.Data["license-ip"]; ok {
+				if data, ok := secret.Data["addresses"]; ok {
 					licAddr = string(data)
 					lic_found = true
 				}
@@ -1279,6 +1285,8 @@ func (r *IxiaTGReconciler) containersForController(ctx context.Context, ixia *ne
 			}
 			if !entry_found && lic_found {
 				envEntries = append(envEntries, corev1.EnvVar{Name: LIC_ENV_VAR, Value: licAddr})
+			} else if !lic_found && (lic_server_image || lic_server_secret) {
+				envEntries = append(envEntries, corev1.EnvVar{Name: LIC_ENV_VAR, Value: "localhost"})
 			}
 			container.Env = envEntries
 		}
@@ -1294,7 +1302,7 @@ func (r *IxiaTGReconciler) containersForController(ctx context.Context, ixia *ne
 	}
 	if !lic_found {
 		// Add license server only if secret is present or image is configmap driven
-		if len(lic_container.Name) > 0 {
+		if lic_server_image || lic_server_secret {
 			log.Infof("Adding to pod: %s, container: %s, Image: %s, Args: %v, Cmd: %v, Port: %v, Vol: %v",
 				CONTROLLER_NAME, LICENSE_NAME, lic_container.Image, lic_container.Args, lic_container.Command,
 				lic_container.Ports, lic_container.VolumeMounts)
@@ -1431,7 +1439,7 @@ func (r *IxiaTGReconciler) GetSecret(ctx context.Context, name string, namespace
 }
 
 func (r *IxiaTGReconciler) DeleteSecrets(ctx context.Context, namespace string) error {
-	secretList := []string{SECRET_NAME, LIC_ADDR_SECRET, LIC_SERVER_SECRET}
+	secretList := []string{SECRET_NAME, LIC_SERVER_SECRET}
 	for _, name := range secretList {
 		instance := &corev1.Secret{}
 		if r.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, instance) == nil {
@@ -1448,7 +1456,7 @@ func (r *IxiaTGReconciler) DeleteSecrets(ctx context.Context, namespace string) 
 func (r *IxiaTGReconciler) ReconcileSecrets(ctx context.Context,
 	req ctrl.Request, ixia *networkv1beta1.IxiaTG) error {
 	_ = r.Log.WithValues("ixiatg", req.NamespacedName)
-	secretList := []string{SECRET_NAME, LIC_ADDR_SECRET, LIC_SERVER_SECRET}
+	secretList := []string{SECRET_NAME, LIC_SERVER_SECRET}
 	// Fetch the Secret instance
 	instance := &corev1.Secret{}
 
@@ -1470,25 +1478,23 @@ func (r *IxiaTGReconciler) ReconcileSecrets(ctx context.Context,
 			return err
 		}
 
-		if rep, ok := instance.Annotations["secretsync.ixiatg.com/replicate"]; ok && rep == "true" {
-			targetSecret, err := createSecret(instance, currNamespace.Name, ixia.Namespace)
+		targetSecret, err := createSecret(instance, currNamespace.Name, ixia.Namespace)
+		if err != nil {
+			return err
+		}
+		secret := &corev1.Secret{}
+		err = r.Get(ctx, types.NamespacedName{Name: targetSecret.Name, Namespace: targetSecret.Namespace}, secret)
+		if err != nil && errapi.IsNotFound(err) {
+			log.Info(fmt.Sprintf("Target secret %s doesn't exist, creating it in namespace %s", targetSecret.Name, targetSecret.Namespace))
+			err = r.Create(ctx, targetSecret)
 			if err != nil {
 				return err
 			}
-			secret := &corev1.Secret{}
-			err = r.Get(ctx, types.NamespacedName{Name: targetSecret.Name, Namespace: targetSecret.Namespace}, secret)
-			if err != nil && errapi.IsNotFound(err) {
-				log.Info(fmt.Sprintf("Target secret %s doesn't exist, creating it in namespace %s", targetSecret.Name, targetSecret.Namespace))
-				err = r.Create(ctx, targetSecret)
-				if err != nil {
-					return err
-				}
-			} else {
-				log.Info(fmt.Sprintf("Target secret %s exists, updating it now in namespace %s", targetSecret.Name, targetSecret.Namespace))
-				err = r.Update(ctx, targetSecret)
-				if err != nil {
-					return err
-				}
+		} else {
+			log.Info(fmt.Sprintf("Target secret %s exists, updating it now in namespace %s", targetSecret.Name, targetSecret.Namespace))
+			err = r.Update(ctx, targetSecret)
+			if err != nil {
+				return err
 			}
 		}
 	}
