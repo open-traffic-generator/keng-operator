@@ -54,13 +54,13 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publishing Artifacts
-        if: steps.check_tag.outputs.exists == 'false'
+        if: steps.check_tag.outputs.exists == 'false' && steps.get_branch.outputs.branch == 'main'
         run: |
           chmod u+x ./ci.sh
           TOKEN_GITHUB=${{ secrets.TOKEN_GITHUB }} ./ci.sh publish
 
       - name: Create Release
-        if: steps.check_tag.outputs.exists == 'false'
+        if: steps.check_tag.outputs.exists == 'false' && steps.get_branch.outputs.branch == 'main'
         uses: ncipollo/release-action@v1
         with:
           artifacts: "release/*"
