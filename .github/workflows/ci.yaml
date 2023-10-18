@@ -12,7 +12,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: "true"
-          token: ${{ secrets.TOKEN_GITHUB }}
 
       - name: Setup Docker
         uses: docker-practice/actions-setup-docker@master
