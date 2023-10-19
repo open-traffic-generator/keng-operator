@@ -80,9 +80,9 @@ get_docker_build() {
 }
 
 gen_ixia_c_op_dep_yaml() {
-    # Generating ixia-c-operator deployment yaml using Makefile
+    # Generating keng-operator deployment yaml using Makefile
     img=${1}
-    echo "Generating ixia-c-operator deployment yaml ..."
+    echo "Generating keng-operator deployment yaml ..."
     export VERSION=$(get_version)
     export IMAGE_TAG_BASE=${img}
     make yaml
@@ -162,13 +162,13 @@ cicd_gen_release_art() {
 }
 
 gen_operator_artifacts() {
-    echo "Generating ixia-c-operator offline artifacts ..."
+    echo "Generating keng-operator offline artifacts ..."
     art=${1}
     version=$(get_version)
     rm -rf ${art}/*.yaml
     rm -rf ${art}/*.tar.gz
     mv ./ixiatg-operator.yaml ${art}/
-    docker save ${IXIA_C_OPERATOR_IMAGE}:${version} | gzip > ${art}/ixia-c-operator.tar.gz
+    docker save ${IXIA_C_OPERATOR_IMAGE}:${version} | gzip > ${art}/keng-operator.tar.gz
 }
 
 build() {

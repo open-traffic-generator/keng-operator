@@ -30,7 +30,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	networkv1beta1 "github.com/open-traffic-generator/ixia-c-operator/api/v1beta1"
+	networkv1beta1 "github.com/open-traffic-generator/keng-operator/api/v1beta1"
 	//+kubebuilder:scaffold:imports
 )
 

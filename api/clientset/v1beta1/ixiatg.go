@@ -30,7 +30,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 
-	typesv1beta1 "github.com/open-traffic-generator/ixia-c-operator/api/v1beta1"
+	typesv1beta1 "github.com/open-traffic-generator/keng-operator/api/v1beta1"
 )
 
 // IxiaTGInterface provides access to the IxiaTG CRD.

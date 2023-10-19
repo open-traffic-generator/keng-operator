@@ -12,7 +12,7 @@ SUDO_USER = 'root'
 
 SANITY_SETTINGS = {
     "required_artifacts": [
-        "ixia-c-operator.tar.gz",
+        "keng-operator.tar.gz",
         "ixiatg-operator.yaml",
         "template-ixia-configmap.yaml",
         "operator-cicd-deploy.sh",
@@ -160,12 +160,12 @@ class RunIxiaCOperatorE2E:
     def get_cmd_line_options(self):
         try:
             parser = argparse.ArgumentParser(
-                description="--- Auto Ixia-C-Operator E2E Regression Run Tool help ---") # noqa
+                description="--- Auto KENG Operator E2E Regression Run Tool help ---") # noqa
             parser.add_argument(
                 '-build',
                 dest='build',
                 default=self.build,
-                help="Enter the Ixia-C-Operator build version")
+                help="Enter the KENG Operator build version")
             parser.add_argument(
                 '-ixia_c_release',
                 dest='ixia_c_release',
@@ -261,18 +261,18 @@ class RunIxiaCOperatorE2E:
 
     def deploy_ixia_c_op(self):
         try:
-            self.logger.info('Deploying Ixia-C-Operator')
+            self.logger.info('Deploying KENG Operator')
             cmd = SANITY_SETTINGS['deploy_cmd']
             out = exec_shell(
                 cmd, self.logger)
             if out is not None:
                 out = out.split('\n')
                 if out[-2].strip() == "success":
-                    self.logger.info('Ixia-C-Operator deployed successfully')
+                    self.logger.info('KENG Operator deployed successfully')
                 else:
-                    raise Exception('Failed to deploy Ixia-C-Operator')
+                    raise Exception('Failed to deploy KENG Operator')
             else:
-                raise Exception('Failed to deploy Ixia-C-Operator')
+                raise Exception('Failed to deploy KENG Operator')
 
         except Exception as e:
             print(
@@ -396,7 +396,7 @@ class RunIxiaCOperatorE2E:
                     raise Exception('Failed to remove : {}'.format(
                         test_report_location))
             self.logger.info(
-                'Starting sanity run for Ixia-C-Operator')
+                'Starting sanity run for KENG Operator')
             sanity_run_command = SANITY_SETTINGS["sanity_cmd"].format(
                 sys.executable,
                 test_report_name,
@@ -422,7 +422,7 @@ class RunIxiaCOperatorE2E:
     def cleanup_ixia_c_op(self):
         try:
             self.logger.info(
-                'Cleaning up Ixia-C-Operator')
+                'Cleaning up KENG Operator')
 
             cmd = SANITY_SETTINGS['cleanup_cmd']
             out = exec_shell(
@@ -430,11 +430,11 @@ class RunIxiaCOperatorE2E:
             if out is not None:
                 out = out.split('\n')
                 if out[-2].strip() == "success":
-                    self.logger.info('Ixia-C-Operator clean up successfully')
+                    self.logger.info('KENG Operator clean up successfully')
                 else:
-                    raise Exception('Failed to clean up Ixia-C-Operator')
+                    raise Exception('Failed to clean up KENG Operator')
             else:
-                raise Exception('Failed to clean up Ixia-C-Operator')
+                raise Exception('Failed to clean up KENG Operator')
 
         except Exception as e:
             print(

@@ -34,8 +34,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	networkv1beta1 "github.com/open-traffic-generator/ixia-c-operator/api/v1beta1"
-	"github.com/open-traffic-generator/ixia-c-operator/controllers"
+	networkv1beta1 "github.com/open-traffic-generator/keng-operator/api/v1beta1"
+	"github.com/open-traffic-generator/keng-operator/controllers"
 	//+kubebuilder:scaffold:imports
 )
 

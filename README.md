@@ -2,10 +2,10 @@
 
 [![Project Status: Active – The project has reached a stable, usable state and is being actively developed.](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
 [![license](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![release)](https://img.shields.io/github/v/release/open-traffic-generator/ixia-c-operator)](https://github.com/open-traffic-generator/ixia-c-operator/releases/latest)
-[![Build](https://github.com/open-traffic-generator/ixia-c-operator/actions/workflows/publish.yaml/badge.svg)](https://github.com/open-traffic-generator/ixia-c-operator/actions)
-[![LGTM Grade](https://img.shields.io/lgtm/grade/python/github/open-traffic-generator/ixia-c-operator)](https://lgtm.com/projects/g/open-traffic-generator/ixia-c-operator/context:python)
-[![LGTM Alerts](https://img.shields.io/lgtm/alerts/github/open-traffic-generator/ixia-c-operator)](https://lgtm.com/projects/g/open-traffic-generator/ixia-c-operator/?mode=list)
+[![release)](https://img.shields.io/github/v/release/open-traffic-generator/keng-operator)](https://github.com/open-traffic-generator/keng-operator/releases/latest)
+[![Build](https://github.com/open-traffic-generator/keng-operator/actions/workflows/publish.yaml/badge.svg)](https://github.com/open-traffic-generator/keng-operator/actions)
+[![LGTM Grade](https://img.shields.io/lgtm/grade/python/github/open-traffic-generator/keng-operator)](https://lgtm.com/projects/g/open-traffic-generator/keng-operator/context:python)
+[![LGTM Alerts](https://img.shields.io/lgtm/alerts/github/open-traffic-generator/keng-operator)](https://lgtm.com/projects/g/open-traffic-generator/keng-operator/?mode=list)
 
 Kubernetes Operator is built on the basic Kubernetes resources and controller concepts and includes application specific knowledge to automate common tasks like create, configure and manage instances on behalf of a Kubernetes user. It extends the functionality of the Kubernetes API and is used to package, deploy and manage Kubernetes application.<br/>
     
@@ -102,18 +102,18 @@ Note: The operator sets the minimum cpu and memory requirement to the default va
 Please make sure that the setup meets [Deployment Prerequisites](#deployment-prerequisites).
 
 - **Available Releases**
-    https://github.com/open-traffic-generator/ixia-c-operator/releases
+    https://github.com/open-traffic-generator/keng-operator/releases
 
 - **Download Deployment yaml**
 
   ```sh
-  curl -kLO "https://github.com/open-traffic-generator/ixia-c-operator/releases/tag/v0.0.65/ixiatg-operator.yaml"
+  curl -kLO "https://github.com/open-traffic-generator/keng-operator/releases/tag/v0.0.65/ixiatg-operator.yaml"
   ```
 
 - **Load Image**
 
   ```sh
-  docker pull ixiacom/ixia-c-operator:0.0.65
+  docker pull ixiacom/keng-operator:0.0.65
   ```
 
 - **Running as K8S Pod**
@@ -131,19 +131,19 @@ Please make sure that the setup meets [Deployment Prerequisites](#deployment-pre
 - **Clone this project**
 
   ```sh
-  git clone https://github.com/open-traffic-generator/ixia-c-operator.git
-  cd ixia-c-operator/
+  git clone https://github.com/open-traffic-generator/keng-operator.git
+  cd keng-operator/
   ```
 
 - **For Production**
 
     ```sh
     export VERSION=latest
-    export IMAGE_TAG_BASE=ixia-c-operator
+    export IMAGE_TAG_BASE=keng-operator
 
-    # Generating ixia-c-operator deployment yaml using Makefile
+    # Generating keng-operator deployment yaml using Makefile
     make yaml
-    # Generating docker build with name & tag (ixia-c-operator:latest) using Makefile
+    # Generating docker build with name & tag (keng-operator:latest) using Makefile
     make docker-build
     ```
 

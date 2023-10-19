@@ -42,7 +42,7 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	networkv1beta1 "github.com/open-traffic-generator/ixia-c-operator/api/v1beta1"
+	networkv1beta1 "github.com/open-traffic-generator/keng-operator/api/v1beta1"
 
 	log "github.com/sirupsen/logrus"
 

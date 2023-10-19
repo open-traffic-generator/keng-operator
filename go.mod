@@ -1,4 +1,4 @@
-module github.com/open-traffic-generator/ixia-c-operator
+module github.com/open-traffic-generator/keng-operator
 
 go 1.17
 
