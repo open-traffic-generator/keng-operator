@@ -396,7 +396,7 @@ delete_ceos_image() {
 
 delete_ixia_c_operator_image() {
     cecho "Deleting ixia-c operator image ..."
-    docker exec -t kind-control-plane crictl rmi $(docker exec -t kind-control-plane crictl images | grep "ixia-c-operator") 2> /dev/null || true
+    docker exec -t kind-control-plane crictl rmi $(docker exec -t kind-control-plane crictl images | grep "keng-operator") 2> /dev/null || true
 }
 
 delete_images() {

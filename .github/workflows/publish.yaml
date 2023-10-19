@@ -11,7 +11,7 @@
 #     steps:
 #       - name: Give Permission
 #         run: |
-#           sudo chown -R $USER:$USER /home/$USER/actions-runner/_work/ixia-c-operator
+#           sudo chown -R $USER:$USER /home/$USER/actions-runner/_work/keng-operator
 
 #       - name: Checkout
 #         uses: actions/checkout@v2
