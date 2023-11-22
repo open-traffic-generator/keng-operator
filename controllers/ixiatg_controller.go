@@ -41,6 +41,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	errapi "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -50,7 +51,7 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	networkv1beta1 "github.com/open-traffic-generator/ixia-c-operator/api/v1beta1"
+	networkv1beta1 "github.com/open-traffic-generator/keng-operator/api/v1beta1"
 
 	log "github.com/sirupsen/logrus"
 
@@ -63,6 +64,9 @@ const (
 	CURRENT_NAMESPACE string = "ixiatg-op-system"
 	SECRET_NAME       string = "ixia-pull-secret"
 
+	LIC_SERVER_SECRET string = "license-server"
+	LIC_ENV_VAR       string = "LICENSE_SERVERS"
+
 	SERVER_URL        string = "https://github.com/open-traffic-generator/ixia-c/releases/download/v"
 	SERVER_LATEST_URL string = "https://github.com/open-traffic-generator/ixia-c/releases/latest/download"
 	RELEASE_FILE      string = "/ixiatg-configmap.yaml"
@@ -70,6 +74,7 @@ const (
 	CONTROLLER_NAME string = "ixia-c"
 	GRPC_NAME       string = "grpc"
 	GNMI_NAME       string = "gnmi"
+	LICENSE_NAME    string = "license-server"
 
 	CONFIG_MAP_NAME      string = "ixiatg-release-config"
 	CONFIG_MAP_NAMESPACE string = "ixiatg-op-system"
@@ -99,6 +104,7 @@ const (
 	CTRL_HTTPS_PORT   int32 = 8443
 	CTRL_GNMI_PORT    int32 = 50051
 	CTRL_GRPC_PORT    int32 = 40051
+	CTRL_LICENSE_PORT int32 = 7443
 	PROTOCOL_ENG_PORT int32 = 50071
 	TRAFFIC_ENG_PORT  int32 = 5555
 
@@ -106,11 +112,15 @@ const (
 	STATE_DEPLOYED string = "DEPLOYED"
 	STATE_FAILED   string = "FAILED"
 
-	IMAGE_CONTROLLER   string = "controller"
-	IMAGE_GNMI_SERVER  string = "gnmi-server"
-	IMAGE_GRPC_SERVER  string = "grpc-server"
-	IMAGE_TRAFFIC_ENG  string = "traffic-engine"
-	IMAGE_PROTOCOL_ENG string = "protocol-engine"
+	IMAGE_CONTROLLER     string = "controller"
+	IMAGE_GNMI_SERVER    string = "gnmi-server"
+	IMAGE_GRPC_SERVER    string = "grpc-server"
+	IMAGE_LICENSE_SERVER string = "license-server"
+	IMAGE_LICENSE_SECRET string = "license-server-default"
+	IMAGE_TRAFFIC_ENG    string = "traffic-engine"
+	IMAGE_PROTOCOL_ENG   string = "protocol-engine"
+
+	LICENSE_ADDRESS string = "license-address"
 
 	TERMINATION_TIMEOUT_SEC int64 = 5
 
@@ -120,14 +130,22 @@ const (
 	IXIA_C_OTG_VERSION    string = "0.0.1-2727"
 	IXIA_C_GRPC_VERSION   string = "0.0.1-3114"
 
-	LIVENESS_DELAY   int32 = 10
-	LIVENESS_PERIOD  int32 = 1
-	LIVENESS_FAILURE int32 = 3
+	LIVENESS_DELAY   int32 = 1
+	LIVENESS_PERIOD  int32 = 10
+	LIVENESS_FAILURE int32 = 6
+
+	MIN_MEM_CONTROLLER string = "25Mi"
+	MIN_MEM_GNMI       string = "15Mi"
+	MIN_CPU_PROTOCOL   string = "200m"
+	MIN_CPU_TRAFFIC    string = "200m"
+	MIN_CPU_CONTROLLER string = "10m"
+	MIN_CPU_GNMI       string = "10m"
 )
 
 var (
-	componentDep  map[string]topoDep = make(map[string]topoDep)
-	latestVersion string             = ""
+	componentDep   map[string]topoDep = make(map[string]topoDep)
+	latestVersion  string             = ""
+	licenseAddress string             = ""
 )
 
 // IxiaTGReconciler reconciles a IxiaTG object
@@ -149,6 +167,7 @@ type componentRel struct {
 	LiveNessDelay   int32                  `json:"liveness-initial-delay,omitempty"`
 	LiveNessPeriod  int32                  `json:"liveness-period,omitempty"`
 	LiveNessFailure int32                  `json:"liveness-failure,omitempty"`
+	MinResource     map[string]string      `json:"min-resource"`
 	Name            string                 `json:"name"`
 	Path            string                 `json:"path"`
 	Port            int32
@@ -280,6 +299,10 @@ func (r *IxiaTGReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		}
 	} else {
 		if containsString(ixia.GetFinalizers(), myFinalizerName) {
+			// Delete secrets, if copied
+			if err = r.DeleteSecrets(ctx, ixia.Namespace); err != nil {
+				return ctrl.Result{}, err
+			}
 			for _, intf := range ixia.Status.Interfaces {
 				if err = r.deleteIxiaPod(ctx, intf.PodName, ixia); err != nil {
 					//log.Errorf("Failed to delete associated pod %v %v", intf.PodName, err)
@@ -305,11 +328,11 @@ func (r *IxiaTGReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 
 	// First we verify if the desired state is already reached; otherwise handle accordingly
 	otgCtrlName := ixia.Name + CTRL_POD_NAME_SUFFIX
-	log.Infof("IXIA DS %v CS %v", ixia.Spec.DesiredState, ixia.Status.State)
+	log.Infof("Desired State: %v, Current State: %v", ixia.Spec.DesiredState, ixia.Status.State)
 	if ixia.Spec.DesiredState == ixia.Status.State {
 		return ctrl.Result{}, nil
 	} else if ixia.Spec.DesiredState == STATE_INITED {
-		otgCtrl, err := r.deployController(ctx, nil, ixia, nil, true)
+		otgCtrl, err := r.deployController(ctx, nil, ixia, true)
 		if err == nil {
 			log.Infof("Controller version for OTG %v", otgCtrl)
 			// For OTG model check for multiple OTGs; otherwise for multiple Ixia nodes check for all versions match
@@ -409,11 +432,11 @@ func (r *IxiaTGReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	}
 
 	// Check if we need to create resources or not
-	secret, err := r.ReconcileSecret(ctx, req, ixia)
+	err = r.ReconcileSecrets(ctx, req, ixia)
 
 	requeue := false
 	found := &corev1.Pod{}
-	otgCtrl, err := r.deployController(ctx, nil, ixia, nil, true)
+	otgCtrl, err := r.deployController(ctx, nil, ixia, true)
 	if err == nil {
 		if !otgCtrl {
 			otgCtrlName = ixia.Name
@@ -431,11 +454,11 @@ func (r *IxiaTGReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 			}
 		}
 		log.Infof("Deployment interface map created: %v", podMap)
-		if _, err = r.deployController(ctx, &podMap, ixia, secret, false); err == nil {
+		if _, err = r.deployController(ctx, &podMap, ixia, false); err == nil {
 			log.Infof("Successfully deployed controller pod")
 			for name, intfs := range podMap {
 				log.Infof("Creating pod %v", name)
-				if err = r.podForIxia(ctx, name, intfs, ixia, secret); err != nil {
+				if err = r.podForIxia(ctx, name, intfs, ixia); err != nil {
 					log.Infof("Pod %v create failed!", name)
 					break
 				}
@@ -485,8 +508,11 @@ func (r *IxiaTGReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 			if err == nil {
 				for _, c := range contStatus {
 					if c.State.Waiting != nil && c.State.Waiting.Reason == "ErrImagePull" {
-						err = errors.New(fmt.Sprintf("Container %s failed - %s", c.Name, c.State.Waiting.Message))
-						break
+						msg := c.State.Waiting.Message
+						if strings.Contains(msg, "repository does not exist") || strings.Contains(msg, "access to the resource is denied") {
+							err = errors.New(fmt.Sprintf("Container %s failed - %s", c.Name, c.State.Waiting.Message))
+							break
+						}
 					}
 				}
 			}
@@ -516,7 +542,7 @@ func (r *IxiaTGReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	return ctrl.Result{}, err
 }
 
-func (r *IxiaTGReconciler) getRelInfo(ctx context.Context, release string, skipLocalConfigmap bool) error {
+func (r *IxiaTGReconciler) getRelInfo(ctx context.Context, release string, namespace string, skipLocalConfigmap bool) error {
 	var data []byte
 	var err error
 	source := DS_RESTAPI
@@ -581,10 +607,10 @@ func (r *IxiaTGReconciler) getRelInfo(ctx context.Context, release string, skipL
 		return nil
 	}
 
-	return r.loadRelInfo(release, &data, false, source)
+	return r.loadRelInfo(ctx, release, &data, false, source, namespace)
 }
 
-func (r *IxiaTGReconciler) loadRelInfo(release string, relData *[]byte, list bool, source string) error {
+func (r *IxiaTGReconciler) loadRelInfo(ctx context.Context, release string, relData *[]byte, list bool, source string, ns string) error {
 	var rel pubRel
 	var relList pubReleases
 	var err error
@@ -618,6 +644,8 @@ func (r *IxiaTGReconciler) loadRelInfo(release string, relData *[]byte, list boo
 			case IMAGE_CONTROLLER:
 				fallthrough
 			case IMAGE_GNMI_SERVER:
+				fallthrough
+			case IMAGE_LICENSE_SERVER:
 				fallthrough
 			case IMAGE_GRPC_SERVER:
 				topoEntry.Controller.Containers[contKeyName] = image
@@ -655,6 +683,10 @@ func (r *IxiaTGReconciler) loadRelInfo(release string, relData *[]byte, list boo
 				compRef.ContainerName = GRPC_NAME
 				compRef.DefCmd = []string{"python3", "-m", "grpc_server", "--app-mode", "athena", "--target-host", "localhost", "--target-port", strconv.Itoa(int(CTRL_HTTPS_PORT)), "--log-stdout", "--log-debug"}
 				compRef.Port = CTRL_GRPC_PORT
+			case IMAGE_LICENSE_SERVER:
+				compRef.ContainerName = LICENSE_NAME
+				compRef.DefArgs = []string{"--accept-eula", "--debug"}
+				compRef.Port = CTRL_LICENSE_PORT
 			case IMAGE_TRAFFIC_ENG:
 				compRef.ContainerName = IMAGE_TRAFFIC_ENG
 				compRef.DefEnv = map[string]string{
@@ -664,18 +696,21 @@ func (r *IxiaTGReconciler) loadRelInfo(release string, relData *[]byte, list boo
 				}
 			case IMAGE_PROTOCOL_ENG:
 				compRef.ContainerName = IMAGE_PROTOCOL_ENG
-				if compRef.LiveNessDelay == 0 {
-					compRef.LiveNessDelay = LIVENESS_DELAY
-				}
-				if compRef.LiveNessPeriod == 0 {
-					compRef.LiveNessPeriod = LIVENESS_PERIOD
-				}
-				if compRef.LiveNessFailure == 0 {
-					compRef.LiveNessFailure = LIVENESS_FAILURE
-				}
 			default:
 				compRef.ContainerName = compRef.Name
 			}
+
+			// For all components update health check parameters
+			if compRef.LiveNessDelay == 0 {
+				compRef.LiveNessDelay = LIVENESS_DELAY
+			}
+			if compRef.LiveNessPeriod == 0 {
+				compRef.LiveNessPeriod = LIVENESS_PERIOD
+			}
+			if compRef.LiveNessFailure == 0 {
+				compRef.LiveNessFailure = LIVENESS_FAILURE
+			}
+
 			if ctrlComponent {
 				topoEntry.Controller.Containers[contKeyName] = compRef
 			} else {
@@ -694,6 +729,22 @@ func (r *IxiaTGReconciler) loadRelInfo(release string, relData *[]byte, list boo
 				// Remove any gRPC component
 				delete(topoEntry.Controller.Containers, IMAGE_GRPC_SERVER)
 				ctrl.DefArgs = []string{"--accept-eula", "--debug", "--grpc-port", "40051"}
+			}
+		}
+
+		if ctx != nil {
+			// License server may not be part of configmap always, we always add a default entry if corresponding secret is found
+			delete(topoEntry.Controller.Containers, IMAGE_LICENSE_SECRET)
+			if secret, err := r.GetSecret(ctx, LIC_SERVER_SECRET, ns); err != nil {
+				return fmt.Errorf("Failed to determine secret %s - %v", LIC_SERVER_SECRET, err)
+			} else if secret != nil {
+				if licImage, ok := secret.Data["image"]; ok {
+					compRef := componentRel{Name: IMAGE_LICENSE_SERVER, Path: string(licImage)}
+					compRef.ContainerName = LICENSE_NAME
+					compRef.DefArgs = []string{"--accept-eula", "--debug"}
+					compRef.Port = CTRL_LICENSE_PORT
+					topoEntry.Controller.Containers[IMAGE_LICENSE_SECRET] = compRef
+				}
 			}
 		}
 
@@ -780,7 +831,7 @@ func (r *IxiaTGReconciler) deleteController(ctx context.Context, ixia *networkv1
 	return nil
 }
 
-func (r *IxiaTGReconciler) deployController(ctx context.Context, podMap *map[string][]string, ixia *networkv1beta1.IxiaTG, secret *corev1.Secret, checkOtgOnly bool) (bool, error) {
+func (r *IxiaTGReconciler) deployController(ctx context.Context, podMap *map[string][]string, ixia *networkv1beta1.IxiaTG, checkOtgOnly bool) (bool, error) {
 	var err error
 	isOtgCtrl := true
 	podList := &corev1.PodList{}
@@ -797,7 +848,7 @@ func (r *IxiaTGReconciler) deployController(ctx context.Context, podMap *map[str
 	}
 
 	if _, ok := componentDep[depVersion]; !ok || depVersion == DEFAULT_VERSION || componentDep[depVersion].Source == DS_CONFIGMAP {
-		if err = r.getRelInfo(ctx, depVersion, false); err != nil {
+		if err = r.getRelInfo(ctx, depVersion, ixia.Namespace, false); err != nil {
 			log.Errorf("Failed to get release information for %s", depVersion)
 			return isOtgCtrl, err
 		}
@@ -840,8 +891,8 @@ func (r *IxiaTGReconciler) deployController(ctx context.Context, podMap *map[str
 	}
 
 	// Deploy controller and services
-	imagePullSecrets := getImgPullSctSecret(secret)
-	containers, err := r.containersForController(ixia, depVersion, isOtgCtrl)
+	imagePullSecrets := []corev1.LocalObjectReference{{Name: string(SECRET_NAME)}}
+	containers, err := r.containersForController(ctx, ixia, depVersion, isOtgCtrl)
 	if err != nil {
 		return isOtgCtrl, err
 	}
@@ -929,7 +980,7 @@ func (r *IxiaTGReconciler) deployController(ctx context.Context, podMap *map[str
 	return isOtgCtrl, nil
 }
 
-func (r *IxiaTGReconciler) podForIxia(ctx context.Context, podName string, intfList []string, ixia *networkv1beta1.IxiaTG, secret *corev1.Secret) error {
+func (r *IxiaTGReconciler) podForIxia(ctx context.Context, podName string, intfList []string, ixia *networkv1beta1.IxiaTG) error {
 	initContainers := []corev1.Container{}
 	versionToDeploy := latestVersion
 	if ixia.Spec.Release != "" && ixia.Spec.Release != DEFAULT_VERSION {
@@ -975,7 +1026,7 @@ func (r *IxiaTGReconciler) podForIxia(ctx context.Context, podName string, intfL
 		initContainers = append(initContainers, defaultInitCont)
 	}
 	log.Info(initContainerMsg)
-	imagePullSecrets := getImgPullSctSecret(secret)
+	imagePullSecrets := []corev1.LocalObjectReference{{Name: string(SECRET_NAME)}}
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      podName,
@@ -1149,35 +1200,49 @@ func versionLaterOrEqual(baseVer string, chkVer string) (bool, error) {
 	return false, nil
 }
 
-func (r *IxiaTGReconciler) containersForController(ixia *networkv1beta1.IxiaTG, release string, otg bool) ([]corev1.Container, error) {
+func (r *IxiaTGReconciler) containersForController(ctx context.Context, ixia *networkv1beta1.IxiaTG, release string, otg bool) ([]corev1.Container, error) {
 	log.Infof("Get containers for Controller (release %s)", release)
 	var containers []corev1.Container
 	var newGNMI bool
 	var err error
+	var pbHdlr corev1.ProbeHandler
+	lic_found := false
+	lic_container := corev1.Container{}
+	var lic_server_image, lic_server_secret bool
 
-	ctrlContainers := 2
+	if _, ok := componentDep[release].Controller.Containers[IMAGE_CONTROLLER]; !ok {
+		return nil, fmt.Errorf("Failed to find controller entry in configmap for release %s", release)
+	}
+	if _, ok := componentDep[release].Controller.Containers[IMAGE_GNMI_SERVER]; !ok {
+		return nil, fmt.Errorf("Failed to find gNMI entry in configmap for release %s", release)
+	}
 	if ctrl, ok := componentDep[release].Controller.Containers[IMAGE_CONTROLLER]; ok {
 		noGRPC, err := versionLaterOrEqual(IXIA_C_GRPC_VERSION, ctrl.Tag)
 		if err != nil {
 			log.Error(err)
 		}
 		if !noGRPC {
-			ctrlContainers = 3
+			if _, ok := componentDep[release].Controller.Containers[IMAGE_GRPC_SERVER]; !ok {
+				return nil, fmt.Errorf("Failed to find gRPC entry in configmap for release %s", release)
+			}
 		}
 	}
-	if len(componentDep[release].Controller.Containers) < ctrlContainers {
-		errStr := "Failed to find required container entries; "
-		if ctrlContainers > 2 {
-			errStr = errStr + "expect Controller, gNMI and gRPC "
-		} else {
-			errStr = errStr + "expect Controller and gNMI "
-		}
-		errStr = errStr + fmt.Sprintf("entries to be present in configmap for release %s", release)
-		return nil, errors.New(errStr)
+	if _, ok := componentDep[release].Controller.Containers[IMAGE_LICENSE_SERVER]; ok {
+		lic_server_image = true
 	}
-	for _, comp := range componentDep[release].Controller.Containers {
+	if _, ok := componentDep[release].Controller.Containers[IMAGE_LICENSE_SECRET]; ok {
+		lic_server_secret = true
+	}
+	for key, comp := range componentDep[release].Controller.Containers {
+		if key == IMAGE_LICENSE_SERVER && lic_server_secret {
+			// Secrets based image takes precedence
+			continue
+		}
 		name := comp.ContainerName
-		image := comp.Path + ":" + comp.Tag
+		image := comp.Path
+		if comp.Tag != "" {
+			image += ":" + comp.Tag
+		}
 		log.Infof("Deploying %s version %s for config version %s, ns %s (source %s)",
 			name, comp.Tag, release, ixia.Namespace, componentDep[release].Source)
 		container := corev1.Container{
@@ -1195,17 +1260,102 @@ func (r *IxiaTGReconciler) containersForController(ixia *networkv1beta1.IxiaTG, 
 		}
 		newGNMI = false
 		err = nil
+		resRequest := corev1.ResourceList{}
+		if r, ok := comp.MinResource["cpu"]; ok {
+			resRequest["cpu"] = resource.MustParse(r)
+		}
+		if r, ok := comp.MinResource["memory"]; ok {
+			resRequest["memory"] = resource.MustParse(r)
+		}
 		if name == GNMI_NAME {
+			tcpSock := corev1.TCPSocketAction{Port: intstr.IntOrString{IntVal: CTRL_GNMI_PORT}}
+			pbHdlr = corev1.ProbeHandler{TCPSocket: &tcpSock}
 			newGNMI, err = versionLaterOrEqual(GNMI_NEW_BASE_VERSION, comp.Tag)
 			if err != nil {
 				log.Error(err)
 			}
+			if _, ok := resRequest["cpu"]; !ok {
+				resRequest["cpu"] = resource.MustParse(MIN_CPU_GNMI)
+			}
+			if _, ok := resRequest["memory"]; !ok {
+				resRequest["memory"] = resource.MustParse(MIN_MEM_GNMI)
+			}
+		} else if name == CONTROLLER_NAME {
+			tcpSock := corev1.TCPSocketAction{Port: intstr.IntOrString{IntVal: CTRL_GRPC_PORT}}
+			pbHdlr = corev1.ProbeHandler{TCPSocket: &tcpSock}
+			if _, ok := resRequest["cpu"]; !ok {
+				resRequest["cpu"] = resource.MustParse(MIN_CPU_CONTROLLER)
+			}
+			if _, ok := resRequest["memory"]; !ok {
+				resRequest["memory"] = resource.MustParse(MIN_MEM_CONTROLLER)
+			}
 		}
+		container.Resources.Requests = resRequest
+
+		if comp.LiveNessEnable == nil || *comp.LiveNessEnable {
+			probe := corev1.Probe{
+				ProbeHandler:                  pbHdlr,
+				InitialDelaySeconds:           comp.LiveNessDelay,
+				PeriodSeconds:                 comp.LiveNessPeriod,
+				FailureThreshold:              comp.LiveNessFailure,
+				TerminationGracePeriodSeconds: pointer.Int64(1),
+			}
+			container.LivenessProbe = &probe
+		}
+
 		updateControllerContainer(&container, comp, newGNMI)
-		log.Infof("Adding to pod: %s, container: %s, Image: %s, Args: %v, Cmd: %v, Env: %v, Port: %v, Vol: %v",
-			CONTROLLER_NAME, name, image, container.Args, container.Command, container.Env,
-			container.Ports, container.VolumeMounts)
-		containers = append(containers, container)
+		// License server related handling
+		if name == CONTROLLER_NAME {
+			// First check is corresponding secret is present
+			licAddr := ""
+			if secret, err := r.GetSecret(ctx, LIC_SERVER_SECRET, ixia.Namespace); err != nil {
+				return nil, fmt.Errorf("Failed to determine secret %s - %v", LIC_SERVER_SECRET, err)
+			} else if secret != nil {
+				if data, ok := secret.Data["addresses"]; ok {
+					licAddr = string(data)
+					lic_found = true
+				}
+			}
+			// Iterate through specified env variables and remove LIC_ENV_VAR, if secret present
+			envEntries := container.Env
+			var entry_found bool
+			for index, env := range envEntries {
+				if env.Name == LIC_ENV_VAR {
+					if lic_found {
+						envEntries[index].Value = licAddr
+					} else {
+						// License server ip through configmap
+						lic_found = true
+					}
+					entry_found = true
+					break
+				}
+			}
+			if !entry_found && lic_found {
+				envEntries = append(envEntries, corev1.EnvVar{Name: LIC_ENV_VAR, Value: licAddr})
+			} else if !lic_found && (lic_server_image || lic_server_secret) {
+				envEntries = append(envEntries, corev1.EnvVar{Name: LIC_ENV_VAR, Value: "localhost"})
+			}
+			container.Env = envEntries
+		}
+		if name == LICENSE_NAME {
+			// Delay license server container until we confirm no secrets are present
+			lic_container = container
+		} else {
+			log.Infof("Adding to pod: %s, container: %s, Image: %s, Args: %v, Cmd: %v, Port: %v, Vol: %v",
+				CONTROLLER_NAME, name, image, container.Args, container.Command,
+				container.Ports, container.VolumeMounts)
+			containers = append(containers, container)
+		}
+	}
+	if !lic_found {
+		// Add license server only if secret is present or image is configmap driven
+		if lic_server_image || lic_server_secret {
+			log.Infof("Adding to pod: %s, container: %s, Image: %s, Args: %v, Cmd: %v, Port: %v, Vol: %v",
+				CONTROLLER_NAME, LICENSE_NAME, lic_container.Image, lic_container.Args, lic_container.Command,
+				lic_container.Ports, lic_container.VolumeMounts)
+			containers = append(containers, lic_container)
+		}
 	}
 
 	log.Infof("Done containersForController total containers %v!", len(containers))
@@ -1227,6 +1377,7 @@ func (r *IxiaTGReconciler) containersForIxia(podName string, intfList []string, 
 		versionToDeploy = ixia.Spec.Release
 	}
 	for cName, comp := range componentDep[versionToDeploy].Ixia.Containers {
+		var tcpSock corev1.TCPSocketAction
 		if strings.HasPrefix(comp.Name, INIT_CONT_NAME_PREFIX) {
 			continue
 		}
@@ -1245,22 +1396,49 @@ func (r *IxiaTGReconciler) containersForIxia(podName string, intfList []string, 
 		for k, v := range comp.DefEnv {
 			compCopy.DefEnv[k] = v
 		}
+		resRequest := corev1.ResourceList{}
+		if r, ok := comp.MinResource["cpu"]; ok {
+			resRequest["cpu"] = resource.MustParse(r)
+		}
+		if r, ok := comp.MinResource["memory"]; ok {
+			resRequest["memory"] = resource.MustParse(r)
+		}
 		if cName == IMAGE_PROTOCOL_ENG {
 			compCopy.DefEnv["INTF_LIST"] = strings.Join(intfList, ",")
-			if compCopy.LiveNessEnable == nil || *compCopy.LiveNessEnable {
-				tcpSock := corev1.TCPSocketAction{Port: intstr.IntOrString{IntVal: 50071}}
-				pbHdlr := corev1.ProbeHandler{TCPSocket: &tcpSock}
-				probe := corev1.Probe{
-					ProbeHandler:                  pbHdlr,
-					InitialDelaySeconds:           compCopy.LiveNessDelay,
-					PeriodSeconds:                 compCopy.LiveNessPeriod,
-					FailureThreshold:              compCopy.LiveNessFailure,
-					TerminationGracePeriodSeconds: pointer.Int64(1),
+			tcpSock = corev1.TCPSocketAction{Port: intstr.IntOrString{IntVal: PROTOCOL_ENG_PORT}}
+			if _, ok := resRequest["cpu"]; !ok {
+				resRequest["cpu"] = resource.MustParse(MIN_CPU_PROTOCOL)
+			}
+			if _, ok := resRequest["memory"]; !ok {
+				min_mem := 350
+				if len(intfList) > 1 {
+					min_mem = 400 + (10 * len(intfList))
 				}
-				container.LivenessProbe = &probe
+				resRequest["memory"] = resource.MustParse(fmt.Sprintf("%vMi", min_mem))
 			}
 		} else {
 			compCopy.DefEnv["ARG_IFACE_LIST"] = argIntfList
+			tcpSock = corev1.TCPSocketAction{Port: intstr.IntOrString{IntVal: TRAFFIC_ENG_PORT}}
+			if _, ok := resRequest["cpu"]; !ok {
+				resRequest["cpu"] = resource.MustParse(MIN_CPU_TRAFFIC)
+			}
+			if _, ok := resRequest["memory"]; !ok {
+				min_mem := 50 + (10 * len(intfList))
+				resRequest["memory"] = resource.MustParse(fmt.Sprintf("%vMi", min_mem))
+			}
+		}
+		container.Resources.Requests = resRequest
+
+		if compCopy.LiveNessEnable == nil || *compCopy.LiveNessEnable {
+			pbHdlr := corev1.ProbeHandler{TCPSocket: &tcpSock}
+			probe := corev1.Probe{
+				ProbeHandler:                  pbHdlr,
+				InitialDelaySeconds:           compCopy.LiveNessDelay,
+				PeriodSeconds:                 compCopy.LiveNessPeriod,
+				FailureThreshold:              compCopy.LiveNessFailure,
+				TerminationGracePeriodSeconds: pointer.Int64(1),
+			}
+			container.LivenessProbe = &probe
 		}
 		updateControllerContainer(&container, compCopy, false)
 		log.Infof("Adding to pod: %s, container: %s, Image: %s, Args: %v, Cmd: %v, Env: %v",
@@ -1297,55 +1475,78 @@ func getDefaultSecurityContext() *corev1.SecurityContext {
 	return sc
 }
 
-func (r *IxiaTGReconciler) ReconcileSecret(ctx context.Context,
-	req ctrl.Request, ixia *networkv1beta1.IxiaTG) (*corev1.Secret, error) {
+func (r *IxiaTGReconciler) GetSecret(ctx context.Context, name string, namespace string) (*corev1.Secret, error) {
+	instance := &corev1.Secret{}
+	err := r.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, instance)
+	if err == nil {
+		return instance, nil
+	} else if errapi.IsNotFound(err) {
+		return nil, nil
+	}
+	return nil, err
+}
+
+func (r *IxiaTGReconciler) DeleteSecrets(ctx context.Context, namespace string) error {
+	secretList := []string{SECRET_NAME, LIC_SERVER_SECRET}
+	for _, name := range secretList {
+		instance := &corev1.Secret{}
+		if r.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, instance) == nil {
+			if err := r.Delete(ctx, instance); err != nil {
+				log.Errorf("Failed to delete secret %v - %v", instance, err)
+				return err
+			}
+			log.Infof("Deleted secret %v", instance)
+		}
+	}
+	return nil
+}
+
+func (r *IxiaTGReconciler) ReconcileSecrets(ctx context.Context,
+	req ctrl.Request, ixia *networkv1beta1.IxiaTG) error {
 	_ = r.Log.WithValues("ixiatg", req.NamespacedName)
+	secretList := []string{SECRET_NAME, LIC_SERVER_SECRET}
 	// Fetch the Secret instance
 	instance := &corev1.Secret{}
 
-	//err := r.Get(ctx, req.NamespacedName, instance)
-	currNamespace := new(types.NamespacedName)
-	currNamespace.Namespace = CURRENT_NAMESPACE
-	currNamespace.Name = SECRET_NAME
-	log.Infof("Getting Secret for namespace : %v", *currNamespace)
-	err := r.Get(ctx, *currNamespace, instance)
-	if err != nil {
-		if errapi.IsNotFound(err) {
-			// Request object not found, could have been deleted after reconcile request.
-			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
-			// Return and don't requeue
-			log.Infof("No Secret found in namespace : %v", *currNamespace)
-			return nil, nil
+	for _, secretName := range secretList {
+		currNamespace := new(types.NamespacedName)
+		currNamespace.Namespace = CURRENT_NAMESPACE
+		currNamespace.Name = secretName
+		log.Infof("Getting Secret for namespace : %v", *currNamespace)
+		err := r.Get(ctx, *currNamespace, instance)
+		if err != nil {
+			if errapi.IsNotFound(err) {
+				// Request object not found, could have been deleted after reconcile request.
+				// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
+				// Return and don't requeue
+				log.Infof("No Secret found in namespace : %v", *currNamespace)
+				continue
+			}
+			// Error reading the object - requeue the request.
+			return err
 		}
-		// Error reading the object - requeue the request.
-		return nil, err
-	}
 
-	if rep, ok := instance.Annotations["secretsync.ixiatg.com/replicate"]; ok {
-		if rep == "true" {
-			targetSecret, err := createSecret(instance, currNamespace.Name, ixia.Namespace)
+		targetSecret, err := createSecret(instance, currNamespace.Name, ixia.Namespace)
+		if err != nil {
+			return err
+		}
+		secret := &corev1.Secret{}
+		err = r.Get(ctx, types.NamespacedName{Name: targetSecret.Name, Namespace: targetSecret.Namespace}, secret)
+		if err != nil && errapi.IsNotFound(err) {
+			log.Info(fmt.Sprintf("Target secret %s doesn't exist, creating it in namespace %s", targetSecret.Name, targetSecret.Namespace))
+			err = r.Create(ctx, targetSecret)
 			if err != nil {
-				return nil, err
+				return err
 			}
-			secret := &corev1.Secret{}
-			err = r.Get(ctx, types.NamespacedName{Name: targetSecret.Name, Namespace: targetSecret.Namespace}, secret)
-			if err != nil && errapi.IsNotFound(err) {
-				log.Info(fmt.Sprintf("Target secret %s doesn't exist, creating it in namespace %s", targetSecret.Name, targetSecret.Namespace))
-				err = r.Create(ctx, targetSecret)
-				if err != nil {
-					return nil, err
-				}
-			} else {
-				log.Info(fmt.Sprintf("Target secret %s exists, updating it now in namespace %s", targetSecret.Name, targetSecret.Namespace))
-				err = r.Update(ctx, targetSecret)
-				if err != nil {
-					return nil, err
-				}
+		} else {
+			log.Info(fmt.Sprintf("Target secret %s exists, updating it now in namespace %s", targetSecret.Name, targetSecret.Namespace))
+			err = r.Update(ctx, targetSecret)
+			if err != nil {
+				return err
 			}
-			return targetSecret, err
 		}
 	}
-	return nil, nil
+	return nil
 }
 
 func createSecret(secret *corev1.Secret, name string, namespace string) (*corev1.Secret, error) {
@@ -1623,6 +1824,15 @@ func (r *IxiaTGReconciler) deployCtrlNode(ctx context.Context, release string, n
 	gnmiExposedPort := nat.PortSet{
 		nat.Port(gnmiStr): struct{}{},
 	}
+
+	// Override license server address if configured
+	if len(component.Env) == 0 {
+		component.Env = make(map[string]interface{})
+	}
+	if licenseAddress != "" {
+		component.Env[LIC_ENV_VAR] = licenseAddress
+	}
+
 	config := container.Config{Entrypoint: entryPoint, ExposedPorts: gnmiExposedPort}
 	httpOut := ctrlParam.HttpOut
 	if httpOut == 0 {
@@ -1774,7 +1984,25 @@ func (r *IxiaTGReconciler) ProcessConfigmap(req *http.Request) error {
 		log.Infof("Warning no data found in configmap")
 		return nil
 	}
-	return r.loadRelInfo(DEFAULT_VERSION, &data, false, DS_CONFIGMAP)
+	return r.loadRelInfo(nil, DEFAULT_VERSION, &data, false, DS_CONFIGMAP, "")
+}
+
+func (r *IxiaTGReconciler) ProcessLicenseServer(req *http.Request) error {
+	var dat map[string]string
+	jsonData, err := ioutil.ReadAll(req.Body)
+	if err != nil {
+		return err
+	}
+	err = json.Unmarshal(jsonData, &dat)
+	if err != nil {
+		return err
+	}
+	for k, v := range dat {
+		if k == LICENSE_ADDRESS {
+			licenseAddress = v
+		}
+	}
+	return nil
 }
 
 func (r *IxiaTGReconciler) ManageDockerContainers(req *http.Request, setup bool) (string, error) {
@@ -1825,7 +2053,7 @@ func (r *IxiaTGReconciler) ManageDockerContainers(req *http.Request, setup bool)
 			log.Infof("No ixiatg version specified, using default version %s", depVersion)
 		}
 		if _, ok := componentDep[depVersion]; !ok || depVersion == DEFAULT_VERSION || componentDep[depVersion].Source == DS_CONFIGMAP {
-			if err = r.getRelInfo(ctx, depVersion, true); err != nil {
+			if err = r.getRelInfo(ctx, depVersion, namespace, true); err != nil {
 				log.Errorf("Failed to get release information for %s", depVersion)
 				return "", err
 			}
@@ -1866,6 +2094,7 @@ func (r *IxiaTGReconciler) ManageDockerContainers(req *http.Request, setup bool)
 		}
 		contNameMap[baseName+"ixia-c"] = true
 		contNameMap[baseName+"gnmi"] = true
+		contNameMap[baseName+"license-server"] = true
 		err = r.deleteTopoContainers(ctx, contNameMap)
 		if err != nil {
 			return "", errors.New(fmt.Sprintf("Error in topo delete %v\n", err))

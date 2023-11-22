@@ -36,8 +36,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	networkv1beta1 "github.com/open-traffic-generator/ixia-c-operator/api/v1beta1"
-	"github.com/open-traffic-generator/ixia-c-operator/controllers"
+	networkv1beta1 "github.com/open-traffic-generator/keng-operator/api/v1beta1"
+	"github.com/open-traffic-generator/keng-operator/controllers"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -61,6 +61,16 @@ func HandleConfig(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	fmt.Fprintf(w, "Successfully processed configmap\n")
+}
+
+func HandleLicense(w http.ResponseWriter, req *http.Request) {
+	ctrl := controllers.IxiaTGReconciler{}
+	err := ctrl.ProcessLicenseServer(req)
+	if err != nil {
+		fmt.Fprintf(w, "Error: %v\n", err)
+		return
+	}
+	fmt.Fprintf(w, "Successfully processed license\n")
 }
 
 func HandleCreate(w http.ResponseWriter, req *http.Request) {
@@ -102,6 +112,7 @@ func main() {
 
 	if _, err := os.Stat("/var/run/docker.sock"); err == nil {
 		http.HandleFunc("/config", HandleConfig)
+		http.HandleFunc("/license", HandleLicense)
 		http.HandleFunc("/create", HandleCreate)
 		http.HandleFunc("/delete", HandleDelete)
 		log.Fatal(http.ListenAndServe(serverAddr, nil))
