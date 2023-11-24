@@ -67,7 +67,7 @@ spec:
     gnmi:
       in: 50051
     http:
-      in: 443
+      in: 8443
   desired_state: DEPLOYED
   interfaces:
   - name: eth1
