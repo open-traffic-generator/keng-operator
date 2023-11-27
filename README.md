@@ -131,7 +131,7 @@ Please make sure that the setup meets [Deployment Prerequisites](#deployment-pre
   kubectl apply -f ixiatg-operator.yaml
   ```
 
-- **For apply seat based license**
+- **Enable licensing (optional)**
   
   ```sh
   kubectl create secret -n ixiatg-op-system generic license-server --from-literal=addresses="<space separated IP addresses>"
