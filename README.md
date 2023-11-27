@@ -36,12 +36,11 @@ The various KENG component versions to be deployed is derived from the KENG rele
       {
 ```
 
-The operator deploys one single Controller pod with Ixia-c, gNMI and optionally license-server containers for user control, management and statistics reporting of KENG specific network devices. It also deploys KENG network device nodes for control and data plane. The deployed KENG resource release versions are anchored and dictated by the KENG release as defined in the KNE config file.
+The operator deploys one single Controller pod with Ixia-c and gNMI containers for user control, management and statistics reporting of KENG specific network devices. It also deploys KENG network device nodes for control and data plane. The deployed KENG resource release versions are anchored and dictated by the KENG release as defined in the KNE config file.
 
-The KENG operator is available with three modes of licensing based deployment.
+The KENG Controller can be deployed with or without licensing installed (default).
 - Community: Default deployment with no licensing; functionality is restricted to a subset of features
-- Seat: License enforcement based on number of concurrent test runs, uses a VM-based license server
-- Site: License enforcement based on an enterprise agreement, uses a container-based license server 
+- NEM: License enforcement based on number of concurrent test runs, uses a VM-based licensing
 
 <kbd> <img src="KENG_Operator.jpg"> </kbd><br/><br/>
 
@@ -104,7 +103,6 @@ Note: The operator sets the minimum cpu and memory requirement to the default va
 The following KENG release components are deployed by the operator.
 - keng-controller
 - otg-gnmi-server
-- keng-license-server (optional)
 - ixia-c-protocol-engine
 - ixia-c-traffic-engine
 
@@ -133,7 +131,7 @@ Please make sure that the setup meets [Deployment Prerequisites](#deployment-pre
   kubectl apply -f ixiatg-operator.yaml
   ```
 
-- **For apply seat based license (for NEMs)**
+- **For apply seat based license**
   
   ```sh
   kubectl create secret -n ixiatg-op-system generic license-server --from-literal=addresses="<space separated IP addresses>"
@@ -157,35 +155,6 @@ Please make sure that the setup meets [Deployment Prerequisites](#deployment-pre
              "env": {
                 "LICENSE_SERVERS": "<space separated IP addresses>"
              }
-         },
-         {
-  ```
-
-  ```sh
-  kubectl apply -f ixiatg-configmap.yaml
-  ```
-
-- **For apply site based license (for enterprise customers)**
-  
-  ```sh
-  kubectl create secret -n ixiatg-op-system generic license-server --from-literal=image="<license container image>"
-  ```
-
-  Note for operator upgrades the previous secret, if any, is required to be deleted
-
-  ```sh
-  kubectl delete secret/license-server -n ixiatg-op-system
-  ```
-
-  The license can also be added by updating the ixiatg-configmap.yaml with an additional entry for license server container and applying the configmap.
-
-  ```sh
-     "release": "v0.1",
-     "images": [
-         {
-             "name": "license-server",
-             "path": "ghcr.io/open-traffic-generator/licensed/keng-license-server",
-             "tag": "0.0.1-32"
          },
          {
   ```
