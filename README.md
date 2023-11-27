@@ -175,11 +175,11 @@ The following steps outline a simple topology deployment in hybrid mode and run 
 1. Pull the required docker images
 
     ```Shell
-    docker pull ghcr.io/open-traffic-generator/licensed/ixia-c-controller:0.0.1-3662
-    docker pull ghcr.io/open-traffic-generator/ixia-c-gnmi-server:1.9.9
+    docker pull ghcr.io/open-traffic-generator/licensed/keng-controller:0.0.1-3662
+    docker pull ghcr.io/open-traffic-generator/otg-gnmi-server:1.9.9
     docker pull ghcr.io/open-traffic-generator/ixia-c-traffic-engine:1.6.0.19
     docker pull ghcr.io/open-traffic-generator/licensed/ixia-c-protocol-engine:1.00.0.243
-    docker pull ghcr.io/open-traffic-generator/ixia-c-operator:0.3.3
+    docker pull ghcr.io/open-traffic-generator/keng-operator:0.3.3
     ```
     
     
@@ -312,7 +312,7 @@ The following steps outline a simple topology deployment in hybrid mode and run 
 8. Run FeatureProfile test:
 
     ```Shell
-    go test -v feature/bgp/policybase/otg_tests/route_installation_test/route_installation_test.go -testbed /home/athena/featureprofiles/topologies/atedut_2.testbed -binding /home/athena/featureprofiles/topologies/otgdut_2.binding  --deviation_interface_enabled --deviation_default_network_instance=default
+    go test -v feature/bgp/policybase/otg_tests/route_installation_test/route_installation_test.go -testbed "${PWD}/topologies/atedut_2.testbed" -binding "${PWD}/topologies/otgdut_2.binding"  --deviation_interface_enabled --deviation_default_network_instance=default
     ```
 
 
