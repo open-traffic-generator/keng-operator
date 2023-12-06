@@ -17,6 +17,8 @@ limitations under the License.
 package controllers
 
 import (
+	"archive/tar"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -26,6 +28,13 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	dockertypes "github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
+	dockerclient "github.com/docker/docker/client"
+	"github.com/docker/go-connections/nat"
+	"github.com/phayes/freeport"
+	"github.com/vishvananda/netlink"
 
 	"github.com/go-logr/logr"
 	"k8s.io/utils/pointer"
@@ -87,6 +96,8 @@ const (
 	CTRL_MAP_VOL_NAME   string = "config"
 	CTRL_MAP_FILE_NAME  string = "config.yaml"
 	CTRL_MAP_MOUNT_PATH string = "/home/ixia-c/controller/config"
+	CTRL_USER_NAME      string = "ixia-c"
+	CTRL_USER_GROUP     string = "root"
 
 	SERVICE_NAME_SUFFIX string = ".svc.cluster.local"
 
@@ -109,6 +120,8 @@ const (
 	IMAGE_TRAFFIC_ENG    string = "traffic-engine"
 	IMAGE_PROTOCOL_ENG   string = "protocol-engine"
 
+	LICENSE_ADDRESS string = "license-address"
+
 	TERMINATION_TIMEOUT_SEC int64 = 5
 
 	HTTP_TIMEOUT_SEC time.Duration = 5
@@ -130,8 +143,9 @@ const (
 )
 
 var (
-	componentDep  map[string]topoDep = make(map[string]topoDep)
-	latestVersion string             = ""
+	componentDep   map[string]topoDep = make(map[string]topoDep)
+	latestVersion  string             = ""
+	licenseAddress string             = ""
 )
 
 // IxiaTGReconciler reconciles a IxiaTG object
@@ -198,6 +212,39 @@ type controllerMap struct {
 type location struct {
 	Location string `yaml:"location"`
 	EndPoint string `yaml:"endpoint"`
+}
+
+// cpdpIntf denotes each interface in CP-DP docker containers for non-K8s
+type cpdpIntf struct {
+	Name     string
+	Peer     string
+	PeerIntf string
+	Create   bool
+	Index    int
+}
+
+// cpdpNode denotes each CP-DP node to be docker deployed for non-K8s
+type cpdpNode struct {
+	CpName     string
+	DpName     string
+	MgmtIP     string
+	Interfaces []cpdpIntf
+}
+
+// ctrlContData denotes controller node parameters to be docker deployed for non-K8s
+type ctrlContData struct {
+	Name      string
+	Namespace string
+	HttpOut   int32
+	GrpcOut   int32
+	GnmiOut   int32
+}
+
+// dockerContInfo denotes docker container related data that is successfully deployed for non-K8s
+type dockerContInfo struct {
+	Id     string
+	Pid    int
+	MgmtIP string
 }
 
 //+kubebuilder:rbac:groups=network.keysight.com,resources=ixiatgs,verbs=get;list;watch;create;update;patch;delete
@@ -495,7 +542,7 @@ func (r *IxiaTGReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	return ctrl.Result{}, err
 }
 
-func (r *IxiaTGReconciler) getRelInfo(ctx context.Context, release string, namespace string) error {
+func (r *IxiaTGReconciler) getRelInfo(ctx context.Context, release string, namespace string, isHybrid bool) error {
 	var data []byte
 	var err error
 	source := DS_RESTAPI
@@ -533,7 +580,7 @@ func (r *IxiaTGReconciler) getRelInfo(ctx context.Context, release string, names
 		log.Errorf("Failed to download release config file - %v", err)
 	}
 
-	if err != nil || len(data) == 0 {
+	if (err != nil || len(data) == 0) && !isHybrid {
 		if release == DEFAULT_VERSION {
 			log.Infof("Could not retrieve latest release information")
 		}
@@ -560,10 +607,10 @@ func (r *IxiaTGReconciler) getRelInfo(ctx context.Context, release string, names
 		return nil
 	}
 
-	return r.loadRelInfo(ctx, release, &data, false, source, namespace)
+	return r.loadRelInfo(ctx, release, &data, false, source, namespace, isHybrid)
 }
 
-func (r *IxiaTGReconciler) loadRelInfo(ctx context.Context, release string, relData *[]byte, list bool, source string, ns string) error {
+func (r *IxiaTGReconciler) loadRelInfo(ctx context.Context, release string, relData *[]byte, list bool, source string, ns string, isHybrid bool) error {
 	var rel pubRel
 	var relList pubReleases
 	var err error
@@ -645,7 +692,6 @@ func (r *IxiaTGReconciler) loadRelInfo(ctx context.Context, release string, relD
 				compRef.DefEnv = map[string]string{
 					"OPT_LISTEN_PORT":  strconv.Itoa(int(TRAFFIC_ENG_PORT)),
 					"ARG_CORE_LIST":    "2 3 4",
-					"ARG_IFACE_LIST":   "virtual@af_packet,eth1",
 					"OPT_NO_HUGEPAGES": "Yes",
 				}
 			case IMAGE_PROTOCOL_ENG:
@@ -686,17 +732,19 @@ func (r *IxiaTGReconciler) loadRelInfo(ctx context.Context, release string, relD
 			}
 		}
 
-		// License server may not be part of configmap always, we always add a default entry if corresponding secret is found
-		delete(topoEntry.Controller.Containers, IMAGE_LICENSE_SECRET)
-		if secret, err := r.GetSecret(ctx, LIC_SERVER_SECRET, ns); err != nil {
-			return fmt.Errorf("Failed to determine secret %s - %v", LIC_SERVER_SECRET, err)
-		} else if secret != nil {
-			if licImage, ok := secret.Data["image"]; ok {
-				compRef := componentRel{Name: IMAGE_LICENSE_SERVER, Path: string(licImage)}
-				compRef.ContainerName = LICENSE_NAME
-				compRef.DefArgs = []string{"--accept-eula", "--debug"}
-				compRef.Port = CTRL_LICENSE_PORT
-				topoEntry.Controller.Containers[IMAGE_LICENSE_SECRET] = compRef
+		if !isHybrid {
+			// License server may not be part of configmap always, we always add a default entry if corresponding secret is found
+			delete(topoEntry.Controller.Containers, IMAGE_LICENSE_SECRET)
+			if secret, err := r.GetSecret(ctx, LIC_SERVER_SECRET, ns); err != nil {
+				return fmt.Errorf("Failed to determine secret %s - %v", LIC_SERVER_SECRET, err)
+			} else if secret != nil {
+				if licImage, ok := secret.Data["image"]; ok {
+					compRef := componentRel{Name: IMAGE_LICENSE_SERVER, Path: string(licImage)}
+					compRef.ContainerName = LICENSE_NAME
+					compRef.DefArgs = []string{"--accept-eula", "--debug"}
+					compRef.Port = CTRL_LICENSE_PORT
+					topoEntry.Controller.Containers[IMAGE_LICENSE_SECRET] = compRef
+				}
 			}
 		}
 
@@ -800,7 +848,7 @@ func (r *IxiaTGReconciler) deployController(ctx context.Context, podMap *map[str
 	}
 
 	if _, ok := componentDep[depVersion]; !ok || depVersion == DEFAULT_VERSION || componentDep[depVersion].Source == DS_CONFIGMAP {
-		if err = r.getRelInfo(ctx, depVersion, ixia.Namespace); err != nil {
+		if err = r.getRelInfo(ctx, depVersion, ixia.Namespace, false); err != nil {
 			log.Errorf("Failed to get release information for %s", depVersion)
 			return isOtgCtrl, err
 		}
@@ -1523,4 +1571,535 @@ func createSecret(secret *corev1.Secret, name string, namespace string) (*corev1
 		Data: secret.Data,
 		Type: secret.Type,
 	}, nil
+}
+
+func getImgPullSctSecret(secret *corev1.Secret) []corev1.LocalObjectReference {
+	var ips []corev1.LocalObjectReference
+	ips = append(ips, corev1.LocalObjectReference{Name: string(SECRET_NAME)})
+	return ips
+}
+
+func execOnTargetContainer(ctx context.Context, cli *dockerclient.Client, cmdList []string, containerId string) error {
+	execInspect := dockertypes.ContainerExecInspect{Running: true}
+
+	for _, cmd := range cmdList {
+		log.Infof("Exec cmd on container (id %s): %s", containerId, cmd)
+		execCfg := dockertypes.ExecConfig{
+			AttachStdout: true,
+			AttachStderr: true,
+			Cmd:          strings.Fields(cmd),
+		}
+
+		response, err := cli.ContainerExecCreate(ctx, containerId, execCfg)
+		if err != nil {
+			return err
+		}
+
+		if err := cli.ContainerExecStart(ctx, response.ID, dockertypes.ExecStartCheck{}); err != nil {
+			return err
+		}
+
+		for execInspect.Running {
+			// TODO revisit
+			time.Sleep(10 * time.Millisecond)
+			if execInspect, err = cli.ContainerExecInspect(ctx, response.ID); err != nil {
+				return err
+			}
+		}
+
+		if execInspect.ExitCode != 0 {
+			return errors.New(fmt.Sprintf("Cmd exec failed on container: id %s, cmd %s", containerId, cmd))
+		}
+
+		log.Infof("Cmd exec succesful (id %s), cmd: %s", containerId, cmd)
+	}
+
+	return nil
+}
+
+func deployDockerContainer(ctx context.Context, cli *dockerclient.Client, cfg *container.Config, hostCfg *container.HostConfig, comp componentRel, name string) (dockerContInfo, error) {
+	response := dockerContInfo{}
+	log.Infof("Start deploy container %s", name)
+	// Add component image
+	(*cfg).Image = comp.Path + ":" + comp.Tag
+	// Update component env var
+	cfgMapEnv := make(map[string]string)
+	for ek, ev := range comp.DefEnv {
+		cfgMapEnv[ek] = ev
+	}
+	for ek, ev := range comp.Env {
+		cfgMapEnv[ek] = ev.(string)
+	}
+	env := (*cfg).Env
+	for key, value := range cfgMapEnv {
+		env = append(env, fmt.Sprintf("%v=%v", key, value))
+	}
+	(*cfg).Env = env
+	// Update component command
+	command := comp.DefCmd
+	if len(comp.Command) > 0 {
+		command = comp.Command
+	}
+	if len(command) > 0 {
+		(*cfg).Cmd = command
+	}
+	// Update component args
+	args := comp.DefArgs
+	if len(comp.Args) > 0 {
+		args = comp.Args
+	}
+	if len(args) > 0 {
+		(*cfg).Entrypoint = append((*cfg).Entrypoint, args...)
+	}
+
+	resp, err := cli.ContainerCreate(ctx, cfg, hostCfg, nil, nil, name)
+	if err != nil {
+		return response, err
+	}
+
+	response.Id = resp.ID
+	if err = cli.ContainerStart(ctx, resp.ID, dockertypes.ContainerStartOptions{}); err != nil {
+		return response, err
+	}
+
+	containerData, err := cli.ContainerInspect(ctx, resp.ID)
+	if err != nil {
+		return response, err
+	}
+
+	response.Pid = containerData.ContainerJSONBase.State.Pid
+	response.MgmtIP = containerData.NetworkSettings.DefaultNetworkSettings.IPAddress
+	log.Infof("Successfully deployed docker container %s (id %s), PID %d IP %s", name, resp.ID, response.Pid, response.MgmtIP)
+
+	return response, nil
+}
+
+func (r *IxiaTGReconciler) deployCpDpNode(ctx context.Context, release string, node *cpdpNode) error {
+	// CP docker container deploy
+	cli, err := dockerclient.NewEnvClient()
+	if err != nil {
+		return err
+	}
+
+	var cpIntfList, dpIntfList []string
+	component, ok := componentDep[release].Ixia.Containers[IMAGE_PROTOCOL_ENG]
+	if !ok {
+		return fmt.Errorf("Failed to find protocol engine image for release %s", release)
+	}
+
+	for index, intf := range node.Interfaces {
+		cpIntfList = append(cpIntfList, intf.Name)
+		dpIntfList = append(dpIntfList, fmt.Sprintf("virtual@af_packet,%s", intf.Name))
+		(*node).Interfaces[index].Index = index + 1
+	}
+
+	envIntf := "INTF_LIST=" + strings.Join(cpIntfList, ",")
+	config := container.Config{Env: []string{envIntf}}
+	hostConfig := container.HostConfig{Privileged: true}
+
+	var response dockerContInfo
+	if response, err = deployDockerContainer(ctx, cli, &config, &hostConfig, component, node.CpName); err != nil {
+		return err
+	}
+	(*node).MgmtIP = response.MgmtIP
+
+	// Make macvtap and push into CP netns
+	for _, intf := range node.Interfaces {
+		if intf.PeerIntf == "" {
+			continue
+		}
+		if intf.Peer != "localhost" {
+			return errors.New("Peer should be localhost")
+		}
+		var link netlink.Link
+		parentLink, err := netlink.LinkByName(intf.PeerIntf)
+		if err != nil {
+			return err
+		}
+		if err = netlink.SetPromiscOn(parentLink); err != nil {
+			return err
+		}
+		if intf.Create {
+			macvtapName := "macvtap" + intf.Name
+			macvlan := netlink.Macvlan{LinkAttrs: netlink.LinkAttrs{Name: macvtapName, ParentIndex: parentLink.Attrs().Index}, Mode: netlink.MACVLAN_MODE_PASSTHRU}
+			link = &netlink.Macvtap{Macvlan: macvlan}
+			if err = netlink.LinkAdd(link); err != nil {
+				return err
+			}
+			log.Infof("Created macvtap network interface %s on %s", link.Attrs().Name, intf.Name)
+		} else {
+			link = parentLink
+		}
+
+		if err = netlink.LinkSetNsPid(link, response.Pid); err != nil {
+			return err
+		}
+		log.Infof("%s interface pushed into container (id %s) network namespace", link.Attrs().Name, response.Id)
+
+		cmdExecOnCont := fmt.Sprintf("ip link set %s name %s", link.Attrs().Name, intf.Name)
+		cmdIntfUp := fmt.Sprintf("ifconfig %s up", intf.Name)
+		err = execOnTargetContainer(ctx, cli, []string{cmdExecOnCont, cmdIntfUp}, response.Id)
+		if err != nil {
+			if intf.Create {
+				netlink.LinkDel(link)
+			}
+			return err
+		}
+	}
+
+	// DP docker container deploy
+	component, ok = componentDep[release].Ixia.Containers[IMAGE_TRAFFIC_ENG]
+	if !ok {
+		return fmt.Errorf("Failed to find traffic engine image for release %s", release)
+	}
+
+	argIntfList := "ARG_IFACE_LIST=" + strings.Join(dpIntfList, " ")
+	envArgs := []string{argIntfList}
+	config = container.Config{Env: envArgs}
+	networkMode := container.NetworkMode(fmt.Sprintf("container:%s", response.Id))
+	hostConfig = container.HostConfig{NetworkMode: networkMode, Privileged: true}
+
+	_, err = deployDockerContainer(ctx, cli, &config, &hostConfig, component, node.DpName)
+
+	return err
+}
+
+func (r *IxiaTGReconciler) deleteTopoContainers(ctx context.Context, contMap map[string]bool) error {
+	// CP docker container delete
+	var ret error
+	cli, err := dockerclient.NewEnvClient()
+	if err != nil {
+		return err
+	}
+
+	containers, err := cli.ContainerList(ctx, dockertypes.ContainerListOptions{All: true})
+	if err != nil {
+		return err
+	}
+
+	for _, cont := range containers {
+		if len(cont.Names) > 0 {
+			name := cont.Names[0]
+			if name[0:1] == "/" {
+				name = name[1:]
+			}
+			if _, ok := contMap[name]; ok {
+				log.Infof("Deleting container: %s", name)
+				d := time.Second * 3
+				if err = cli.ContainerStop(ctx, cont.ID, &d); err != nil {
+					ret = errors.New(fmt.Sprintf("Failed to stop container: %s", name))
+					log.Errorf("%v", ret)
+					continue
+				}
+
+				if err = cli.ContainerRemove(ctx, cont.ID, dockertypes.ContainerRemoveOptions{}); err != nil {
+					ret = errors.New(fmt.Sprintf("Failed to remove container: %s", name))
+					log.Errorf("%v", ret)
+					continue
+				}
+				contMap[name] = false
+			}
+		}
+	}
+
+	return ret
+}
+
+func (r *IxiaTGReconciler) deployCtrlNode(ctx context.Context, release string, nList []cpdpNode, ctrlParam ctrlContData) (string, error) {
+	// Controller docker container deploy
+	httpStr := fmt.Sprintf("%v/tcp", CTRL_HTTPS_PORT)
+	grpcStr := fmt.Sprintf("%v/tcp", CTRL_GRPC_PORT)
+	gnmiStr := fmt.Sprintf("%v/tcp", CTRL_GNMI_PORT)
+	cli, err := dockerclient.NewEnvClient()
+	if err != nil {
+		return "", err
+	}
+
+	component, ok := componentDep[release].Controller.Containers[IMAGE_CONTROLLER]
+	if !ok {
+		return "", fmt.Errorf("Failed to find Controller image for release %s", release)
+	}
+
+	entryPoint := []string{"./bin/controller"}
+	gnmiExposedPort := nat.PortSet{
+		nat.Port(gnmiStr): struct{}{},
+	}
+
+	// Override license server address if configured
+	if len(component.Env) == 0 {
+		component.Env = make(map[string]interface{})
+	}
+	if licenseAddress != "" {
+		component.Env[LIC_ENV_VAR] = licenseAddress
+	}
+
+	config := container.Config{Entrypoint: entryPoint, ExposedPorts: gnmiExposedPort}
+	httpOut := ctrlParam.HttpOut
+	if httpOut == 0 {
+		httpOut = 31000 // default
+		if port, err := freeport.GetFreePort(); err == nil {
+			httpOut = int32(port)
+		}
+	}
+	grpcOut := ctrlParam.GrpcOut
+	if grpcOut == 0 {
+		grpcOut = 31001 // default
+		if port, err := freeport.GetFreePort(); err == nil {
+			grpcOut = int32(port)
+		}
+	}
+	gnmiOut := ctrlParam.GnmiOut
+	if gnmiOut == 0 {
+		gnmiOut = 31002 // default
+		if port, err := freeport.GetFreePort(); err == nil {
+			gnmiOut = int32(port)
+		}
+	}
+
+	bindingMap := make(map[nat.Port][]nat.PortBinding)
+	if httpOut != -1 {
+		bindingMap[nat.Port(httpStr)] = []nat.PortBinding{{
+			HostIP:   "0.0.0.0",
+			HostPort: fmt.Sprintf("%v", httpOut),
+		}}
+	}
+	if grpcOut != -1 {
+		bindingMap[nat.Port(grpcStr)] = []nat.PortBinding{{
+			HostIP:   "0.0.0.0",
+			HostPort: fmt.Sprintf("%v", grpcOut),
+		}}
+	}
+	if gnmiOut != -1 {
+		bindingMap[nat.Port(gnmiStr)] = []nat.PortBinding{{
+			HostIP:   "0.0.0.0",
+			HostPort: fmt.Sprintf("%v", gnmiOut),
+		}}
+	}
+
+	hostConfig := container.HostConfig{PortBindings: nat.PortMap(bindingMap)}
+	baseName := ctrlParam.Namespace + "_" + ctrlParam.Name + "-controller_"
+	containerName := baseName + "ixia-c"
+
+	response, err := deployDockerContainer(ctx, cli, &config, &hostConfig, component, containerName)
+	if err != nil {
+		return "", err
+	}
+
+	mgmtIp := response.MgmtIP
+	locations := []location{}
+	pePort := ":" + strconv.Itoa(int(PROTOCOL_ENG_PORT))
+	tePort := ":" + strconv.Itoa(int(TRAFFIC_ENG_PORT))
+
+	for _, node := range nList {
+		for _, intf := range node.Interfaces {
+			loc := fmt.Sprintf("%s%s+%s%s", node.MgmtIP, tePort, node.MgmtIP, pePort)
+			if len(node.Interfaces) > 1 {
+				loc = fmt.Sprintf("%s%s;%d+%s%s", node.MgmtIP, tePort, intf.Index, node.MgmtIP, pePort)
+			}
+			locations = append(locations, location{Location: intf.Name, EndPoint: loc})
+		}
+	}
+
+	mappings := controllerMap{LocationMap: locations}
+	log.Infof("Prepared the location map object: %v", mappings)
+	yamlObj, err := yaml.Marshal(&mappings)
+	if err != nil {
+		return "", err
+	}
+
+	lastIndex := strings.LastIndex(CTRL_MAP_MOUNT_PATH, "/") + 1
+	baseDir := CTRL_MAP_MOUNT_PATH[:lastIndex]
+	buf := new(bytes.Buffer)
+	tw := tar.NewWriter(buf)
+	name, content := fmt.Sprintf("%s/%s", CTRL_MAP_MOUNT_PATH[lastIndex:], CTRL_MAP_FILE_NAME), string(yamlObj)
+	hdr := &tar.Header{
+		Name:  name,
+		Size:  int64(len(content)),
+		Mode:  0755,
+		Uname: CTRL_USER_NAME,
+		Gname: CTRL_USER_GROUP,
+	}
+	if err = tw.WriteHeader(hdr); err != nil {
+		return "", err
+	}
+	if _, err = tw.Write([]byte(content)); err != nil {
+		return "", err
+	}
+	if err = tw.Close(); err != nil {
+		return "", err
+	}
+
+	err = cli.CopyToContainer(ctx, response.Id, baseDir, buf, dockertypes.CopyToContainerOptions{})
+	if err != nil {
+		return "", err
+	}
+	log.Infof("Successfully copied location map in controller container: %v", mappings)
+
+	// gNMI docker container deploy
+	component, ok = componentDep[release].Controller.Containers[IMAGE_GNMI_SERVER]
+	if !ok {
+		return "", fmt.Errorf("Failed to find gNMI server image for release %s", release)
+	}
+
+	// Override default args and cmd for newer gnmi
+	component.DefArgs = []string{"-http-server", "https://localhost:8443", "--debug"}
+	component.DefCmd = []string{}
+
+	entryPoint = []string{"bin/gnmid"}
+	config = container.Config{Entrypoint: entryPoint}
+	networkMode := container.NetworkMode(fmt.Sprintf("container:%s", response.Id))
+	hostConfig = container.HostConfig{NetworkMode: networkMode}
+	containerName = baseName + "gnmi"
+
+	_, err = deployDockerContainer(ctx, cli, &config, &hostConfig, component, containerName)
+	out := ""
+	if httpOut != -1 {
+		out += fmt.Sprintf("HTTPS: %s:%d (0.0.0.0:%d)\n", mgmtIp, CTRL_HTTPS_PORT, httpOut)
+	}
+	if gnmiOut != -1 {
+		out += fmt.Sprintf("GNMI:  %s:%d (0.0.0.0:%d)\n", mgmtIp, CTRL_GNMI_PORT, gnmiOut)
+	}
+	if grpcOut != -1 {
+		out += fmt.Sprintf("GRPC:  %s:%d (0.0.0.0:%d)\n", mgmtIp, CTRL_GRPC_PORT, grpcOut)
+	}
+
+	return out, err
+}
+
+func (r *IxiaTGReconciler) ProcessConfigmap(req *http.Request) error {
+	var data []byte
+	yamlData, err := ioutil.ReadAll(req.Body)
+	if err == nil {
+		var yamlCfg ixiaConfigMap
+		err = yaml.Unmarshal([]byte(yamlData), &yamlCfg)
+		if err == nil {
+			data = []byte(yamlCfg.Data.Versions)
+		}
+	}
+	if err != nil {
+		log.Errorf("Failed to parse config file - %v", err)
+		return err
+	}
+	if len(data) == 0 {
+		log.Infof("Warning no data found in configmap")
+		return nil
+	}
+	return r.loadRelInfo(nil, DEFAULT_VERSION, &data, false, DS_CONFIGMAP, "", true)
+}
+
+func (r *IxiaTGReconciler) ProcessLicenseServer(req *http.Request) error {
+	var dat map[string]string
+	jsonData, err := ioutil.ReadAll(req.Body)
+	if err != nil {
+		return err
+	}
+	err = json.Unmarshal(jsonData, &dat)
+	if err != nil {
+		return err
+	}
+	for k, v := range dat {
+		if k == LICENSE_ADDRESS {
+			licenseAddress = v
+		}
+	}
+	return nil
+}
+
+func (r *IxiaTGReconciler) ManageDockerContainers(req *http.Request, setup bool) (string, error) {
+	var jsonSpec networkv1beta1.IxiaTG
+	ctx := context.Background()
+	jsonData, err := ioutil.ReadAll(req.Body)
+	if err != nil {
+		return "", errors.New(fmt.Sprintf("Error in topology file read %v\n", err))
+	}
+	err = json.Unmarshal(jsonData, &jsonSpec)
+	if err != nil {
+		return "", errors.New(fmt.Sprintf("Error in topology file unmarshall %v\n", err))
+	}
+
+	nodeList := []cpdpNode{}
+	name := jsonSpec.ObjectMeta.Name
+	namespace := jsonSpec.ObjectMeta.Namespace
+	groupMap := make(map[string][]cpdpIntf)
+	depVersion := DEFAULT_VERSION
+	for _, intf := range jsonSpec.Spec.Interfaces {
+		nodeIntf := cpdpIntf{Name: intf.Name, Peer: intf.Peer, PeerIntf: intf.PeerIntf, Create: true, Index: 0}
+		if intf.UseRaw {
+			nodeIntf.Create = false
+		}
+		if intf.Group != "" {
+			groupMap[intf.Group] = append(groupMap[intf.Group], nodeIntf)
+		} else {
+			baseName := namespace + "_" + name + "-port-" + intf.Name
+			node := cpdpNode{Interfaces: []cpdpIntf{nodeIntf}}
+			node.CpName = baseName + "_protocol-engine"
+			node.DpName = baseName + "_traffic-engine"
+			nodeList = append(nodeList, node)
+		}
+	}
+	// Add all lag nodes
+	for group, intfs := range groupMap {
+		baseName := namespace + "_" + name + "-port-group-" + group
+		node := cpdpNode{Interfaces: intfs}
+		node.CpName = baseName + "_protocol-engine"
+		node.DpName = baseName + "_traffic-engine"
+		nodeList = append(nodeList, node)
+	}
+	if setup {
+		// First check if we have the component dependency data for the release
+		if jsonSpec.Spec.Release != "" {
+			depVersion = jsonSpec.Spec.Release
+		} else {
+			log.Infof("No ixiatg version specified, using default version %s", depVersion)
+		}
+		if _, ok := componentDep[depVersion]; !ok || depVersion == DEFAULT_VERSION || componentDep[depVersion].Source == DS_CONFIGMAP {
+			if err = r.getRelInfo(ctx, depVersion, namespace, true); err != nil {
+				log.Errorf("Failed to get release information for %s", depVersion)
+				return "", err
+			}
+		}
+		if depVersion == DEFAULT_VERSION {
+			if latestVersion == "" {
+				log.Errorf("Failed to get release information for %s", depVersion)
+				return "", errors.New(fmt.Sprintf("Failed to get release information for version %s", DEFAULT_VERSION))
+			} else {
+				depVersion = latestVersion
+			}
+		}
+		for index, node := range nodeList {
+			log.Infof("Node: %s %s %v\n", node.CpName, node.DpName, node.Interfaces)
+			err = r.deployCpDpNode(ctx, depVersion, &nodeList[index])
+			if err != nil {
+				return "", errors.New(fmt.Sprintf("Error in cpdp node deploy %v\n", err))
+			}
+		}
+		// Deploy ixia-c, grpc and gnmi
+		ctrlParam := ctrlContData{Name: name, Namespace: namespace, HttpOut: -1, GrpcOut: -1, GnmiOut: -1}
+		if val, ok := jsonSpec.Spec.ApiEndPoint["https"]; ok {
+			ctrlParam.HttpOut = val.Out
+		}
+		if val, ok := jsonSpec.Spec.ApiEndPoint["grpc"]; ok {
+			ctrlParam.GrpcOut = val.Out
+		}
+		if val, ok := jsonSpec.Spec.ApiEndPoint["gnmi"]; ok {
+			ctrlParam.GnmiOut = val.Out
+		}
+		return r.deployCtrlNode(ctx, depVersion, nodeList, ctrlParam)
+	} else {
+		baseName := namespace + "_" + name + "-controller_"
+		contNameMap := make(map[string]bool)
+		for _, node := range nodeList {
+			contNameMap[node.CpName] = true
+			contNameMap[node.DpName] = true
+		}
+		contNameMap[baseName+"ixia-c"] = true
+		contNameMap[baseName+"gnmi"] = true
+		contNameMap[baseName+"license-server"] = true
+		err = r.deleteTopoContainers(ctx, contNameMap)
+		if err != nil {
+			return "", errors.New(fmt.Sprintf("Error in topo delete %v\n", err))
+		}
+	}
+
+	return "", nil
 }

@@ -34,8 +34,11 @@ type IxiaTGSvcPort struct {
 
 // IxiaTGSvcPort defines the endpoint ports for network traffic for the OTG node
 type IxiaTGIntf struct {
-	Name  string `json:"name"`
-	Group string `json:"group,omitempty"`
+	Name     string `json:"name"`
+	Group    string `json:"group,omitempty"`
+	Peer     string `json:"peer,omitempty"`
+	PeerIntf string `json:"peer_interface,omitempty"`
+	UseRaw   bool   `json:"use_raw,omitempty"`
 }
 
 // IxiaTGIntfStatus defines the mapping between endpoint ports and encasing pods

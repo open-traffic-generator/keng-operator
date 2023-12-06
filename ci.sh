@@ -8,7 +8,7 @@ GO_VERSION=1.17.9
 export DEBIAN_FRONTEND=noninteractive
 
 
-IXIA_C_OPERATOR_IMAGE=keng-operator
+IXIA_C_OPERATOR_IMAGE=keng-hybrid-operator
 GO_TARGZ=""
 
 GITHUB_REPO="ghcr.io/open-traffic-generator"
@@ -168,7 +168,7 @@ gen_operator_artifacts() {
     rm -rf ${art}/*.yaml
     rm -rf ${art}/*.tar.gz
     mv ./ixiatg-operator.yaml ${art}/
-    docker save ${IXIA_C_OPERATOR_IMAGE}:${version} | gzip > ${art}/keng-operator.tar.gz
+    docker save ${IXIA_C_OPERATOR_IMAGE}:${version} | gzip > ${art}/${IXIA_C_OPERATOR_IMAGE}.tar.gz
 }
 
 build() {

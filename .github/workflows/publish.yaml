@@ -44,11 +44,11 @@
 #         env:
 #           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-#       - name: Publishing Artifacts
-#         if: steps.check_tag.outputs.exists == 'false' && steps.get_branch.outputs.branch == 'main'
-#         run: |
-#           sudo chmod u+x ./do.sh
-#           sudo TOKEN_GITHUB=${{ secrets.TOKEN_GITHUB }} ./do.sh cicd_publish
+#      - name: Publishing Artifacts
+#        if: steps.check_tag.outputs.exists == 'false' && steps.get_branch.outputs.branch == 'dev-hw-dut'
+#        run: |
+#          sudo chmod u+x ./do.sh
+#          sudo TOKEN_GITHUB=${{ secrets.TOKEN_GITHUB }} ./do.sh cicd_publish
 
 #       - name: Create Release
 #         if: steps.check_tag.outputs.exists == 'false' && steps.get_branch.outputs.branch == 'main'

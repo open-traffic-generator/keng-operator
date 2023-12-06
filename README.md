@@ -167,6 +167,164 @@ Please make sure that the setup meets [Deployment Prerequisites](#deployment-pre
 
 - Please make sure you have kubernetes cluster up in your setup.
 
+## Deployment in Hybrid Mode
+
+To test networking hardware devices with Ixia-c software, the operator allows you to deploy Ixia-c software components and required interconnects with host network interfaces. As a minimum user would require a server with sudo permissions, docker and go version 1.18 or later installed.
+
+The following steps outline a simple topology deployment in hybrid mode and run featureprofiles test.
+1. Pull the required docker images
+
+    ```Shell
+    docker pull ghcr.io/open-traffic-generator/keng-controller:0.1.0-81
+    docker pull ghcr.io/open-traffic-generator/otg-gnmi-server:1.13.2
+    docker pull ghcr.io/open-traffic-generator/ixia-c-traffic-engine:1.6.0.100
+    docker pull ghcr.io/open-traffic-generator/ixia-c-protocol-engine:1.00.0.339
+    docker pull ghcr.io/open-traffic-generator/keng-hybrid-operator:0.0.4
+    ```
+    
+    
+2. Deploy the operator container:
+
+    ```Shell
+    docker run -d --name=ixia-c-operator -v /var/run/docker.sock:/var/run/docker.sock --cap-add CAP_NET_ADMIN --net=host --pid=host --user=root ghcr.io/open-traffic-generator/ixia-c-operator:0.3.3 --server-bind-address=:35000
+    ```  
+   The server-bind-address is optional to custom bind to user specified port, default is **30000**.
+
+
+3. Load the configmap in operator (Optional):
+
+    In case there is absence of internet connectivity the operator would require the configmap to be loaded.
+
+    ```Shell
+    curl --data-binary @ixiatg-configmap.yaml http://localhost:35000/config
+    ```
+
+
+4. Apply seat based license in operator (Optional):
+
+    Seat based license can be added by loading an updated ixiatg-configmap.yaml as specified in the deployment steps above. Alternatively, the license can also be apply as shown below.
+
+    ```Shell
+    curl --data-raw '{"license-address": "<space separated IP addresses>" }' http://localhost:35000/license
+    ```
+
+
+5. Deploy the topology:
+
+    For our example here we will use a port-dut-port deployment configuration file as shown below. Note in this example our two dut ports, *Ethernet1* and *Ethernet2*, are wire connected to our server interface, *enp0s8* and *enp0s9*. For our test we would require otg interface *eth1* and *eth2* to be connected to dut *Ethernet1* and *Ethernet2* respectively.
+
+    ```Shell
+    {
+        "metadata": {
+            "name": "otg",
+            "namespace": "ixia-c"
+        },
+        "spec": {
+            "api_endpoint_map": {
+                "https": {
+                    "in": 8443
+                },
+                "grpc": {
+                    "in": 40051
+                },
+                "gnmi": {
+                    "in": 50051
+                }
+            },
+            "interfaces": [
+                {
+                    "name": "eth1",
+                    "peer": "localhost",
+                    "peer_interface": "enp0s8"
+                },
+                {
+                    "name": "eth2",
+                    "peer": "localhost",
+                    "peer_interface": "enp0s9"
+                }
+            ],
+            "release": "0.0.1-3662"
+        }
+    }
+    ```
+
+    ```Shell
+    curl -d @port-dut-port http://localhost:35000/create
+    ```
+
+
+6. Clone FeatureProfiles repository:
+
+    ```Shell
+    git clone https://github.com/open-traffic-generator/featureprofiles.git
+    ```
+    
+    
+7. Update the binding file:
+
+    Update the corresponding binding file for the test, for this example we will update otgdut_2.binding with the correct Controller and DUT addresses. Also ensure the required basic configuration is set on the hardware DUT, examples of these can be found as config files under topologies/kne directory.
+    
+    ```Shell
+    options {
+      username: "admin"
+      password: ""
+    }
+
+    duts {
+      id: "dut"
+      name: "172.17.0.2"
+      gnmi {
+        target: "172.17.0.2:6030"
+      }
+      ports {
+        id: "port1"
+        name: "Ethernet1"
+      }
+      ports {
+        id: "port2"
+        name: "Ethernet2"
+      }
+    }
+
+    ates {
+      id: "ate"
+      name: "172.17.0.5"
+      otg {
+        target: "172.17.0.5:40051"
+        insecure: true
+      }
+      gnmi {
+        target: "172.17.0.5:50051"
+        skip_verify: true
+      }
+      ports {
+        id: "port1"
+        name: "eth1"
+      }
+      ports {
+        id: "port2"
+        name: "eth2"
+      }
+    }
+    ```
+    
+    
+8. Run FeatureProfile test:
+
+    ```Shell
+    go test -v feature/bgp/policybase/otg_tests/route_installation_test/route_installation_test.go -testbed "${PWD}/topologies/atedut_2.testbed" -binding "${PWD}/topologies/otgdut_2.binding"  --deviation_interface_enabled --deviation_default_network_instance=default
+    ```
+
+
+9. Cleanup:
+
+    ```Shell
+    curl -d @port-dut-port http://localhost:35000/delete
+    docker stop ixia-c-operator
+    docker rm ixia-c-operator
+    ```
+    
+    
 ## Build
 
 - **Clone this project**
