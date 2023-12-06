@@ -542,7 +542,7 @@ func (r *IxiaTGReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	return ctrl.Result{}, err
 }
 
-func (r *IxiaTGReconciler) getRelInfo(ctx context.Context, release string, namespace string, skipLocalConfigmap bool) error {
+func (r *IxiaTGReconciler) getRelInfo(ctx context.Context, release string, namespace string, isHybrid bool) error {
 	var data []byte
 	var err error
 	source := DS_RESTAPI
@@ -580,7 +580,7 @@ func (r *IxiaTGReconciler) getRelInfo(ctx context.Context, release string, names
 		log.Errorf("Failed to download release config file - %v", err)
 	}
 
-	if (err != nil || len(data) == 0) && !skipLocalConfigmap {
+	if (err != nil || len(data) == 0) && !isHybrid {
 		if release == DEFAULT_VERSION {
 			log.Infof("Could not retrieve latest release information")
 		}
@@ -607,10 +607,10 @@ func (r *IxiaTGReconciler) getRelInfo(ctx context.Context, release string, names
 		return nil
 	}
 
-	return r.loadRelInfo(ctx, release, &data, false, source, namespace)
+	return r.loadRelInfo(ctx, release, &data, false, source, namespace, isHybrid)
 }
 
-func (r *IxiaTGReconciler) loadRelInfo(ctx context.Context, release string, relData *[]byte, list bool, source string, ns string) error {
+func (r *IxiaTGReconciler) loadRelInfo(ctx context.Context, release string, relData *[]byte, list bool, source string, ns string, isHybrid bool) error {
 	var rel pubRel
 	var relList pubReleases
 	var err error
@@ -732,7 +732,7 @@ func (r *IxiaTGReconciler) loadRelInfo(ctx context.Context, release string, relD
 			}
 		}
 
-		if ctx != nil {
+		if !isHybrid {
 			// License server may not be part of configmap always, we always add a default entry if corresponding secret is found
 			delete(topoEntry.Controller.Containers, IMAGE_LICENSE_SECRET)
 			if secret, err := r.GetSecret(ctx, LIC_SERVER_SECRET, ns); err != nil {
@@ -1984,7 +1984,7 @@ func (r *IxiaTGReconciler) ProcessConfigmap(req *http.Request) error {
 		log.Infof("Warning no data found in configmap")
 		return nil
 	}
-	return r.loadRelInfo(nil, DEFAULT_VERSION, &data, false, DS_CONFIGMAP, "")
+	return r.loadRelInfo(nil, DEFAULT_VERSION, &data, false, DS_CONFIGMAP, "", true)
 }
 
 func (r *IxiaTGReconciler) ProcessLicenseServer(req *http.Request) error {
