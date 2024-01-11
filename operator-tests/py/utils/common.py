@@ -150,6 +150,21 @@ def apply_configmap(configmap):
         ))
 
 
+def create_secret(namespace, data):
+    cmd = "kubectl create secret -n {} {}".format(namespace, data)
+    print(cmd)
+    out, _ = exec_shell(cmd, True, True)
+    if out is None:
+        raise Exception("Failed to create secret {} "
+                        "inside kind container".format(
+                            data
+                        ))
+    else:
+        print("secret {} created inside kind container".format(
+            data
+        ))
+
+
 def load_custom_configmap():
     print("Loading custom container config...")
     cmd = "cat ./{}".format(
@@ -324,6 +339,59 @@ def load_min_resource_configmap(resource):
 
     apply_configmap(custom_configmap_path)
     os.remove(custom_configmap_path)
+
+
+def load_license_configmap(lic_addr, lic_path, lic_tag):
+    print("Loading license config...")
+    cmd = "cat ./{}".format(
+        IXIA_CONFIGMAP_FILE
+    )
+    out, _ = exec_shell(cmd, False, True)
+    yaml_obj = yaml.safe_load(out)
+    json_obj = json.loads(yaml_obj["data"]["versions"])
+    if lic_addr != "":
+        for elem in json_obj["images"]:
+            if elem["name"] == "controller":
+                elem["env"] = dict()
+                elem["env"]["LICENSE_SERVERS"] = lic_addr
+                break
+    if lic_path != "":
+        lic_elem = {
+            "name": "license-server",
+            "path": lic_path,
+            "tag": lic_tag
+        }
+        json_obj["images"].append(lic_elem)
+
+    yaml_obj["data"]["versions"] = json.dumps(json_obj)
+    license_configmap_path = "{}".format(CUSTOM_CONFIGMAP_FILE)
+    with open(license_configmap_path, "w") as yaml_file:
+        yaml.dump(yaml_obj, yaml_file)
+
+    apply_configmap(license_configmap_path)
+    os.remove(license_configmap_path)
+
+
+def load_license_secrets(lic_addr, lic_image):
+    print("Loading license secrets...")
+    data = " generic license-server --from-literal="
+    if lic_addr != "":
+        secret_data = data + "addresses=\"" + lic_addr + "\""
+        create_secret("ixiatg-op-system", secret_data)
+    elif lic_image != "":
+        secret_data = data + "image=\"" + lic_image + "\""
+        create_secret("ixiatg-op-system", secret_data)
+
+
+def remove_license_secrets():
+    print("Deleting license secrets...")
+    cmd = "kubectl delete secret license-server -n ixiatg-op-system"
+    out, _ = exec_shell(cmd, True, True)
+    if out is None:
+        # Ignore exception when secret not present
+        return
+    else:
+        print("Secret license-server deleted inside kind container")
 
 
 def seconds_elapsed(start_seconds):
@@ -579,6 +647,21 @@ def check_liveness_data(cont, pod, namespace, enabled=True, delay=0, period=0, f
     if failure != 0:
         key = 'failureThreshold'
         assert key in res.keys() and failure == res[key], "FailureThreshold mismatch, expected {}, found {}".format(failure, res[key])
+
+
+def check_env_data(cont, pod, namespace, name, value):
+    base_cmd = "'jsonpath={.spec.containers[?(@.name==\"" + cont + "\")].env"
+    base_cmd = "kubectl get pod/{} -n {} -o ".format(pod, namespace) + base_cmd
+    cmd = base_cmd + "}'"
+    out, _ = exec_shell(cmd, True, True)
+    res = json.loads(out)
+    for elem in res:
+        if elem['name'] == name:
+            if elem['value'] == value:
+                return
+            else:
+                raise Exception("Mismatch in environment variable '" + name + "' value")
+    raise Exception("Failed to find environment variable '" + name + "'")
 
 
 def check_min_resource_data(cont, pod, namespace, memory="", cpu=""):
