@@ -1158,7 +1158,6 @@ func (r *IxiaTGReconciler) containersForController(ctx context.Context, ixia *ne
 	var containers []corev1.Container
 	var newGNMI bool
 	var err error
-	var pbHdlr corev1.ProbeHandler
 	lic_found := false
 	lic_container := corev1.Container{}
 	var lic_server_image, lic_server_secret bool
@@ -1187,6 +1186,7 @@ func (r *IxiaTGReconciler) containersForController(ctx context.Context, ixia *ne
 		lic_server_secret = true
 	}
 	for key, comp := range componentDep[release].Controller.Containers {
+		var pbHdlr *corev1.ProbeHandler = nil
 		if key == IMAGE_LICENSE_SERVER && lic_server_secret {
 			// Secrets based image takes precedence
 			continue
@@ -1222,7 +1222,7 @@ func (r *IxiaTGReconciler) containersForController(ctx context.Context, ixia *ne
 		}
 		if name == GNMI_NAME {
 			tcpSock := corev1.TCPSocketAction{Port: intstr.IntOrString{IntVal: CTRL_GNMI_PORT}}
-			pbHdlr = corev1.ProbeHandler{TCPSocket: &tcpSock}
+			pbHdlr = &corev1.ProbeHandler{TCPSocket: &tcpSock}
 			newGNMI, err = versionLaterOrEqual(GNMI_NEW_BASE_VERSION, comp.Tag)
 			if err != nil {
 				log.Error(err)
@@ -1235,19 +1235,22 @@ func (r *IxiaTGReconciler) containersForController(ctx context.Context, ixia *ne
 			}
 		} else if name == CONTROLLER_NAME {
 			tcpSock := corev1.TCPSocketAction{Port: intstr.IntOrString{IntVal: CTRL_GRPC_PORT}}
-			pbHdlr = corev1.ProbeHandler{TCPSocket: &tcpSock}
+			pbHdlr = &corev1.ProbeHandler{TCPSocket: &tcpSock}
 			if _, ok := resRequest["cpu"]; !ok {
 				resRequest["cpu"] = resource.MustParse(MIN_CPU_CONTROLLER)
 			}
 			if _, ok := resRequest["memory"]; !ok {
 				resRequest["memory"] = resource.MustParse(MIN_MEM_CONTROLLER)
 			}
+		} else if name == LICENSE_NAME {
+			tcpSock := corev1.TCPSocketAction{Port: intstr.IntOrString{IntVal: CTRL_LICENSE_PORT}}
+			pbHdlr = &corev1.ProbeHandler{TCPSocket: &tcpSock}
 		}
 		container.Resources.Requests = resRequest
 
-		if comp.LiveNessEnable == nil || *comp.LiveNessEnable {
+		if pbHdlr != nil && (comp.LiveNessEnable == nil || *comp.LiveNessEnable) {
 			probe := corev1.Probe{
-				ProbeHandler:                  pbHdlr,
+				ProbeHandler:                  *pbHdlr,
 				InitialDelaySeconds:           comp.LiveNessDelay,
 				PeriodSeconds:                 comp.LiveNessPeriod,
 				FailureThreshold:              comp.LiveNessFailure,
