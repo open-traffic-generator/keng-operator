@@ -2,7 +2,7 @@ name: ixia-c
 nodes:
   - name: otg
     vendor: KEYSIGHT
-    version: local
+    version: latest
     services:
       8443:
         name: https
@@ -13,7 +13,7 @@ nodes:
       50051:
         name: gnmi
         inside: 50051
-  - name: dut
+  - name: arista1
     vendor: ARISTA
     model: ceos
     os: eos
@@ -21,7 +21,7 @@ nodes:
       file: arista-ceos.config
       config_path: /mnt/flash
       config_file: startup-config
-      image: ghcr.io/open-traffic-generator/ceos:local
+      image: ghcr.io/open-traffic-generator/ceos:4.29.1F-29233963
       cert:
         self_signed:
           cert_name: gnmiCert.pem
@@ -40,9 +40,10 @@ nodes:
 links:
   - a_node: otg
     a_int: eth1
-    z_node: dut
+    z_node: arista1
     z_int: eth1
   - a_node: otg
     a_int: eth2
-    z_node: dut
+    z_node: arista1
     z_int: eth2
+

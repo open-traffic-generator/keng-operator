@@ -21,8 +21,9 @@ def test_lag_single_namespace():
     - ixiatgs
     """
     namespace1 = 'ixia-c'
-    namespace1_config = 'lag_ixia_c_namespace.txt'
+    namespace1_config = 'ixia_c_lag_topology.yaml'
     expected_svcs = {
+        'service-https-otg-controller': [8443],
         'service-gnmi-otg-controller': [50051],
         'service-grpc-otg-controller': [40051],
         'service-otg-port-eth1': [5555, 50071],
@@ -148,69 +149,62 @@ def test_lag_single_namespace():
 
     expected_ixiatgs = [
         {
-            "metadata": {
-                "name": "otg",
-                "namespace": "ixia-c",
-            },
-            "spec": {
-                "api_endpoint_map": {
-                    "gnmi": {
-                        "in": 50051
-                    },
-                    "grpc": {
-                        "in": 40051
-                    }
-                },
-                "desired_state": "DEPLOYED",
-                "interfaces": [
-                    {
-                        "group": "lag",
-                        "name": "eth4"
-                    },
-                    {
-                        "name": "eth1"
-                    },
-                    {
-                        "name": "eth2"
-                    },
-                    {
-                        "group": "lag",
-                        "name": "eth3"
-                    }
-                ],
-                "release": "local-latest"
-            },
-            "status": {
-                "api_endpoint": {
-                    "pod_name": "otg-controller",
-                    "service_names": [
-                        "service-gnmi-otg-controller",
-                        "service-grpc-otg-controller"
+            'metadata': 
+            {
+                'name': 'otg', 
+                'namespace': 'ixia-c'
+            }, 
+            'spec': 
+            {
+                'api_endpoint_map': 
+                {
+                    'gnmi': {'in': 50051}, 
+                    'grpc': {'in': 40051}, 
+                    'https': {'in': 8443}
+                }, 
+                'desired_state': 'DEPLOYED', 
+                'init_container': {}, 
+                'interfaces': [
+                    {'group': 'lag', 'name': 'eth3'}, 
+                    {'group': 'lag', 'name': 'eth4'}, 
+                    {'name': 'eth1'}, 
+                    {'name': 'eth2'}
+                ], 
+                'release': 'local'
+            }, 
+            'status': 
+            {
+                'api_endpoint': {
+                    'pod_name': 'otg-controller', 
+                    'service_names': [
+                        'service-https-otg-controller', 
+                        'service-gnmi-otg-controller', 
+                        'service-grpc-otg-controller'
                     ]
-                },
-                "interfaces": [
+                }, 
+                'interfaces': [
                     {
-                        "interface": "eth4",
-                        "name": "eth4",
-                        "pod_name": "otg-port-group-lag"
-                    },
+                        'interface': 'eth3', 
+                        'name': 'eth3', 
+                        'pod_name': 'otg-port-group-lag'
+                    }, 
                     {
-                        "interface": "eth1",
-                        "name": "eth1",
-                        "pod_name": "otg-port-eth1"
-                    },
+                        'interface': 'eth4', 
+                        'name': 'eth4', 
+                        'pod_name': 'otg-port-group-lag'
+                    }, 
                     {
-                        "interface": "eth2",
-                        "name": "eth2",
-                        "pod_name": "otg-port-eth2"
-                    },
+                        'interface': 'eth1', 
+                        'name': 'eth1', 
+                        'pod_name': 'otg-port-eth1'
+                    }, 
                     {
-                        "interface": "eth3",
-                        "name": "eth3",
-                        "pod_name": "otg-port-group-lag"
+                        'interface': 'eth2', 
+                        'name': 'eth2', 
+                        'pod_name': 'otg-port-eth2'
                     }
-                ],
-                "state": "DEPLOYED"
+                ], 
+                'state': 'DEPLOYED'
             }
         }
     ]

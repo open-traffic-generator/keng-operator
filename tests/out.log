@@ -1,0 +1,10 @@
+============================= test session starts ==============================
+platform linux -- Python 3.10.12, pytest-8.0.0, pluggy-1.4.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+metadata: {'Python': '3.10.12', 'Platform': 'Linux-6.2.0-39-generic-x86_64-with-glibc2.35', 'Packages': {'pytest': '8.0.0', 'pluggy': '1.4.0'}, 'Plugins': {'html': '3.2.0', 'metadata': '3.0.0'}}
+rootdir: /home/ixia_c_cicd/keng-operator/tests/py
+configfile: pytest.ini
+plugins: html-3.2.0, metadata-3.0.0
+collecting ... collected 1 item
+
+py/rest/test_rest_double_namespace.py::test_rest_double_namespace 

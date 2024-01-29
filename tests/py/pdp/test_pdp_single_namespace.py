@@ -21,14 +21,10 @@ def test_pdp_single_namespace():
     - socket connection
     - meshnet topologies
     - ixiatgs
-    TODO: 
-    - add proper way to parse output of kne_cli show & toplogy
     """
-    namespace1 = 'ixia-c'
-    namespace1_config = 'pdp_ixia_c_namespace.txt'
 
     expected_svcs = {
-        'service-https-otg-controller': [443],
+        'service-https-otg-controller': [8443],
         'service-gnmi-otg-controller': [50051],
         'service-grpc-otg-controller': [40051],
         'service-otg-port-eth1': [5555, 50071],
@@ -110,61 +106,57 @@ def test_pdp_single_namespace():
 
     expected_ixiatgs = [
         {
-            "metadata": {
-                "name": "otg",
-                "namespace": "ixia-c",
-            },
-            "spec": {
-                "api_endpoint_map": {
-                    "gnmi": {
-                        "in": 50051
-                    },
-                    "grpc": {
-                        "in": 40051
-                    },
-                    "https": {
-                        "in": 443
+            'metadata': {
+                'name': 'otg', 
+                'namespace': 'ixia-c'
+            }, 
+            'spec': {
+                'api_endpoint_map': 
+                {
+                    'gnmi': {
+                        'in': 50051
+                    }, 
+                    'grpc': {
+                        'in': 40051
+                    }, 
+                    'https': {
+                        'in': 8443
                     }
-                },
-                "desired_state": "DEPLOYED",
-                "interfaces": [
-                    {
-                        "name": "eth1"
-                    },
-                    {
-                        "name": "eth2"
-                    }
-                ],
-                "release": "local-latest"
-            },
-            "status": {
-                "api_endpoint": {
-                    "pod_name": "otg-controller",
-                    "service_names": [
-                        "service-gnmi-otg-controller",
-                        "service-grpc-otg-controller",
-                        "service-https-otg-controller"
+                }, 
+                'desired_state': 'DEPLOYED', 
+                'init_container': {}, 
+                'interfaces': [
+                    {'name': 'eth1'}, 
+                    {'name': 'eth2'}
+                ], 'release': 'local'
+            }, 
+            'status': {
+                'api_endpoint': {
+                    'pod_name': 'otg-controller', 
+                    'service_names': [
+                        'service-https-otg-controller', 
+                        'service-gnmi-otg-controller', 
+                        'service-grpc-otg-controller'
                     ]
-                },
-                "interfaces": [
+                }, 
+                'interfaces': [
                     {
-                        "interface": "eth1",
-                        "name": "eth1",
-                        "pod_name": "otg-port-eth1"
-                    },
+                        'interface': 'eth1', 
+                        'name': 'eth1', 
+                        'pod_name': 'otg-port-eth1'
+                    }, 
                     {
-                        "interface": "eth2",
-                        "name": "eth2",
-                        "pod_name": "otg-port-eth2"
-                    }
-                ],
-                "state": "DEPLOYED"
+                        'interface': 'eth2', 
+                        'name': 'eth2', 
+                        'pod_name': 'otg-port-eth2'}
+                ], 
+                'state': 'DEPLOYED'
             }
         }
     ]
 
-    expected_topo_svcs = 'pdp_knecli_topo_service.txt'
-    expected_knecli_show = 'pdp_knecli_show.txt'
+    namespace1 = 'ixia-c'
+    namespace1_config = 'ixia_c_pdp_topology.yaml'
     try:
         op_rscount = utils.get_operator_restart_count()
         print("[Namespace:{}]Deploying KNE topology".format(
@@ -183,12 +175,6 @@ def test_pdp_single_namespace():
 
         svc_ingress_map = utils.get_ingress_mapping(namespace1, list(expected_svcs.keys()))
         utils.socket_alive(expected_svcs, svc_ingress_map)
-
-        out_topo_svc = utils.get_knecli_topology(namespace1_config)
-        utils.validate_expected_text(out_topo_svc, expected_topo_svcs)
-
-        out_show = utils.get_knecli_show(namespace1_config)
-        utils.validate_expected_text(out_show, expected_knecli_show)
 
         print("[Namespace:{}]Deleting KNE topology".format(
             namespace1

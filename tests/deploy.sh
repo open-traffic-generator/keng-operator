@@ -16,6 +16,9 @@ KNE_VERSION=v0.1.15
 TIMEOUT_SECONDS=300
 APT_GET_UPDATE=true
 
+GITHUB_USER="biplamal"
+GITHUB_PAT="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"
+
 apt_update() {
     if [ "${APT_UPDATE}" = "true" ]
     then
@@ -103,11 +106,6 @@ common_install() {
 }
 
 login_ghcr() {
-    if [ -f "$HOME/.docker/config.json" ]
-    then
-        grep ghcr.io "$HOME/.docker/config.json" > /dev/null && return 0
-    fi
-
     if [ -z "${GITHUB_USER}" ] || [ -z "${GITHUB_PAT}" ]
     then
         echo "Logging into docker repo ghcr.io (Please provide Github Username and PAT)"

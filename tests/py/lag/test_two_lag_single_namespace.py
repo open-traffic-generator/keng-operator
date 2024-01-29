@@ -21,7 +21,7 @@ def test_two_lag_single_namespace():
     - ixiatgs
     """
     namespace1 = 'ixia-c'
-    namespace1_config = 'two_lag_ixia_c_namespace.txt'
+    namespace1_config = 'ixia_c_two_lags_topology.yaml'
     expected_svcs = {
         'service-gnmi-otg-controller': [50051],
         'service-grpc-otg-controller': [40051],
@@ -178,6 +178,7 @@ def test_two_lag_single_namespace():
                     }
                 },
                 "desired_state": "DEPLOYED",
+                'init_container': {}, 
                 "interfaces": [
                     {
                         "group": "lag1",
@@ -199,7 +200,7 @@ def test_two_lag_single_namespace():
                         "name": "eth5"
                     }
                 ],
-                "release": "local-latest"
+                "release": "local"
             },
             "status": {
                 "api_endpoint": {

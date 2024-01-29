@@ -13,7 +13,7 @@ def test_lag_min_resource():
     - default minimum resource for all components
     """
     namespace1 = 'ixia-c'
-    namespace1_config = 'lag_ixia_c_namespace.txt'
+    namespace1_config = 'ixia_c_lag_topology.yaml'
     expected_pods = [
         'otg-controller',
         'arista1',

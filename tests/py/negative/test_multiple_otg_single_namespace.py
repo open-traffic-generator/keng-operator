@@ -1,7 +1,5 @@
 import utils
 import pytest
-import time
-from deepdiff import DeepDiff
 
 @pytest.mark.sanity
 def test_multiple_otg_single_namespace():
