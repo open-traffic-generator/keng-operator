@@ -9,23 +9,16 @@ SUDO_USER = 'root'
 
 # path to dir containing kne configurations relative root dir
 CONFIGS_DIR = 'topology'
-BAD_CONFIGMAP_FILE = 'bad-configmap.yaml'
+BAD_CONFIG_MAP_FILE = 'bad-ixia-c-config.yaml'
 INIT_CONFIG_MAP_FILE = 'init-config.yaml'
+BASIC_IXIA_CONFIG_MAP_FILE = 'deployments/basic-ixia-c-config.yaml'
 IXIA_CONFIG_MAP_FILE = 'deployments/ixia-c-config.yaml'
 CUSTOM_CONFIG_MAP_FILE = 'custom-ixia-c-config.yaml'
 
 KIND_SINGLE_NODE_NAME = 'kind-control-plane'
 
-expected_svc_port_map = [
-    'service-https-otg-controller',
-    'service-gnmi-otg-controller',
-    'service-grpc-otg-controller',
-    'service-otg-port-eth1',
-    'service-otg-port-eth2'
-]
 
-
-def exec_shell(cmd, sudo=True, check_return_code=True):
+def exec_shell(cmd, sudo=True, check_return_code=True, wait=True):
     """
     Executes a command in native shell and returns output as str on success or,
     None on error.
@@ -34,23 +27,27 @@ def exec_shell(cmd, sudo=True, check_return_code=True):
         cmd = 'sudo -u ' + SUDO_USER + ' ' + cmd
 
     print('Executing `%s` ...' % cmd)
-    p = subprocess.Popen(
-        cmd.encode('utf-8', errors='ignore'),
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True
-    )
-    out, err = p.communicate()
-    out = out.decode('utf-8', errors='ignore')
-    err = err.decode('utf-8', errors='ignore')
+    if wait == True:
+        p = subprocess.Popen(
+            cmd.encode('utf-8', errors='ignore'),
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True
+        )
+        out, err = p.communicate()
+        out = out.decode('utf-8', errors='ignore')
+        err = err.decode('utf-8', errors='ignore')
 
-    print('Output:\n%s' % out)
-    print('Error:\n%s' % err)
+        print('Output:\n%s' % out)
+        print('Error:\n%s' % err)
 
-    if check_return_code:
-        if p.returncode == 0:
+        if check_return_code:
+            if p.returncode == 0:
+                return out, err
+            return None, err
+        else:
             return out, err
-        return None, err
     else:
-        return out, err
+        subprocess.Popen(cmd.split(" "))
+        return "", None
 
 
 def get_kne_config_path(config_name):
@@ -59,36 +56,6 @@ def get_kne_config_path(config_name):
         CONFIGS_DIR,
         config_name
     ])
-
-
-def copy_file_to_kind(filepath):
-    cmd = "docker cp {} {}:/".format(
-        filepath, KIND_SINGLE_NODE_NAME
-    )
-    out = exec_shell(cmd, False, True)
-    if out is None:
-        raise Exception("Failed to copy file {} to kind container".format(
-            filepath
-        ))
-    else:
-        print("{} copied inside kind container".format(
-            filepath
-        ))
-
-
-def delete_file_from_kind(filepath):
-    cmd = "docker exec -t {} rm -rf ./{}".format(
-        KIND_SINGLE_NODE_NAME, filepath
-    )
-    out = exec_shell(cmd, True, True)
-    if out is None:
-        raise Exception("Failed to delete file {} from kind container".format(
-            filepath
-        ))
-    else:
-        print("{} deleted from kind container".format(
-            filepath
-        ))
 
 
 def topology_deleted(namespace):
@@ -103,7 +70,7 @@ def topology_deleted(namespace):
     return False
 
 
-def create_kne_config(config_name, namespace):
+def create_kne_config(config_name, namespace, wait=True):
     config_path = get_kne_config_path(config_name)
     # Ensure topology was deleted from past run
     wait_for(
@@ -111,10 +78,10 @@ def create_kne_config(config_name, namespace):
         'ensured topology does not exists',
         timeout_seconds=120
     )
-    cmd = "kne create ./{}".format(
+    cmd = "kne create {}".format(
         config_path
     )
-    out, err = exec_shell(cmd, True, False)
+    out, err = exec_shell(cmd, True, False, wait)
     return out, err
     
 
@@ -257,43 +224,11 @@ def load_bad_configmap(bad_component, update_release=False):
             break
 
     yaml_obj["data"]["versions"] = json.dumps(json_obj)
-    bad_configmap_path = "{}".format(BAD_CONFIGMAP_FILE)
+    bad_configmap_path = "{}".format(BAD_CONFIG_MAP_FILE)
     with open(bad_configmap_path, "w") as yaml_file:
         yaml.dump(yaml_obj, yaml_file)
     apply_configmap(bad_configmap_path)
     os.remove(bad_configmap_path)
-
-
-def load_grpc_configmap(include_grpc=True, controller_version="default"):
-    print("Loading gRPC Config...")
-    cmd = "cat ./{}".format(
-        IXIA_CONFIG_MAP_FILE
-    )
-    out, _ = exec_shell(cmd, False, True)
-    yaml_obj = yaml.safe_load(out)
-    json_obj = json.loads(yaml_obj["data"]["versions"])
-    grpc_found = False
-    for elem in json_obj["images"]:
-        if elem["name"] == "grpc-server":
-            if include_grpc:
-                grpc_found = True
-            else:
-                json_obj["images"].remove(elem)
-        elif elem["name"] == "controller" and controller_version != "default":
-            elem["tag"] = "0.0.1-3113"
-    if include_grpc and not grpc_found:
-        elem = {
-            "name": "grpc-server",
-            "path": "us-central1-docker.pkg.dev/kt-nts-athena-dev/keysight/ixia-c-grpc-server",
-            "tag": "0.8.9"
-        }
-        json_obj["images"].append(elem)
-    yaml_obj["data"]["versions"] = json.dumps(json_obj)
-    grpc_configmap_path = "{}".format(BAD_CONFIGMAP_FILE)
-    with open(grpc_configmap_path, "w") as yaml_file:
-        yaml.dump(yaml_obj, yaml_file)
-    apply_configmap(grpc_configmap_path)
-    os.remove(grpc_configmap_path)
 
 
 def load_liveness_configmap(probe):
@@ -343,7 +278,7 @@ def load_min_resource_configmap(resource):
 def load_license_configmap(lic_addr, lic_path, lic_tag):
     print("Loading license config...")
     cmd = "cat ./{}".format(
-        IXIA_CONFIG_MAP_FILE
+        BASIC_IXIA_CONFIG_MAP_FILE
     )
     out, _ = exec_shell(cmd, False, True)
     yaml_obj = yaml.safe_load(out)
@@ -678,25 +613,6 @@ def check_min_resource_data(cont, pod, namespace, memory="", cpu=""):
         assert key in res.keys() and cpu == res[key], "Cpu resource mismatch, expected {}, found {}".format(cpu, res[key])
 
 
-def generate_rest_config_from_temaplate(config, ixia_c_release):
-    template_config_path = get_kne_config_path(
-        'template_' + config
-    )
-    config_path = get_kne_config_path(config)
-    cmd = "cat {} | sed \"s/IXIA_C_RELEASE/{}/g\" | tee {} > /dev/null".format(
-        template_config_path,
-        ixia_c_release,
-        config_path
-    )
-    out, _ = exec_shell(cmd, True, True)
-    if out is None:
-        raise Exception('Failed to generate rest config from template')
-    else:
-        print("Rest KNE topo config generated from template :{}".format(
-            config_path
-        ))
-
-
 def delete_config(config):
     config_path = get_kne_config_path(config)
     cmd = "rm -rf {}".format(
@@ -709,174 +625,6 @@ def delete_config(config):
         print("KNE topo config deleted :{}".format(
             config_path
         ))
-
-
-def generate_opts_json_from_template(namespcae):
-    opts_json = 'opts.json'
-    template_json = 'template-opts.json'
-    if os.path.exists(opts_json):
-        os.remove(opts_json)
-
-    cmd = "cat {} | sed -E 's/IXIA_C_NAMESPACE/{}/g' | tee {} > /dev/null".format(  # noqa
-        template_json,
-        namespcae,
-        opts_json
-    )
-
-    print(cmd)
-    out, _ = exec_shell(cmd, True, True)
-    if out is None:
-        raise Exception('Failed to generate opts.json from template')
-    else:
-        print("opts.json generated from template for namespcae: {}".format(
-            namespcae
-        ))
-
-
-def delete_opts_json():
-    opts_json = 'opts.json'
-    if os.path.exists(opts_json):
-        os.remove(opts_json)
-    print("opts.json deleted ...")
-
-
-def copy_opts_to_testclient():
-    local_opts = "./opts.json"
-    copy_file_to_kind(local_opts)
-    cp_cmd = "kubectl cp ./opts.json ixia-c-test-client:/home/keysight/athena/tests/go/tests/opts.json"  # noqa
-    out, _ = exec_shell(cp_cmd, True, True)
-    if out is None:
-        raise Exception('Failed to copy opts.json to ixia-c-test-client')
-    else:
-        print("opts.json copied to ixia-c-test-client")
-
-
-def run_e2e_test_from_client(report, testcase=None, tags="sanity"):
-    print("Running e2e test case ...")
-    if os.path.exists(report):
-        os.remove(report)
-
-    test_run_cmd = "go test -timeout 24h -tags={} -v".format(
-        tags
-    )
-    if testcase:
-        test_run_cmd = "go test -run={} -tags={} -v".format(
-            testcase, tags
-        )
-    cp_cmd = 'kubectl exec -t ixia-c-test-client -- bash -c "cd go/tests; ' + \
-        test_run_cmd + '" | tee ' + report
-    exec_shell(cp_cmd, True, False)
-
-
-def check_e2e_test_status(report, expected_pass_rate=100):
-    print("Checking e2e test status ...")
-    cmd = "cat {} | grep -c '=== RUN'".format(
-        report
-    )
-    out, _ = exec_shell(cmd, True, False)
-    total_count = int(out)
-
-    cmd = "cat {} | grep -c 'PASS:'".format(
-        report
-    )
-    out, _ = exec_shell(cmd, True, False)
-    pass_count = int(out)
-
-    print('Total Count : {} - Pass Count: {}'.format(
-        total_count,
-        pass_count
-    ))
-
-    pass_rate = (pass_count / total_count) * 100
-
-    print('Actual Pass Rate : {} - Expected: {}'.format(
-        pass_rate,
-        expected_pass_rate
-    ))
-
-    if os.path.exists(report):
-        os.remove(report)
-    if total_count != 0 and pass_rate >= expected_pass_rate:
-        return True
-    return False
-
-
-def ixia_c_e2e_test_ok(namespace, testcase=None, tags="sanity",
-                       expected_pass_rate=100):
-    print("[Namespace: {}]Generating local opts.json from template".format(
-        namespace
-    ))
-    generate_opts_json_from_template(namespace)
-
-    print("[Namespace: {}]Copying local opts.json to test-client".format(
-        namespace
-    ))
-    copy_opts_to_testclient()
-
-    test_report = "report-{}-e2e.txt".format(
-        namespace
-    )
-    print("[Namespace: {}]Running E2E tests from test-client".format(
-        namespace
-    ))
-    run_e2e_test_from_client(test_report, testcase, tags)
-
-    print("[Namespace: {}]Analyzing E2E test results".format(
-        namespace
-    ))
-    assert check_e2e_test_status(
-        test_report, expected_pass_rate), "E2E test case failed!!!"
-
-    print("[Namespace: {}]Deleting local opts.json".format(
-        namespace
-    ))
-    delete_opts_json()
-
-
-def arista_sshable_ok(arista_pods, namespace):
-    print("[Namespace: {}]Verifying arista pods to be sshable".format(
-        namespace
-    ))
-    for pod in arista_pods:
-        print(pod)
-        wait_for(
-            lambda: is_arista_ssh_reachable(pod, namespace),
-            'arista pods to be sshable',
-            timeout_seconds=300
-        )
-
-
-def is_arista_ssh_reachable(pod, namespcae):
-    cmd = "kubectl get services service-" + \
-        pod + " -n " + namespcae + \
-        " -o 'jsonpath={.spec.ports[?(@.name==\"ssh\")].nodePort}'"
-    out, _ = exec_shell(cmd, True, True)
-    if out is not None:
-        nodeport = out.split('\n')[0]
-        print("namespace: {}, pod: {} - nodeport: {}".format(
-            namespcae,
-            pod,
-            nodeport
-        ))
-
-        ssh_cmd = "docker exec -t {} ssh -p {} -o StrictHostKeyChecking=no -o \"UserKnownHostsFile /dev/null\" admin@localhost echo ok".format(  # noqa
-            KIND_SINGLE_NODE_NAME,
-            nodeport
-        )
-        out, _ = exec_shell(ssh_cmd, True, True)
-        print(out)
-        if out is not None:
-            print('namespace: {}, pod: {} - sshable'.format(
-                namespcae,
-                pod
-            ))
-            return True
-        else:
-            print('namespace: {}, pod: {} - not sshable yet'.format(
-                namespcae,
-                pod
-            ))
-            return False
 
 
 def time_taken_for_pods_to_be_ready(namespace, exp_pods):
@@ -984,7 +732,6 @@ def get_ingress_mapping(namespace, services):
         ingress_map[service] = get_ingress_ip(namespace, service)
 
     return ingress_map
-
 
 
 def check_socket_connection(host, port):

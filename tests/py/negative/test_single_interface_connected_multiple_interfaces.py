@@ -1,12 +1,11 @@
 import utils
 import pytest
 import time
-from deepdiff import DeepDiff
 
 @pytest.mark.sanity
 def test_single_interface_connected_multiple_interfaces():
     """
-    Deploy single interface connected to multipole interfaces kne topology,
+    Deploy single interface connected to multi-pole interfaces kne topology,
     - namespace - 1: ixia-c
     Validate,
     - kne_cli error
@@ -15,7 +14,7 @@ def test_single_interface_connected_multiple_interfaces():
     - operator pod health
     """
     namespace1 = 'ixia-c'
-    namespace1_config = 'single_inf_to_multi_intf.txt'
+    namespace1_config = 'single_inf_to_multi_intf.yaml'
     try:
         op_rscount = utils.get_operator_restart_count()
         print("[Namespace:{}]Deploying KNE topology".format(
@@ -23,7 +22,7 @@ def test_single_interface_connected_multiple_interfaces():
         ))
         _, err = utils.create_kne_config(namespace1_config, namespace1)
         expected_err = "interface otg:eth1 already connected"
-        err = err.split("\n")[-2]
+        err = err.split("\n")[-4]
         assert expected_err in err, "Expected error mismatch!!!"
         utils.ixia_c_pods_ok(namespace1, [])
         utils.ixia_c_services_ok(namespace1, [])

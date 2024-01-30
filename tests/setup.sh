@@ -393,25 +393,11 @@ rm_k8s_cluster() {
     rm -rf $HOME/.kube
 }
 
-kne_topo_file() {
-    path=deployments/k8s/kne-manifests
-    if [ -z "${2}" ]
-    then
-        echo ${path}/${1}.yaml
-    else
-        echo ${path}/${1}-${2}.yaml
-    fi
-}
-
-kne_namespace() {
-    grep -E "^name" $(kne_topo_file ${1} ${2}) | cut -d\  -f2 | sed -e s/\"//g
-}
-
-prepytest() {
+pre_test() {
     rm -rf .env
     python -m pip install virtualenv \
     && python -m virtualenv .env \
-    && .env/bin/python -m pip install -r tests/py/requirements.txt \
+    && .env/bin/python -m pip install -r py/requirements.txt \
     && echo "Successfully setup pytest !"
 }
 

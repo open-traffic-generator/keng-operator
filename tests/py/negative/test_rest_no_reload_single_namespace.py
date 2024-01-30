@@ -2,12 +2,12 @@ import pytest
 import utils
 import time
 
-
+@pytest.mark.sanity
 def test_rest_no_reload_single_namespace():
     """
-    Deploy b2b kne topology with latest version,
+    Deploy pd kne topology with latest version,
     - namespace - 1: ixia-c
-    Delete b2b kne topology,
+    Delete pd kne topology,
     - namespace - 1: ixia-c
     Validate,
     - total pods count
@@ -16,9 +16,9 @@ def test_rest_no_reload_single_namespace():
     - individual pod status
     - individual service status
     - operator pod health
-    Deploy b2b kne topology with BAD config and latest release,
+    Deploy pd kne topology with BAD config and latest release,
     - namespace - 1: ixia-c
-    Delete b2b kne topology,
+    Delete pd kne topology,
     - namespace - 1: ixia-c
     Validate,
     - total pods count
@@ -29,18 +29,21 @@ def test_rest_no_reload_single_namespace():
     - operator pod health
     """
     namespace1 = 'ixia-c'
-    namespace1_config = 'ixia_c_default_config.txt'
+    namespace1_config = 'ixia_c_rest_topology.yaml'
     expected_svcs = [
+        'service-arista1',
+        'service-https-otg-controller',
         'service-gnmi-otg-controller',
         'service-grpc-otg-controller',
         'service-otg-port-eth1',
-        'service-otg-port-eth2'
+        'service-otg-port-eth2',
     ]
 
     expected_pods = [
+        'arista1',
         'otg-controller',
         'otg-port-eth1',
-        'otg-port-eth2'
+        'otg-port-eth2',
     ]
     try:
         op_rscount = utils.get_operator_restart_count()
@@ -78,6 +81,7 @@ def test_rest_no_reload_single_namespace():
         utils.ixia_c_pods_ok(namespace1, [])
         utils.ixia_c_services_ok(namespace1, [])
         op_rscount = utils.ixia_c_operator_ok(op_rscount)
+        utils.reset_configmap()
 
     finally:
         utils.delete_kne_config(namespace1_config, namespace1)

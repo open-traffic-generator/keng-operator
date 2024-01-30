@@ -2,7 +2,7 @@ import pytest
 import utils
 import time
 
-
+@pytest.mark.sanity
 def test_license_server_config():
     """
     1.  Apply configmap with both license server address and image info,
@@ -30,7 +30,7 @@ def test_license_server_config():
             License server deployed in Controller POD
     """
     namespace1 = 'ixia-c'
-    namespace1_config = 'pdp_ixia_c_namespace.txt'
+    namespace1_config = 'ixia_c_pdp_topology.yaml'
     controller_pod = 'ixia-c'
     expected_pods = [
         'arista1',
@@ -39,8 +39,8 @@ def test_license_server_config():
         'otg-port-eth2'
     ]
     lic_address = '1.1.1.1'
-    lic_path = 'docker-local-athena.artifactory.it.keysight.com/keng-license-server'
-    lic_tag = '0.0.1-32'
+    lic_path = 'ghcr.io/open-traffic-generator/licensed/keng-license-server'
+    lic_tag = 'latest'
     ctrl_pod_name = 'otg-controller'
     ctrl_container_count = 2
     env_name = 'LICENSE_SERVERS'
@@ -52,6 +52,7 @@ def test_license_server_config():
             namespace1
         ))
         utils.load_license_configmap(lic_address, lic_path, lic_tag)
+        utils.remove_license_secrets()
         utils.load_license_secrets(lic_address, "")
         utils.create_kne_config(namespace1_config, namespace1)
         utils.ixia_c_pods_ok(namespace1, expected_pods)
@@ -71,6 +72,7 @@ def test_license_server_config():
             namespace1
         ))
         utils.load_license_configmap(lic_address, lic_path, lic_tag)
+        utils.remove_license_secrets()
         utils.load_license_secrets("", lic_path+":"+lic_tag)
         utils.create_kne_config(namespace1_config, namespace1)
         utils.ixia_c_pods_ok(namespace1, expected_pods)
@@ -89,6 +91,7 @@ def test_license_server_config():
             namespace1
         ))
         utils.load_license_configmap("", lic_path, lic_tag)
+        utils.remove_license_secrets()
         utils.load_license_secrets("", lic_path+":"+lic_tag)
         utils.create_kne_config(namespace1_config, namespace1)
         utils.ixia_c_pods_ok(namespace1, expected_pods)

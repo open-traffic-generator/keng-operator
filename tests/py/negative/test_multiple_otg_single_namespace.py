@@ -6,7 +6,7 @@ def test_multiple_otg_single_namespace():
     """
     Deploy multiple otg kne topology,
     - namespace - 1: ixia-c
-    Delete b2b kne topology,
+    Delete pd kne topology,
     - namespace - 1: ixia-c
     Validate,
     - kne_cli error
@@ -15,7 +15,7 @@ def test_multiple_otg_single_namespace():
     - operator pod health
     """
     namespace1 = 'ixia-c'
-    namespace1_config = 'multiple_otg_ixia_c_namespace.txt'
+    namespace1_config = 'ixia_c_multi_otg_topology.yaml'
     try:
         op_rscount = utils.get_operator_restart_count()
         print("[Namespace:{}]Deploying KNE topology".format(
@@ -23,7 +23,7 @@ def test_multiple_otg_single_namespace():
         ))
         _, err = utils.create_kne_config(namespace1_config, namespace1)
         expected_err = "Unsupported configuration; multiple (2) OTG nodes specified"
-        err = err.split("\n")[-2]
+        err = err.split("\n")[-4]
         assert expected_err in err, "Expected error mismatch!!!"
         utils.ixia_c_pods_ok(namespace1, [])
         utils.ixia_c_services_ok(namespace1, [])

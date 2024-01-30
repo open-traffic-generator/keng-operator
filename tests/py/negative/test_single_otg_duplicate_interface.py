@@ -15,7 +15,7 @@ def test_single_interface_connected_multiple_interfaces():
     - operator pod health
     """
     namespace1 = 'ixia-c'
-    namespace1_config = 'single_otg_duplicate_interface.txt'
+    namespace1_config = 'single_otg_duplicate_interface.yaml'
     try:
         op_rscount = utils.get_operator_restart_count()
         print("[Namespace:{}]Deploying KNE topology".format(
@@ -23,7 +23,7 @@ def test_single_interface_connected_multiple_interfaces():
         ))
         _, err = utils.create_kne_config(namespace1_config, namespace1)
         expected_err = "could not find peer for node otg pod otg-port-eth1 link UID 0"
-        err = err.split("\n")[-2]
+        err = err.split("\n")[-4]
         assert expected_err in err, "Expected error mismatch!!!"
         utils.ixia_c_pods_ok(namespace1, [])
         utils.ixia_c_services_ok(namespace1, [])
