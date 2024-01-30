@@ -90,7 +90,7 @@ gen_ixia_c_op_dep_yaml() {
 
 github_docker_image_exists() {
     img=${1}
-    docker login -p ${TOKEN_GITHUB} -u biplamal ghcr.io
+    docker login -p ${GITHUB_PAT} -u ${GITHUB_USER} ghcr.io
     if DOCKER_CLI_EXPERIMENTAL=enabled docker manifest inspect ${img} >/dev/null; then
         docker logout ghcr.io
         return 0
@@ -103,7 +103,7 @@ github_docker_image_exists() {
 push_github_docker_image() {
     img=${1}
     echo "Pushing image ${img} in GitHub"
-    docker login -p ${TOKEN_GITHUB} -u biplamal ghcr.io \
+    docker login -p ${GITHUB_PAT} -u ${GITHUB_USER} ghcr.io \
     && docker push "${img}" \
     && docker logout ghcr.io \
     && echo "${img} pushed in GitHub" \

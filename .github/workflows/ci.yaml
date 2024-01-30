@@ -53,13 +53,12 @@ jobs:
         with:
           tag: ${{ steps.get_version.outputs.version }}
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.ENV_GITHUB_PAT }}
 
       - name: Publishing Artifacts
         if: steps.check_tag.outputs.exists == 'false' && steps.get_branch.outputs.branch == 'main'
         run: |
-          chmod u+x ./ci.sh
-          TOKEN_GITHUB=${{ secrets.TOKEN_GITHUB }} ./ci.sh publish
+          GITHUB_USER=${{ secrets.ENV_GITHUB_USER }} GITHUB_PAT=${{ secrets.ENV_GITHUB_PAT }} ./ci.sh publish
 
       - name: Create Release
         if: steps.check_tag.outputs.exists == 'false' && steps.get_branch.outputs.branch == 'main'
