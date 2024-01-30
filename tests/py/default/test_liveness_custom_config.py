@@ -2,7 +2,7 @@ import pytest
 import utils
 import time
 
-
+@pytest.mark.sanity
 def test_liveness_custom_config():
     """
     Deploy b2b kne topology with default version,
@@ -13,11 +13,11 @@ def test_liveness_custom_config():
     - custom liveness parameters for protocol engines
     """
     namespace1 = 'ixia-c'
-    namespace1_config = 'ixia_c_default_config.txt'
+    namespace1_config = 'ixia_c_pd_topology.yaml'
     expected_pods = [
         'otg-controller',
         'otg-port-eth1',
-        'otg-port-eth2'
+        'arista1'
     ]
     container_extensions = [
         '-protocol-engine',
@@ -36,8 +36,6 @@ def test_liveness_custom_config():
         utils.check_liveness_data('gnmi', expected_pods[0], namespace1, False)
         utils.check_liveness_data(expected_pods[1]+container_extensions[0], expected_pods[1], namespace1, True, 12, 10, 6)
         utils.check_liveness_data(expected_pods[1]+container_extensions[1], expected_pods[1], namespace1, True, 1, 5, 6)
-        utils.check_liveness_data(expected_pods[2]+container_extensions[0], expected_pods[2], namespace1, True, 12, 10, 6)
-        utils.check_liveness_data(expected_pods[2]+container_extensions[1], expected_pods[2], namespace1, True, 1, 5, 6)
         op_rscount = utils.ixia_c_operator_ok(op_rscount)
 
         print("[Namespace:{}]Deleting KNE topology".format(
@@ -46,6 +44,7 @@ def test_liveness_custom_config():
         utils.delete_kne_config(namespace1_config, namespace1)
         utils.ixia_c_pods_ok(namespace1, [])
         op_rscount = utils.ixia_c_operator_ok(op_rscount)
+        utils.reset_configmap()
 
     finally:
         utils.delete_kne_config(namespace1_config, namespace1)

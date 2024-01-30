@@ -2,7 +2,7 @@ import pytest
 import utils
 import time
 
-
+@pytest.mark.sanity
 def test_create_delete_ixia_c_performance():
     """
     Deploy one arm kne topology,
@@ -20,19 +20,18 @@ def test_create_delete_ixia_c_performance():
     - operator pod health
     """
     namespace1 = 'ixia-c'
-    namespace1_config = 'b2b_ixia_c_namespace.txt'
+    namespace1_config = 'ixia_c_pd_topology.yaml'
     expected_svcs = [
-        'service-http-otg-controller',
         'service-gnmi-otg-controller',
         'service-grpc-otg-controller',
         'service-otg-port-eth1',
-        'service-otg-port-eth2'
+        'service-arista1'
     ]
 
     expected_pods = [
         'otg-controller',
         'otg-port-eth1',
-        'otg-port-eth2'
+        'arista1'
     ]
 
     ixia_c_pod_exp_creation_time = 25

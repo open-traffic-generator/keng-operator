@@ -2,7 +2,7 @@ import pytest
 import utils
 import time
 
-
+@pytest.mark.sanity
 def test_lag_min_resource():
     """
     Deploy lag kne topology,

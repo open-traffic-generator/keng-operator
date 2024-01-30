@@ -2,7 +2,7 @@ import pytest
 import utils
 import time
 
-
+@pytest.mark.sanity
 def test_liveness_disabled_config():
     """
     Deploy b2b kne topology with default version,
@@ -13,11 +13,11 @@ def test_liveness_disabled_config():
     - disabled liveness parameters for protocol engines
     """
     namespace1 = 'ixia-c'
-    namespace1_config = 'ixia_c_default_config.txt'
+    namespace1_config = 'ixia_c_pd_topology.yaml'
     expected_pods = [
         'otg-controller',
         'otg-port-eth1',
-        'otg-port-eth2'
+        'arista1'
     ]
     container_extension = '-traffic-engine'
     probe_params = {'traffic-engine':{'liveness-enable': False}}
@@ -30,7 +30,6 @@ def test_liveness_disabled_config():
         utils.create_kne_config(namespace1_config, namespace1)
         utils.ixia_c_pods_ok(namespace1, expected_pods)
         utils.check_liveness_data(expected_pods[1]+container_extension, expected_pods[1], namespace1, False)
-        utils.check_liveness_data(expected_pods[2]+container_extension, expected_pods[2], namespace1, False)
         op_rscount = utils.ixia_c_operator_ok(op_rscount)
 
         print("[Namespace:{}]Deleting KNE topology".format(
@@ -39,6 +38,7 @@ def test_liveness_disabled_config():
         utils.delete_kne_config(namespace1_config, namespace1)
         utils.ixia_c_pods_ok(namespace1, [])
         op_rscount = utils.ixia_c_operator_ok(op_rscount)
+        utils.reset_configmap()
 
     finally:
         utils.delete_kne_config(namespace1_config, namespace1)

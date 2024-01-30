@@ -2,7 +2,7 @@ import pytest
 import utils
 import time
 
-
+@pytest.mark.sanity
 def test_init_container():
     """
     Deploy neg-vm kne topology,
@@ -14,11 +14,11 @@ def test_init_container():
     - operator pod health
     """
     namespace1 = 'ixia-c'
-    namespace1_config = 'b2b_ixia_c_namespace.txt'
+    namespace1_config = 'ixia_c_pd_topology.yaml'
     expected_pods = [
         'otg-controller',
         'otg-port-eth1',
-        'otg-port-eth2'
+        'arista1'
     ]
     try:
         op_rscount = utils.get_operator_restart_count()
@@ -36,7 +36,7 @@ def test_init_container():
         utils.delete_kne_config(namespace1_config, namespace1)
         utils.ixia_c_pods_ok(namespace1, [])
         op_rscount = utils.ixia_c_operator_ok(op_rscount)
-
+        utils.reset_configmap()
     finally:
         utils.delete_kne_config(namespace1_config, namespace1)
         utils.ixia_c_pods_ok(namespace1, [])

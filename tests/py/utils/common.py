@@ -10,9 +10,9 @@ SUDO_USER = 'root'
 # path to dir containing kne configurations relative root dir
 CONFIGS_DIR = 'topology'
 BAD_CONFIGMAP_FILE = 'bad-configmap.yaml'
-INIT_CONFIGMAP_FILE = 'init-configmap.yaml'
-IXIA_CONFIGMAP_FILE = 'ixia-configmap.yaml'
-CUSTOM_CONFIGMAP_FILE = 'custom-configmap.yaml'
+INIT_CONFIG_MAP_FILE = 'init-config.yaml'
+IXIA_CONFIG_MAP_FILE = 'deployments/ixia-c-config.yaml'
+CUSTOM_CONFIG_MAP_FILE = 'custom-ixia-c-config.yaml'
 
 KIND_SINGLE_NODE_NAME = 'kind-control-plane'
 
@@ -165,8 +165,8 @@ def create_secret(namespace, data):
 
 def load_custom_configmap():
     print("Loading custom container config...")
-    cmd = "cat ./{}".format(
-        IXIA_CONFIGMAP_FILE
+    cmd = "cat {}".format(
+        IXIA_CONFIG_MAP_FILE
     )
     out, _ = exec_shell(cmd, False, True)
     yaml_obj = yaml.safe_load(out)
@@ -179,7 +179,7 @@ def load_custom_configmap():
         elif elem["name"] == "traffic-engine":
             elem["env"] = {"CUSTOM_ENV": "CUSTOM_VAL"}
     yaml_obj["data"]["versions"] = json.dumps(json_obj)
-    custom_configmap_path = "{}".format(CUSTOM_CONFIGMAP_FILE)
+    custom_configmap_path = "{}".format(CUSTOM_CONFIG_MAP_FILE)
     with open(custom_configmap_path, "w") as yaml_file:
         yaml.dump(yaml_obj, yaml_file)
 
@@ -218,7 +218,7 @@ def ixia_c_custom_pods_ok(namespace):
 def load_init_configmap():
     print("Loading Init Container Config...")
     cmd = "cat {}".format(
-        IXIA_CONFIGMAP_FILE
+        IXIA_CONFIG_MAP_FILE
     )
     out, _ = exec_shell(cmd, False, True)
     yaml_obj = yaml.safe_load(out)
@@ -227,7 +227,7 @@ def load_init_configmap():
                  "path": "networkop/init-wait", "tag": "latest"}
     json_obj["images"].append(init_cont)
     yaml_obj["data"]["versions"] = json.dumps(json_obj)
-    init_configmap_path = "{}".format(INIT_CONFIGMAP_FILE)
+    init_configmap_path = "{}".format(INIT_CONFIG_MAP_FILE)
     with open(init_configmap_path, "w") as yaml_file:
         yaml.dump(yaml_obj, yaml_file)
 
@@ -237,13 +237,13 @@ def load_init_configmap():
 
 def reset_configmap():
     print("Reset Configmap...")
-    apply_configmap(IXIA_CONFIGMAP_FILE)
+    apply_configmap(IXIA_CONFIG_MAP_FILE)
 
 
 def load_bad_configmap(bad_component, update_release=False):
     print("Loading Bad Config...")
     cmd = "cat ./{}".format(
-        IXIA_CONFIGMAP_FILE
+        IXIA_CONFIG_MAP_FILE
     )
     out, _ = exec_shell(cmd, False, True)
     yaml_obj = yaml.safe_load(out)
@@ -267,7 +267,7 @@ def load_bad_configmap(bad_component, update_release=False):
 def load_grpc_configmap(include_grpc=True, controller_version="default"):
     print("Loading gRPC Config...")
     cmd = "cat ./{}".format(
-        IXIA_CONFIGMAP_FILE
+        IXIA_CONFIG_MAP_FILE
     )
     out, _ = exec_shell(cmd, False, True)
     yaml_obj = yaml.safe_load(out)
@@ -299,7 +299,7 @@ def load_grpc_configmap(include_grpc=True, controller_version="default"):
 def load_liveness_configmap(probe):
     print("Loading custom liveness config...")
     cmd = "cat ./{}".format(
-        IXIA_CONFIGMAP_FILE
+        IXIA_CONFIG_MAP_FILE
     )
     out, _ = exec_shell(cmd, False, True)
     yaml_obj = yaml.safe_load(out)
@@ -309,7 +309,8 @@ def load_liveness_configmap(probe):
             for key in probe[elem["name"]]:
                 elem[key] = probe[elem["name"]][key]
     yaml_obj["data"]["versions"] = json.dumps(json_obj)
-    custom_configmap_path = "{}".format(CUSTOM_CONFIGMAP_FILE)
+    custom_configmap_path = "{}".format(CUSTOM_CONFIG_MAP_FILE)
+    print(yaml_obj)
     with open(custom_configmap_path, "w") as yaml_file:
         yaml.dump(yaml_obj, yaml_file)
 
@@ -320,7 +321,7 @@ def load_liveness_configmap(probe):
 def load_min_resource_configmap(resource):
     print("Loading custom min resource config...")
     cmd = "cat ./{}".format(
-        IXIA_CONFIGMAP_FILE
+        IXIA_CONFIG_MAP_FILE
     )
     out, _ = exec_shell(cmd, False, True)
     yaml_obj = yaml.safe_load(out)
@@ -331,7 +332,7 @@ def load_min_resource_configmap(resource):
             for key in resource[elem["name"]]:
                 elem["min-resource"][key] = resource[elem["name"]][key]
     yaml_obj["data"]["versions"] = json.dumps(json_obj)
-    custom_configmap_path = "{}".format(CUSTOM_CONFIGMAP_FILE)
+    custom_configmap_path = "{}".format(CUSTOM_CONFIG_MAP_FILE)
     with open(custom_configmap_path, "w") as yaml_file:
         yaml.dump(yaml_obj, yaml_file)
 
@@ -342,7 +343,7 @@ def load_min_resource_configmap(resource):
 def load_license_configmap(lic_addr, lic_path, lic_tag):
     print("Loading license config...")
     cmd = "cat ./{}".format(
-        IXIA_CONFIGMAP_FILE
+        IXIA_CONFIG_MAP_FILE
     )
     out, _ = exec_shell(cmd, False, True)
     yaml_obj = yaml.safe_load(out)
@@ -362,7 +363,7 @@ def load_license_configmap(lic_addr, lic_path, lic_tag):
         json_obj["images"].append(lic_elem)
 
     yaml_obj["data"]["versions"] = json.dumps(json_obj)
-    license_configmap_path = "{}".format(CUSTOM_CONFIGMAP_FILE)
+    license_configmap_path = "{}".format(CUSTOM_CONFIG_MAP_FILE)
     with open(license_configmap_path, "w") as yaml_file:
         yaml.dump(yaml_obj, yaml_file)
 
