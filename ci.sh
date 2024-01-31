@@ -116,7 +116,7 @@ verify_github_images() {
         img=${var}
         docker rmi -f $img > /dev/null 2>&1 || true
         echo "pulling ${img} from GitHub"
-        docker login -p ${TOKEN_GITHUB} -u biplamal ghcr.io
+        docker login -p ${GITHUB_PAT} -u ${GITHUB_USER} ghcr.io
         docker pull $img
         docker logout ghcr.io
         if docker image inspect ${img} >/dev/null 2>&1; then
@@ -195,6 +195,12 @@ create_setup() {
 setup_pre_test() {
     cd tests 
     ./setup.sh pre_test
+    cd ..
+}
+
+run_test() {
+    cd tests 
+    ./setup.sh test
     cd ..
 }
 

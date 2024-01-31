@@ -47,14 +47,6 @@ jobs:
         run: |
           echo "::set-output name=version::v$(head ./version | cut -d' ' -f1)"
 
-      - name: Check tag for current version
-        uses: mukunku/tag-exists-action@v1.0.0
-        id: check_tag
-        with:
-          tag: ${{ steps.get_version.outputs.version }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.ENV_GITHUB_PAT }}
-
       - name: Publishing Artifacts
         if: steps.check_tag.outputs.exists == 'false'
         run: |
@@ -97,16 +89,16 @@ jobs:
         - name: Setup Prerequisites
           run: |
             ./ci.sh setup_pre_test
-        # - name: Run Python tests
-        #   run: |
-        #     ./do.sh pytest ./feature/b2b/
-        # - name: Archive logs
-        #   if: always()
-        #   uses: actions/upload-artifact@v3
-        #   with:
-        #     name: kne_b2b_py
-        #     path: |
-        #       logs
+        - name: Run Tests
+          run: |
+            ./do.sh pytest ./feature/b2b/
+        - name: Archive logs
+          if: always()
+          uses: actions/upload-artifact@v3
+          with:
+            name: sanity
+            path: |
+              logs
         - name: Destroy KNE cluster
           run: |
            ./ci.sh destroy_setup
