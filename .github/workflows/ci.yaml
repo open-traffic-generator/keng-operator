@@ -153,5 +153,5 @@ jobs:
         with:
           artifacts: "release/*"
           tag: ${{ steps.get_version.outputs.version }}
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.ENV_GITHUB_PAT }}
           commit: ${{ github.sha }}

@@ -132,6 +132,7 @@ verify_github_images() {
 
 publish() {
     branch=${1}
+    docker images
     version=$(get_version)
     img="${IXIA_C_OPERATOR_IMAGE}:${version}"
     github_img="${GITHUB_REPO}/${IXIA_C_OPERATOR_IMAGE}:${version}"
