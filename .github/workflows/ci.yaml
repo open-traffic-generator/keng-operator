@@ -47,6 +47,12 @@ jobs:
         run: |
           echo "::set-output name=version::v$(head ./version | cut -d' ' -f1)"
 
+      - name: Check tag for current version
+        uses: mukunku/tag-exists-action@v1.0.0
+        id: check_tag
+        with:
+          tag: ${{ steps.get_version.outputs.version }}
+
       - name: Publishing Artifacts
         if: steps.check_tag.outputs.exists == 'false'
         run: |
