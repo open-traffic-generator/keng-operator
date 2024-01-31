@@ -150,21 +150,23 @@ publish() {
     github_img="${GITHUB_REPO}/${IXIA_C_OPERATOR_IMAGE}:${version}"
     github_img_latest="${GITHUB_REPO}/${IXIA_C_OPERATOR_IMAGE}:latest"
     docker tag ${img} "${github_img}"
-    if github_docker_image_exists ${github_img}; then
-        echo "${github_img} already exists..."
-	    exit 1
-    else
-        echo "${github_img} does not exist..."
-        push_github_docker_image ${github_img}
-        verify_github_images ${github_img}
-        if [ "$branch" = "main" ]
-        then 
-            docker tag "${github_img}" "${github_img_latest}"
-            push_github_docker_image ${github_img_latest}
-            verify_github_images ${github_img_latest}
+    if [ "$branch" = "main" ]
+    then
+        if github_docker_image_exists ${github_img}; then
+            echo "${github_img} already exists..."
+            exit 1
         fi
     fi
-
+        
+    echo "${github_img} does not exist..."
+    push_github_docker_image ${github_img}
+    verify_github_images ${github_img}
+    if [ "$branch" = "main" ]
+    then 
+        docker tag "${github_img}" "${github_img_latest}"
+        push_github_docker_image ${github_img_latest}
+        verify_github_images ${github_img_latest}
+    fi
     cicd_gen_release_art
 }
 
