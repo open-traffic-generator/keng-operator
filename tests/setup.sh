@@ -5,7 +5,6 @@ KIND_VERSION=v0.20.0
 METALLB_VERSION=v0.13.11
 MESHNET_COMMIT=d7c306c
 MESHNET_IMAGE="networkop/meshnet\:v0.3.0"
-KENG_OPERATOR_VERSION="0.3.15"
 KENG_OPERATOR_YAML="deployments/ixiatg-operator.yaml"
 ARISTA_CEOS_OPERATOR_VERSION="2.0.1"
 ARISTA_CEOS_OPERATOR_YAML="https://github.com/aristanetworks/arista-ceoslab-operator/config/default?ref=v${ARISTA_CEOS_OPERATOR_VERSION}"
@@ -208,6 +207,7 @@ get_meshnet() {
 
 get_keng_operator() {
     echo "Installing keng-operator ${KENG_OPERATOR_YAML} ..."
+    cat ${KENG_OPERATOR_YAML}
     load_image_to_kind $(keng_operator_image) \
     && kubectl apply -f ${KENG_OPERATOR_YAML} \
     && wait_for_pods ixiatg-op-system \
@@ -255,8 +255,8 @@ setup_k8s_plugins() {
         kne  )
             get_metallb \
             && get_meshnet \
-            && get_keng_operator \
-            && get_kne
+            && get_kne \
+            && get_keng_operator
         ;;
         *   )
             echo "first argument '${1}' ignored"
