@@ -522,6 +522,7 @@ jobs:
           owner: open-traffic-generator
           package-name: keng-operator
           package-type: container
+          token: ${{ secrets.ENV_GITHUB_PAT }}
 
       - name: Create Release
         if: steps.check_tag.outputs.exists == 'false' && steps.get_branch.outputs.branch == 'main'
