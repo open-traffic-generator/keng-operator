@@ -40,12 +40,12 @@ jobs:
       - name: Get Branch
         id: get_branch
         run: |
-          echo "::set-output name=branch::$(git rev-parse --abbrev-ref HEAD)"
+          echo "branch=$(git rev-parse --abbrev-ref HEAD)" >> $GITHUB_OUTPUT
 
       - name: Get Version
         id: get_version
         run: |
-          echo "::set-output name=version::v$(head ./version | cut -d' ' -f1)"
+          echo "version=v$(head ./version | cut -d' ' -f1)" >> $GITHUB_OUTPUT
 
       - name: Check tag for current version
         uses: mukunku/tag-exists-action@v1.0.0
@@ -484,13 +484,13 @@ jobs:
       - name: Get Branch
         id: get_branch
         run: |
-          echo "::set-output name=branch::$(git rev-parse --abbrev-ref HEAD)"
+          echo "branch=$(git rev-parse --abbrev-ref HEAD)" >> $GITHUB_OUTPUT
 
       - name: Get Version
         id: get_version
         run: |
-          echo "::set-output name=version::v$(head ./version | cut -d' ' -f1)"
-          echo "::set-output name=package_version::$(head ./version | cut -d' ' -f1)"
+          echo "version=v$(head ./version | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+          echo "package_version=$(head ./version | cut -d' ' -f1)" >> $GITHUB_OUTPUT
 
       - name: Check tag for current version
         uses: mukunku/tag-exists-action@v1.0.0
