@@ -90,22 +90,31 @@ gen_ixia_c_op_dep_yaml() {
 
 github_docker_image_exists() {
     img=${1}
-    docker login -p ${TOKEN_GITHUB} -u biplamal ghcr.io
+    login_ghcr
     if DOCKER_CLI_EXPERIMENTAL=enabled docker manifest inspect ${img} >/dev/null; then
-        docker logout ghcr.io
+        logout_ghcr
         return 0
     else
-        docker logout ghcr.io
+        logout_ghcr
         return 1
     fi
+}
+
+login_ghcr() {
+    echo "Logging into docker repo ghcr.io"
+    echo "${GITHUB_PAT}" | docker login -u"${GITHUB_USER}" --password-stdin ghcr.io
+}
+
+logout_ghcr() {
+    docker logout ghcr.io
 }
 
 push_github_docker_image() {
     img=${1}
     echo "Pushing image ${img} in GitHub"
-    docker login -p ${TOKEN_GITHUB} -u biplamal ghcr.io \
+    login_ghcr \
     && docker push "${img}" \
-    && docker logout ghcr.io \
+    && logout_ghcr \
     && echo "${img} pushed in GitHub" \
     && docker rmi "${img}" > /dev/null 2>&1 || true
 }
@@ -116,9 +125,9 @@ verify_github_images() {
         img=${var}
         docker rmi -f $img > /dev/null 2>&1 || true
         echo "pulling ${img} from GitHub"
-        docker login -p ${TOKEN_GITHUB} -u biplamal ghcr.io
+        login_ghcr
         docker pull $img
-        docker logout ghcr.io
+        logout_ghcr
         if docker image inspect ${img} >/dev/null 2>&1; then
             echo "${img} pulled successfully from GitHub"
             docker rmi $img > /dev/null 2>&1 || true
@@ -131,24 +140,30 @@ verify_github_images() {
 }
 
 publish() {
+    branch=${1}
+    docker images
     version=$(get_version)
     img="${IXIA_C_OPERATOR_IMAGE}:${version}"
     github_img="${GITHUB_REPO}/${IXIA_C_OPERATOR_IMAGE}:${version}"
     github_img_latest="${GITHUB_REPO}/${IXIA_C_OPERATOR_IMAGE}:latest"
     docker tag ${img} "${github_img}"
-    docker tag "${github_img}" "${github_img_latest}"
-    if github_docker_image_exists ${github_img}; then
-        echo "${github_img} already exists..."
-	exit 1
-    else
-        echo "${github_img} does not exist..."
-        push_github_docker_image ${github_img}
-        verify_github_images ${github_img}
-
+    if [ "$branch" = "main" ]
+    then
+        if github_docker_image_exists ${github_img}; then
+            echo "${github_img} already exists..."
+            exit 1
+        fi
+    fi
+        
+    echo "${github_img} does not exist..."
+    push_github_docker_image ${github_img}
+    verify_github_images ${github_img}
+    if [ "$branch" = "main" ]
+    then 
+        docker tag "${github_img}" "${github_img_latest}"
         push_github_docker_image ${github_img_latest}
         verify_github_images ${github_img_latest}
     fi
-
     cicd_gen_release_art
 }
 
@@ -182,30 +197,39 @@ build() {
 }
 
 
+create_setup() {
+    cd tests 
+    ./setup.sh rm_k8s_cluster 2> /dev/null || true
+    ./setup.sh new_k8s_cluster kne arista
+    cd ..
+}
+
+setup_pre_test() {
+    cd tests 
+    ./setup.sh pre_test
+    cd ..
+}
+
+run_test() {
+    cd tests 
+    ./setup.sh test ${1}
+    grep FAILED logs-${1}/pytest.log && return 1 || true
+    cd ..
+}
+
+destroy_setup() {
+    cd tests 
+    ./setup.sh rm_k8s_cluster 2> /dev/null || true
+    cd ..
+}
+
+
 
 case $1 in
-    deps   )
-        install_deps
-        ;;
-    local   )
-        get_local_build
-        ;;
-    docker   )
-        get_docker_build
-        ;;
-    yaml   )
-        gen_ixia_c_op_dep_yaml ${IXIA_C_OPERATOR_IMAGE}
-        ;;
-    build   )
-        build
-        ;;
-    publish    )
-        publish
-        ;;
-    version   )
-        echo_version
-        ;;
-	*		)
-        $1 || echo "usage: $0 [deps|local|docker|yaml|version]"
-		;;
+    *   )
+        # shift positional arguments so that arg 2 becomes arg 1, etc.
+        cmd=${1}
+        shift 1
+        ${cmd} ${@} || usage
+    ;;
 esac
