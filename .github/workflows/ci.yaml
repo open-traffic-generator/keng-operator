@@ -515,11 +515,17 @@ jobs:
       #     name: release-artifact
       #     path: release/
 
+      - name: Get Version ID from the Versions List
+        id: get_version_id
+        run: |
+          curl -X GET -H "Authorization: Bearer ${{secrets.ENV_GITHUB_PAT}}" https://api.github.com/orgs/open-traffic-generator/packages/container/keng-operator/versions >> $HOME/versionIds.json
+            echo "version_id=$(jq -r '.[] | select(.name == "${{ steps.get_version.outputs.package_version }}").id' $HOME/versionIds.json)" >> $GITHUB_OUTPUT
+
       - name: Delete Non-Main Branch Images
         if: steps.get_branch.outputs.branch != 'main'
         uses: actions/delete-package-versions@v4
         with:
-          package-version-ids: ${{ steps.get_version.outputs.package_version }}
+          package-version-ids: '${{ steps.get_version_id.outputs.version_id }}'
           owner: open-traffic-generator
           package-name: keng-operator
           package-type: container
