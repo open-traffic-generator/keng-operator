@@ -6,7 +6,7 @@ METALLB_VERSION=v0.13.11
 MESHNET_COMMIT=d7c306c
 MESHNET_IMAGE="networkop/meshnet\:v0.3.0"
 KENG_OPERATOR_VERSION="0.3.15"
-KENG_OPERATOR_YAML="https://github.com/open-traffic-generator/keng-operator/releases/download/v${KENG_OPERATOR_VERSION}/ixiatg-operator.yaml"
+KENG_OPERATOR_YAML="deployments/ixiatg-operator.yaml"
 ARISTA_CEOS_OPERATOR_VERSION="2.0.1"
 ARISTA_CEOS_OPERATOR_YAML="https://github.com/aristanetworks/arista-ceoslab-operator/config/default?ref=v${ARISTA_CEOS_OPERATOR_VERSION}"
 ARISTA_CEOS_VERSION="4.29.1F-29233963"
@@ -17,7 +17,7 @@ TIMEOUT_SECONDS=300
 APT_GET_UPDATE=true
 
 GITHUB_USER="biplamal"
-GITHUB_PAT="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"
+GITHUB_PAT="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"
 
 apt_update() {
     if [ "${APT_UPDATE}" = "true" ]

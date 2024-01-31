@@ -131,12 +131,12 @@ verify_github_images() {
 }
 
 publish() {
+    branch=${1}
     version=$(get_version)
     img="${IXIA_C_OPERATOR_IMAGE}:${version}"
     github_img="${GITHUB_REPO}/${IXIA_C_OPERATOR_IMAGE}:${version}"
     github_img_latest="${GITHUB_REPO}/${IXIA_C_OPERATOR_IMAGE}:latest"
     docker tag ${img} "${github_img}"
-    docker tag "${github_img}" "${github_img_latest}"
     if github_docker_image_exists ${github_img}; then
         echo "${github_img} already exists..."
 	    exit 1
@@ -144,9 +144,12 @@ publish() {
         echo "${github_img} does not exist..."
         push_github_docker_image ${github_img}
         verify_github_images ${github_img}
-
-        push_github_docker_image ${github_img_latest}
-        verify_github_images ${github_img_latest}
+        if [ "$branch" = "main" ]
+        then 
+            docker tag "${github_img}" "${github_img_latest}"
+            push_github_docker_image ${github_img_latest}
+            verify_github_images ${github_img_latest}
+        fi
     fi
 
     cicd_gen_release_art
@@ -179,6 +182,26 @@ build() {
     version=$(get_version)
     echo "Build Version: $version"
     echo "Files in ./art: $(ls -lht ${art})"
+}
+
+
+create_setup() {
+    cd tests 
+    ./setup.sh rm_k8s_cluster 2> /dev/null || true
+    ./setup.sh new_k8s_cluster kne
+    cd ..
+}
+
+setup_pre_test() {
+    cd tests 
+    ./setup.sh pre_test
+    cd ..
+}
+
+destroy_setup() {
+    cd tests 
+    ./setup.sh rm_k8s_cluster 2> /dev/null || true
+    cd ..
 }
 
 
