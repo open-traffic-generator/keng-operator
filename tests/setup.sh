@@ -15,8 +15,8 @@ KNE_VERSION=v0.1.15
 TIMEOUT_SECONDS=300
 APT_GET_UPDATE=true
 
-GITHUB_USER="biplamal"
-GITHUB_PAT="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"
+# GITHUB_USER="biplamal"
+# GITHUB_PAT="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"
 
 apt_update() {
     if [ "${APT_UPDATE}" = "true" ]
