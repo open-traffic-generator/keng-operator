@@ -99,7 +99,7 @@ jobs:
             ./ci.sh setup_pre_test
         - name: Run Tests
           run: |
-            ./do.sh pytest ./feature/b2b/
+            ./ci.sh run_test
         - name: Archive logs
           if: always()
           uses: actions/upload-artifact@v3
