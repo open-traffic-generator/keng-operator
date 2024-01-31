@@ -480,7 +480,7 @@ jobs:
   release:
     runs-on: ubuntu-latest
     # needs: [dut, lag, license, liveness, miscellaneous, negative, performance, resource, rest]
-    # needs: [dut]
+    needs: [dut]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
