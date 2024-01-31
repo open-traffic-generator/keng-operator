@@ -1,8 +1,9 @@
 import utils
 import time
+import pytest
 
-
-def test_rest_double_namespace(ixia_c_release):
+@pytest.mark.rest
+def test_rest_double_namespace():
     """
     Config Map will be fetched via REST call from Ixia-C Release
     Deploy dut kne topology,

@@ -1,9 +1,7 @@
 import utils
 import pytest
-import time
-from deepdiff import DeepDiff
 
-@pytest.mark.sanity
+@pytest.mark.negative
 def test_single_interface_connected_multiple_interfaces():
     """
     Deploy single otg duplicate interfaces kne topology,

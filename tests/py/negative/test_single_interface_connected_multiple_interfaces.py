@@ -1,8 +1,7 @@
 import utils
 import pytest
-import time
 
-@pytest.mark.sanity
+@pytest.mark.negative
 def test_single_interface_connected_multiple_interfaces():
     """
     Deploy single interface connected to multi-pole interfaces kne topology,

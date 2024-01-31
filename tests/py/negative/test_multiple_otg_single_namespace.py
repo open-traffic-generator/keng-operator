@@ -1,7 +1,7 @@
 import utils
 import pytest
 
-@pytest.mark.sanity
+@pytest.mark.negative
 def test_multiple_otg_single_namespace():
     """
     Deploy multiple otg kne topology,

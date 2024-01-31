@@ -2,7 +2,7 @@ import pytest
 import utils
 import time
 
-@pytest.mark.sanity
+@pytest.mark.negative
 def test_cm_reload_single_namespace():
     """
     Deploy pd kne topology with BAD config,

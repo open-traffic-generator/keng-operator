@@ -395,12 +395,13 @@ pre_test() {
     && echo "Successfully setup pytest !"
 }
 
-test() {
-    mkdir -p logs
+test() { 
+    marker=${1}
+    mkdir -p logs-${marker}
     py=.env/bin/python
-    log=logs/pytest.log
+    log=logs-${marker}/pytest.log
 
-    ${py} -m pytest ./py -m sanity | tee ${log}
+    ${py} -m pytest ./py -m ${marker} | tee ${log}
     
     grep FAILED ${log} && return 1 || true
 }

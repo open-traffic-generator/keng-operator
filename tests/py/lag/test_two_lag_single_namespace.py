@@ -2,7 +2,7 @@ import utils
 import pytest
 from deepdiff import DeepDiff
 
-@pytest.mark.sanity
+@pytest.mark.lag
 def test_two_lag_single_namespace():
     """
     Deploy two lag kne topology,

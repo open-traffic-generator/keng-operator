@@ -2,12 +2,12 @@ import pytest
 import utils
 import time
 
-@pytest.mark.sanity
+@pytest.mark.performance
 def test_create_delete_ixia_c_performance():
     """
-    Deploy one arm kne topology,
+    Deploy pd kne topology,
     - namespace - 1: ixia-c
-    Delete one arm kne topology,
+    Delete pd kne topology,
     - namespace - 1: ixia-c
     Validate,
     - pods creation performance

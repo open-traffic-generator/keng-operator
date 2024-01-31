@@ -65,7 +65,7 @@ jobs:
           name: release-artifact
           path: release/
    
-  sanity:
+  dut:
       needs: build
       runs-on: ubuntu-22.04
       steps:
@@ -99,21 +99,387 @@ jobs:
             ./ci.sh setup_pre_test
         - name: Run Tests
           run: |
-            ./ci.sh run_test
+            ./ci.sh run_test dut
         - name: Archive logs
           if: always()
           uses: actions/upload-artifact@v3
           with:
-            name: sanity
+            name: dut
             path: |
-              logs
+              logs-dut
+        - name: Destroy KNE cluster
+          run: |
+           ./ci.sh destroy_setup
+  lag:
+      needs: build
+      runs-on: ubuntu-22.04
+      steps:
+        - name: Checkout source
+          uses: actions/checkout@v3
+        - name: Setup docker
+          uses: docker-practice/actions-setup-docker@master
+        - name: Setup Go
+          uses: actions/setup-go@v3
+          with:
+            go-version: ${{ env.GO_VERSION }}
+        - name: Get Artifacts
+          uses: actions/download-artifact@master
+          with:
+            name: release-artifact
+            path: release/
+
+        - name: Copy Artifacts
+          run: |
+            cp release/ixiatg-operator.yaml tests/deployments
+
+        - name: Setup KNE cluster
+          run: |
+            GITHUB_USER=${{ secrets.ENV_GITHUB_USER }} GITHUB_PAT=${{ secrets.ENV_GITHUB_PAT }} ./ci.sh create_setup
+        - name: Setup Python
+          uses: actions/setup-python@v4
+          with:
+            python-version: ${{ env.PYTHON_VERSION }}
+        - name: Setup Prerequisites
+          run: |
+            ./ci.sh setup_pre_test
+        - name: Run Tests
+          run: |
+            ./ci.sh run_test lags
+        - name: Archive logs
+          if: always()
+          uses: actions/upload-artifact@v3
+          with:
+            name: lag
+            path: |
+              logs-lag
+        - name: Destroy KNE cluster
+          run: |
+           ./ci.sh destroy_setup
+  license:
+      needs: build
+      runs-on: ubuntu-22.04
+      steps:
+        - name: Checkout source
+          uses: actions/checkout@v3
+        - name: Setup docker
+          uses: docker-practice/actions-setup-docker@master
+        - name: Setup Go
+          uses: actions/setup-go@v3
+          with:
+            go-version: ${{ env.GO_VERSION }}
+        - name: Get Artifacts
+          uses: actions/download-artifact@master
+          with:
+            name: release-artifact
+            path: release/
+
+        - name: Copy Artifacts
+          run: |
+            cp release/ixiatg-operator.yaml tests/deployments
+
+        - name: Setup KNE cluster
+          run: |
+            GITHUB_USER=${{ secrets.ENV_GITHUB_USER }} GITHUB_PAT=${{ secrets.ENV_GITHUB_PAT }} ./ci.sh create_setup
+        - name: Setup Python
+          uses: actions/setup-python@v4
+          with:
+            python-version: ${{ env.PYTHON_VERSION }}
+        - name: Setup Prerequisites
+          run: |
+            ./ci.sh setup_pre_test
+        - name: Run Tests
+          run: |
+            ./ci.sh run_test license
+        - name: Archive logs
+          if: always()
+          uses: actions/upload-artifact@v3
+          with:
+            name: license
+            path: |
+              logs-license
+        - name: Destroy KNE cluster
+          run: |
+           ./ci.sh destroy_setup
+
+  liveness:
+      needs: build
+      runs-on: ubuntu-22.04
+      steps:
+        - name: Checkout source
+          uses: actions/checkout@v3
+        - name: Setup docker
+          uses: docker-practice/actions-setup-docker@master
+        - name: Setup Go
+          uses: actions/setup-go@v3
+          with:
+            go-version: ${{ env.GO_VERSION }}
+        - name: Get Artifacts
+          uses: actions/download-artifact@master
+          with:
+            name: release-artifact
+            path: release/
+
+        - name: Copy Artifacts
+          run: |
+            cp release/ixiatg-operator.yaml tests/deployments
+
+        - name: Setup KNE cluster
+          run: |
+            GITHUB_USER=${{ secrets.ENV_GITHUB_USER }} GITHUB_PAT=${{ secrets.ENV_GITHUB_PAT }} ./ci.sh create_setup
+        - name: Setup Python
+          uses: actions/setup-python@v4
+          with:
+            python-version: ${{ env.PYTHON_VERSION }}
+        - name: Setup Prerequisites
+          run: |
+            ./ci.sh setup_pre_test
+        - name: Run Tests
+          run: |
+            ./ci.sh run_test liveness
+        - name: Archive logs
+          if: always()
+          uses: actions/upload-artifact@v3
+          with:
+            name: liveness
+            path: |
+              logs-liveness
+        - name: Destroy KNE cluster
+          run: |
+           ./ci.sh destroy_setup
+
+  miscellaneous:
+      needs: build
+      runs-on: ubuntu-22.04
+      steps:
+        - name: Checkout source
+          uses: actions/checkout@v3
+        - name: Setup docker
+          uses: docker-practice/actions-setup-docker@master
+        - name: Setup Go
+          uses: actions/setup-go@v3
+          with:
+            go-version: ${{ env.GO_VERSION }}
+        - name: Get Artifacts
+          uses: actions/download-artifact@master
+          with:
+            name: release-artifact
+            path: release/
+
+        - name: Copy Artifacts
+          run: |
+            cp release/ixiatg-operator.yaml tests/deployments
+
+        - name: Setup KNE cluster
+          run: |
+            GITHUB_USER=${{ secrets.ENV_GITHUB_USER }} GITHUB_PAT=${{ secrets.ENV_GITHUB_PAT }} ./ci.sh create_setup
+        - name: Setup Python
+          uses: actions/setup-python@v4
+          with:
+            python-version: ${{ env.PYTHON_VERSION }}
+        - name: Setup Prerequisites
+          run: |
+            ./ci.sh setup_pre_test
+        - name: Run Tests
+          run: |
+            ./ci.sh run_test miscellaneous
+        - name: Archive logs
+          if: always()
+          uses: actions/upload-artifact@v3
+          with:
+            name: miscellaneous
+            path: |
+              logs-miscellaneous
+        - name: Destroy KNE cluster
+          run: |
+           ./ci.sh destroy_setup
+
+  negative:
+      needs: build
+      runs-on: ubuntu-22.04
+      steps:
+        - name: Checkout source
+          uses: actions/checkout@v3
+        - name: Setup docker
+          uses: docker-practice/actions-setup-docker@master
+        - name: Setup Go
+          uses: actions/setup-go@v3
+          with:
+            go-version: ${{ env.GO_VERSION }}
+        - name: Get Artifacts
+          uses: actions/download-artifact@master
+          with:
+            name: release-artifact
+            path: release/
+
+        - name: Copy Artifacts
+          run: |
+            cp release/ixiatg-operator.yaml tests/deployments
+
+        - name: Setup KNE cluster
+          run: |
+            GITHUB_USER=${{ secrets.ENV_GITHUB_USER }} GITHUB_PAT=${{ secrets.ENV_GITHUB_PAT }} ./ci.sh create_setup
+        - name: Setup Python
+          uses: actions/setup-python@v4
+          with:
+            python-version: ${{ env.PYTHON_VERSION }}
+        - name: Setup Prerequisites
+          run: |
+            ./ci.sh setup_pre_test
+        - name: Run Tests
+          run: |
+            ./ci.sh run_test negative
+        - name: Archive logs
+          if: always()
+          uses: actions/upload-artifact@v3
+          with:
+            name: negative
+            path: |
+              logs-negative
+        - name: Destroy KNE cluster
+          run: |
+           ./ci.sh destroy_setup
+
+  performance:
+      needs: build
+      runs-on: ubuntu-22.04
+      steps:
+        - name: Checkout source
+          uses: actions/checkout@v3
+        - name: Setup docker
+          uses: docker-practice/actions-setup-docker@master
+        - name: Setup Go
+          uses: actions/setup-go@v3
+          with:
+            go-version: ${{ env.GO_VERSION }}
+        - name: Get Artifacts
+          uses: actions/download-artifact@master
+          with:
+            name: release-artifact
+            path: release/
+
+        - name: Copy Artifacts
+          run: |
+            cp release/ixiatg-operator.yaml tests/deployments
+
+        - name: Setup KNE cluster
+          run: |
+            GITHUB_USER=${{ secrets.ENV_GITHUB_USER }} GITHUB_PAT=${{ secrets.ENV_GITHUB_PAT }} ./ci.sh create_setup
+        - name: Setup Python
+          uses: actions/setup-python@v4
+          with:
+            python-version: ${{ env.PYTHON_VERSION }}
+        - name: Setup Prerequisites
+          run: |
+            ./ci.sh setup_pre_test
+        - name: Run Tests
+          run: |
+            ./ci.sh run_test performance
+        - name: Archive logs
+          if: always()
+          uses: actions/upload-artifact@v3
+          with:
+            name: performance
+            path: |
+              logs-performance
+        - name: Destroy KNE cluster
+          run: |
+           ./ci.sh destroy_setup
+
+  resource:
+      needs: build
+      runs-on: ubuntu-22.04
+      steps:
+        - name: Checkout source
+          uses: actions/checkout@v3
+        - name: Setup docker
+          uses: docker-practice/actions-setup-docker@master
+        - name: Setup Go
+          uses: actions/setup-go@v3
+          with:
+            go-version: ${{ env.GO_VERSION }}
+        - name: Get Artifacts
+          uses: actions/download-artifact@master
+          with:
+            name: release-artifact
+            path: release/
+
+        - name: Copy Artifacts
+          run: |
+            cp release/ixiatg-operator.yaml tests/deployments
+
+        - name: Setup KNE cluster
+          run: |
+            GITHUB_USER=${{ secrets.ENV_GITHUB_USER }} GITHUB_PAT=${{ secrets.ENV_GITHUB_PAT }} ./ci.sh create_setup
+        - name: Setup Python
+          uses: actions/setup-python@v4
+          with:
+            python-version: ${{ env.PYTHON_VERSION }}
+        - name: Setup Prerequisites
+          run: |
+            ./ci.sh setup_pre_test
+        - name: Run Tests
+          run: |
+            ./ci.sh run_test resource
+        - name: Archive logs
+          if: always()
+          uses: actions/upload-artifact@v3
+          with:
+            name: resource
+            path: |
+              logs-resource
+        - name: Destroy KNE cluster
+          run: |
+           ./ci.sh destroy_setup
+
+  rest:
+      needs: build
+      runs-on: ubuntu-22.04
+      steps:
+        - name: Checkout source
+          uses: actions/checkout@v3
+        - name: Setup docker
+          uses: docker-practice/actions-setup-docker@master
+        - name: Setup Go
+          uses: actions/setup-go@v3
+          with:
+            go-version: ${{ env.GO_VERSION }}
+        - name: Get Artifacts
+          uses: actions/download-artifact@master
+          with:
+            name: release-artifact
+            path: release/
+
+        - name: Copy Artifacts
+          run: |
+            cp release/ixiatg-operator.yaml tests/deployments
+
+        - name: Setup KNE cluster
+          run: |
+            GITHUB_USER=${{ secrets.ENV_GITHUB_USER }} GITHUB_PAT=${{ secrets.ENV_GITHUB_PAT }} ./ci.sh create_setup
+        - name: Setup Python
+          uses: actions/setup-python@v4
+          with:
+            python-version: ${{ env.PYTHON_VERSION }}
+        - name: Setup Prerequisites
+          run: |
+            ./ci.sh setup_pre_test
+        - name: Run Tests
+          run: |
+            ./ci.sh run_test rest
+        - name: Archive logs
+          if: always()
+          uses: actions/upload-artifact@v3
+          with:
+            name: rest
+            path: |
+              logs-rest
         - name: Destroy KNE cluster
           run: |
            ./ci.sh destroy_setup
 
   release:
     runs-on: ubuntu-latest
-    needs: [build, sanity]
+    needs: [dut, lag, license, liveness, miscellaneous, negative, performance, resource, rest]
     steps:
       - name: Checkout
         uses: actions/checkout@v4

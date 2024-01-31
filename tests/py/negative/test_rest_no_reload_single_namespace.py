@@ -2,7 +2,7 @@ import pytest
 import utils
 import time
 
-@pytest.mark.sanity
+@pytest.mark.negative
 def test_rest_no_reload_single_namespace():
     """
     Deploy pd kne topology with latest version,

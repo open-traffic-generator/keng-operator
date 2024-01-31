@@ -215,7 +215,7 @@ setup_pre_test() {
 
 run_test() {
     cd tests 
-    ./setup.sh test
+    ./setup.sh test ${1}
     cd ..
 }
 
