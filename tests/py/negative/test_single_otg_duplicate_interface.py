@@ -1,7 +1,6 @@
 import utils
 import pytest
 
-# @pytest.mark.negative
 def test_single_interface_connected_multiple_interfaces():
     """
     Deploy single otg duplicate interfaces kne topology,
