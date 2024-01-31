@@ -238,6 +238,8 @@ get_kne() {
     echo "Installing KNE ${KNE_VERSION} ..."
     CGO_ENBLED=0 go install github.com/openconfig/kne/kne_cli@${KNE_VERSION} \
     && mv $(which kne_cli) $(dirname $(which kne_cli))/kne
+    echo "kne ----- path"
+    which kne
 }
 
 get_kubemod() {

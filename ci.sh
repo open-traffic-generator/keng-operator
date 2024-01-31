@@ -228,28 +228,10 @@ destroy_setup() {
 
 
 case $1 in
-    deps   )
-        install_deps
-        ;;
-    local   )
-        get_local_build
-        ;;
-    docker   )
-        get_docker_build
-        ;;
-    yaml   )
-        gen_ixia_c_op_dep_yaml ${IXIA_C_OPERATOR_IMAGE}
-        ;;
-    build   )
-        build
-        ;;
-    publish    )
-        publish
-        ;;
-    version   )
-        echo_version
-        ;;
-	*		)
-        $1 || echo "usage: $0 [deps|local|docker|yaml|version]"
-		;;
+    *   )
+        # shift positional arguments so that arg 2 becomes arg 1, etc.
+        cmd=${1}
+        shift 1
+        ${cmd} ${@} || usage
+    ;;
 esac
