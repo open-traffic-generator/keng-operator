@@ -508,11 +508,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.ENV_GITHUB_PAT }}
 
-      - name: Get Artifacts
-        uses: actions/download-artifact@master
-        with:
-          name: release-artifact
-          path: release/
+      # - name: Get Artifacts
+      #   uses: actions/download-artifact@master
+      #   with:
+      #     name: release-artifact
+      #     path: release/
 
       - name: Delete Non-Main Branch Images
         if: steps.get_branch.outputs.branch != 'main'
@@ -524,11 +524,11 @@ jobs:
           package-type: container
           token: ${{ secrets.ENV_GITHUB_PAT }}
 
-      - name: Create Release
-        if: steps.check_tag.outputs.exists == 'false' && steps.get_branch.outputs.branch == 'main'
-        uses: ncipollo/release-action@v1
-        with:
-          artifacts: "release/*"
-          tag: ${{ steps.get_version.outputs.version }}
-          token: ${{ secrets.ENV_GITHUB_PAT }}
-          commit: ${{ github.sha }}
+      # - name: Create Release
+      #   if: steps.check_tag.outputs.exists == 'false' && steps.get_branch.outputs.branch == 'main'
+      #   uses: ncipollo/release-action@v1
+      #   with:
+      #     artifacts: "release/*"
+      #     tag: ${{ steps.get_version.outputs.version }}
+      #     token: ${{ secrets.ENV_GITHUB_PAT }}
+      #     commit: ${{ github.sha }}
