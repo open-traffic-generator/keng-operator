@@ -374,11 +374,16 @@ wait_for_no_namespace() {
     done
 }
 
+apply_configmap() {
+    kubectl apply -f deployments/ixia-c-config.yaml
+}
+
 new_k8s_cluster() {
     common_install \
     && setup_kind_cluster \
     && setup_k8s_plugins ${1} ${2} \
-    && load_ixia_c_images
+    && load_ixia_c_images \
+    && apply_configmap
 }
 
 rm_k8s_cluster() {
