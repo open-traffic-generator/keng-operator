@@ -200,7 +200,7 @@ build() {
 create_setup() {
     cd tests 
     ./setup.sh rm_k8s_cluster 2> /dev/null || true
-    ./setup.sh new_k8s_cluster kne
+    ./setup.sh new_k8s_cluster kne arista
     cd ..
 }
 
