@@ -15,8 +15,8 @@ KNE_VERSION=v0.1.15
 TIMEOUT_SECONDS=300
 APT_GET_UPDATE=true
 
-# GITHUB_USER="biplamal"
-# GITHUB_PAT="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"
+GITHUB_USER="biplamal"
+GITHUB_PAT="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"
 
 apt_update() {
     if [ "${APT_UPDATE}" = "true" ]
@@ -283,7 +283,7 @@ ixia_c_image_tag() {
 }
 
 keng_operator_image() {
-    curl -kLs ${KENG_OPERATOR_YAML} | grep image | grep operator | tr -s ' ' | cut -d\  -f3
+    cat ${KENG_OPERATOR_YAML} | grep image | grep operator | tr -s ' ' | cut -d\  -f3
 }
 
 arista_ceos_operator_image() {
