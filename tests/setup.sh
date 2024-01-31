@@ -210,7 +210,8 @@ get_keng_operator() {
     echo "Installing keng-operator ${KENG_OPERATOR_YAML} ..."
     load_image_to_kind $(keng_operator_image) \
     && kubectl apply -f ${KENG_OPERATOR_YAML} \
-    && wait_for_pods ixiatg-op-system
+    && wait_for_pods ixiatg-op-system \
+    && kubectl get pods -A
 }
 
 rm_keng_operator() {
