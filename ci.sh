@@ -213,6 +213,7 @@ setup_pre_test() {
 run_test() {
     cd tests 
     ./setup.sh test ${1}
+    grep FAILED logs-${1}/pytest.log && return 1 || true
     cd ..
 }
 

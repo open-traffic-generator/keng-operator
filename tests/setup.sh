@@ -407,8 +407,6 @@ test() {
     log=logs-${marker}/pytest.log
 
     ${py} -m pytest ./py -m ${marker} | tee ${log}
-    
-    grep FAILED ${log} && exit 1 || true
 }
 
 

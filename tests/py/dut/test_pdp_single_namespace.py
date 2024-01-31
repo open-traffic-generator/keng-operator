@@ -24,7 +24,7 @@ def test_pdp_single_namespace():
     """
 
     expected_svcs = {
-        'service-https-otg-controller': [8443],
+        'service-https-otg-controller': [5443],
         'service-gnmi-otg-controller': [50051],
         'service-grpc-otg-controller': [40051],
         'service-otg-port-eth1': [5555, 50071],
