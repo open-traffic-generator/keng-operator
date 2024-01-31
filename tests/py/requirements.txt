@@ -2,3 +2,6 @@ pytest == 8.0.0
 pytest-html
 flake8 == 7.0.0
 deepdiff
+yaml
+json
+socket
