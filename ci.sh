@@ -16,9 +16,6 @@ GITHUB_REPO="ghcr.io/open-traffic-generator"
 art=./art
 release=./release
 
-# GITHUB_USER="biplamal"
-# GITHUB_PAT="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"
-
 # get installers based on host architecture
 if [ "$(arch)" = "aarch64" ] || [ "$(arch)" = "arm64" ]
 then
