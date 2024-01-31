@@ -144,7 +144,7 @@ jobs:
             ./ci.sh setup_pre_test
         - name: Run Tests
           run: |
-            ./ci.sh run_test lags
+            ./ci.sh run_test lag
         - name: Archive logs
           if: always()
           uses: actions/upload-artifact@v3
