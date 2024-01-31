@@ -90,22 +90,31 @@ gen_ixia_c_op_dep_yaml() {
 
 github_docker_image_exists() {
     img=${1}
-    docker login -p ${GITHUB_PAT} -u ${GITHUB_USER} ghcr.io
+    login_ghcr
     if DOCKER_CLI_EXPERIMENTAL=enabled docker manifest inspect ${img} >/dev/null; then
-        docker logout ghcr.io
+        logout_ghcr
         return 0
     else
-        docker logout ghcr.io
+        logout_ghcr
         return 1
     fi
+}
+
+login_ghcr() {
+    echo "Logging into docker repo ghcr.io"
+    echo "${GITHUB_PAT}" | docker login -u"${GITHUB_USER}" --password-stdin ghcr.io
+}
+
+logout_ghcr() {
+    docker logout ghcr.io
 }
 
 push_github_docker_image() {
     img=${1}
     echo "Pushing image ${img} in GitHub"
-    docker login -p ${GITHUB_PAT} -u ${GITHUB_USER} ghcr.io \
+    login_ghcr \
     && docker push "${img}" \
-    && docker logout ghcr.io \
+    && logout_ghcr \
     && echo "${img} pushed in GitHub" \
     && docker rmi "${img}" > /dev/null 2>&1 || true
 }
@@ -116,9 +125,9 @@ verify_github_images() {
         img=${var}
         docker rmi -f $img > /dev/null 2>&1 || true
         echo "pulling ${img} from GitHub"
-        docker login -p ${GITHUB_PAT} -u ${GITHUB_USER} ghcr.io
+        login_ghcr
         docker pull $img
-        docker logout ghcr.io
+        logout_ghcr
         if docker image inspect ${img} >/dev/null 2>&1; then
             echo "${img} pulled successfully from GitHub"
             docker rmi $img > /dev/null 2>&1 || true
