@@ -8,108 +8,108 @@ on:
   push:
 
 jobs:
-  # build:
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Checkout
-  #       uses: actions/checkout@v4
-  #       with:
-  #         submodules: "true"
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: "true"
 
-  #     - name: Setup Docker
-  #       uses: docker-practice/actions-setup-docker@master
+      - name: Setup Docker
+        uses: docker-practice/actions-setup-docker@master
 
-  #     - name: Setup go
-  #       uses: actions/setup-go@v4
-  #       with:
-  #         go-version: "1.17.9"
+      - name: Setup go
+        uses: actions/setup-go@v4
+        with:
+          go-version: "1.17.9"
 
-  #     - name: Install deps
-  #       run: |
-  #         sudo apt-get update
-  #         sudo apt-get -y install make build-essential
-  #         go version
-  #         go mod download
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get -y install make build-essential
+          go version
+          go mod download
 
-  #     - name: Build
-  #       run: |
-  #         pwd
-  #         chmod u+x ./ci.sh
-  #         ./ci.sh build
+      - name: Build
+        run: |
+          pwd
+          chmod u+x ./ci.sh
+          ./ci.sh build
 
-  #     - name: Get Branch
-  #       id: get_branch
-  #       run: |
-  #         echo "::set-output name=branch::$(git rev-parse --abbrev-ref HEAD)"
+      - name: Get Branch
+        id: get_branch
+        run: |
+          echo "::set-output name=branch::$(git rev-parse --abbrev-ref HEAD)"
 
-  #     - name: Get Version
-  #       id: get_version
-  #       run: |
-  #         echo "::set-output name=version::v$(head ./version | cut -d' ' -f1)"
+      - name: Get Version
+        id: get_version
+        run: |
+          echo "::set-output name=version::v$(head ./version | cut -d' ' -f1)"
 
-  #     - name: Check tag for current version
-  #       uses: mukunku/tag-exists-action@v1.0.0
-  #       id: check_tag
-  #       with:
-  #         tag: ${{ steps.get_version.outputs.version }}
-  #       env:
-  #         GITHUB_TOKEN: ${{ secrets.ENV_GITHUB_PAT }}
+      - name: Check tag for current version
+        uses: mukunku/tag-exists-action@v1.0.0
+        id: check_tag
+        with:
+          tag: ${{ steps.get_version.outputs.version }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.ENV_GITHUB_PAT }}
 
-  #     - name: Publishing Artifacts
-  #       if: steps.check_tag.outputs.exists == 'false'
-  #       run: |
-  #         GITHUB_USER=${{ secrets.ENV_GITHUB_USER }} GITHUB_PAT=${{ secrets.ENV_GITHUB_PAT }} ./ci.sh publish ${{ steps.get_branch.outputs.branch }}
+      - name: Publishing Artifacts
+        if: steps.check_tag.outputs.exists == 'false'
+        run: |
+          GITHUB_USER=${{ secrets.ENV_GITHUB_USER }} GITHUB_PAT=${{ secrets.ENV_GITHUB_PAT }} ./ci.sh publish ${{ steps.get_branch.outputs.branch }}
 
-  #     - uses: actions/upload-artifact@master
-  #       with:
-  #         name: release-artifact
-  #         path: release/
+      - uses: actions/upload-artifact@master
+        with:
+          name: release-artifact
+          path: release/
    
-  # dut:
-  #     needs: build
-  #     runs-on: ubuntu-22.04
-  #     steps:
-  #       - name: Checkout source
-  #         uses: actions/checkout@v3
-  #       - name: Setup docker
-  #         uses: docker-practice/actions-setup-docker@master
-  #       - name: Setup Go
-  #         uses: actions/setup-go@v3
-  #         with:
-  #           go-version: ${{ env.GO_VERSION }}
-  #       - name: Get Artifacts
-  #         uses: actions/download-artifact@master
-  #         with:
-  #           name: release-artifact
-  #           path: release/
+  dut:
+      needs: build
+      runs-on: ubuntu-22.04
+      steps:
+        - name: Checkout source
+          uses: actions/checkout@v3
+        - name: Setup docker
+          uses: docker-practice/actions-setup-docker@master
+        - name: Setup Go
+          uses: actions/setup-go@v3
+          with:
+            go-version: ${{ env.GO_VERSION }}
+        - name: Get Artifacts
+          uses: actions/download-artifact@master
+          with:
+            name: release-artifact
+            path: release/
 
-  #       - name: Copy Artifacts
-  #         run: |
-  #           cp release/ixiatg-operator.yaml tests/deployments
+        - name: Copy Artifacts
+          run: |
+            cp release/ixiatg-operator.yaml tests/deployments
 
-  #       - name: Setup KNE cluster
-  #         run: |
-  #           GITHUB_USER=${{ secrets.ENV_GITHUB_USER }} GITHUB_PAT=${{ secrets.ENV_GITHUB_PAT }} ./ci.sh create_setup
-  #       - name: Setup Python
-  #         uses: actions/setup-python@v4
-  #         with:
-  #           python-version: ${{ env.PYTHON_VERSION }}
-  #       - name: Setup Prerequisites
-  #         run: |
-  #           ./ci.sh setup_pre_test
-  #       - name: Run Tests
-  #         run: |
-  #           ./ci.sh run_test dut
-  #       - name: Archive logs
-  #         if: always()
-  #         uses: actions/upload-artifact@v3
-  #         with:
-  #           name: dut
-  #           path: |
-  #             logs-dut
-  #       - name: Destroy KNE cluster
-  #         run: |
-  #          ./ci.sh destroy_setup
+        - name: Setup KNE cluster
+          run: |
+            GITHUB_USER=${{ secrets.ENV_GITHUB_USER }} GITHUB_PAT=${{ secrets.ENV_GITHUB_PAT }} ./ci.sh create_setup
+        - name: Setup Python
+          uses: actions/setup-python@v4
+          with:
+            python-version: ${{ env.PYTHON_VERSION }}
+        - name: Setup Prerequisites
+          run: |
+            ./ci.sh setup_pre_test
+        - name: Run Tests
+          run: |
+            ./ci.sh run_test dut
+        - name: Archive logs
+          if: always()
+          uses: actions/upload-artifact@v3
+          with:
+            name: dut
+            path: |
+              logs-dut
+        - name: Destroy KNE cluster
+          run: |
+           ./ci.sh destroy_setup
   # lag:
   #     needs: build
   #     runs-on: ubuntu-22.04
@@ -509,11 +509,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.ENV_GITHUB_PAT }}
 
-      # - name: Get Artifacts
-      #   uses: actions/download-artifact@master
-      #   with:
-      #     name: release-artifact
-      #     path: release/
+      - name: Get Artifacts
+        uses: actions/download-artifact@master
+        with:
+          name: release-artifact
+          path: release/
 
       - name: Get Version ID from the Versions List
         id: get_version_id
@@ -523,19 +523,18 @@ jobs:
 
       - name: Delete Non-Main Branch Images
         if: steps.get_branch.outputs.branch != 'main'
-        uses: actions/delete-package-versions@v4
-        with:
-          package-version-ids: '${{ steps.get_version_id.outputs.version_id }}'
-          owner: open-traffic-generator
-          package-name: keng-operator
-          package-type: container
-          token: ${{ secrets.ENV_GITHUB_PAT }}
+        run: |
+          curl -i \
+            -X DELETE \
+            -H 'Authorization: Bearer ${{secrets.ENV_GITHUB_PAT}}' \
+            -H "Accept: application/vnd.github.v3+json" \
+            https://api.github.com/orgs/open-traffic-generator/packages/container/keng-operator/versions/173317052
 
-      # - name: Create Release
-      #   if: steps.check_tag.outputs.exists == 'false' && steps.get_branch.outputs.branch == 'main'
-      #   uses: ncipollo/release-action@v1
-      #   with:
-      #     artifacts: "release/*"
-      #     tag: ${{ steps.get_version.outputs.version }}
-      #     token: ${{ secrets.ENV_GITHUB_PAT }}
-      #     commit: ${{ github.sha }}
+      - name: Create Release
+        if: steps.check_tag.outputs.exists == 'false' && steps.get_branch.outputs.branch == 'main'
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: "release/*"
+          tag: ${{ steps.get_version.outputs.version }}
+          token: ${{ secrets.ENV_GITHUB_PAT }}
+          commit: ${{ github.sha }}
