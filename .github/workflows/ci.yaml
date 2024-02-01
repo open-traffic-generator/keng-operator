@@ -472,17 +472,19 @@ jobs:
   release:
     runs-on: ubuntu-latest
     needs: [dut, lag, license, liveness, miscellaneous, negative, performance, resource, rest]
-    if: always()
     steps:
       - name: Checkout
+        if: always()
         uses: actions/checkout@v4
         with:
           submodules: "true"
 
       - name: Setup Docker
+        if: always()
         uses: docker-practice/actions-setup-docker@master
       
       - name: Get Branch
+        if: always()
         id: get_branch
         run: |
           echo "branch=$(git rev-parse --abbrev-ref HEAD)" >> $GITHUB_OUTPUT
@@ -494,6 +496,7 @@ jobs:
           echo "package_version=$(head ./version | cut -d' ' -f1)" >> $GITHUB_OUTPUT
 
       - name: Check tag for current version
+        if: always()
         uses: mukunku/tag-exists-action@v1.0.0
         id: check_tag
         with:
@@ -501,20 +504,15 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.ENV_GITHUB_PAT }}
 
-      - name: Get Artifacts
-        uses: actions/download-artifact@master
-        with:
-          name: release-artifact
-          path: release/
-
       - name: Get Version ID from the Versions List
         id: get_version_id
+        if: always()
         run: |
           curl -X GET -H "Authorization: Bearer ${{secrets.ENV_GITHUB_PAT}}" https://api.github.com/orgs/open-traffic-generator/packages/container/keng-operator/versions >> $HOME/versionIds.json
             echo "version_id=$(jq -r '.[] | select(.name == "${{ steps.get_version.outputs.package_version }}").id' $HOME/versionIds.json)" >> $GITHUB_OUTPUT
 
       - name: Delete Non-Main Branch Images
-        if: steps.get_branch.outputs.branch != 'main'
+        if: steps.get_branch.outputs.branch != 'main' && always()
         run: |
           curl -i \
             -X DELETE \
@@ -522,6 +520,12 @@ jobs:
             -H "Accept: application/vnd.github.v3+json" \
             https://api.github.com/orgs/open-traffic-generator/packages/container/keng-operator/versions/173317052
 
+      - name: Get Artifacts
+        uses: actions/download-artifact@master
+        with:
+          name: release-artifact
+          path: release/
+      
       - name: Create Release
         if: steps.check_tag.outputs.exists == 'false' && steps.get_branch.outputs.branch == 'main'
         uses: ncipollo/release-action@v1
