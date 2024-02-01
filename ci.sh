@@ -213,7 +213,7 @@ setup_pre_test() {
 run_test() {
     cd tests 
     ./setup.sh test ${1}
-    grep FAILED logs-${1}/pytest.log && return 1 || true
+    grep deselected  logs-${1}/pytest.log | grep ===== | grep failed && return 1 || true
     cd ..
 }
 
@@ -221,6 +221,11 @@ destroy_setup() {
     cd tests 
     ./setup.sh rm_k8s_cluster 2> /dev/null || true
     cd ..
+}
+
+usage() {
+    echo "usage: $0 [name of any function in script]"
+    exit 1
 }
 
 
