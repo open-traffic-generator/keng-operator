@@ -113,9 +113,8 @@ const (
 
 	HTTP_TIMEOUT_SEC time.Duration = 5
 
-	GNMI_NEW_BASE_VERSION string = "1.7.9"
-	IXIA_C_OTG_VERSION    string = "0.0.1-2727"
-	IXIA_C_GRPC_VERSION   string = "0.0.1-3114"
+	IXIA_C_OTG_VERSION  string = "0.0.1-2727"
+	IXIA_C_GRPC_VERSION string = "0.0.1-3114"
 
 	LIVENESS_DELAY   int32 = 1
 	LIVENESS_PERIOD  int32 = 10
@@ -630,7 +629,8 @@ func (r *IxiaTGReconciler) loadRelInfo(ctx context.Context, release string, relD
 				compRef.VolMntPath = CTRL_MAP_MOUNT_PATH
 			case IMAGE_GNMI_SERVER:
 				compRef.ContainerName = GNMI_NAME
-				compRef.DefCmd = []string{"python3", "-m", "otg_gnmi", "--server-port", strconv.Itoa(int(CTRL_GNMI_PORT)), "--app-mode", "athena", "--target-host", "localhost", "--target-port", strconv.Itoa(int(CTRL_HTTPS_PORT)), "--insecure"}
+				grpcUrl := "https://localhost:" + strconv.Itoa(int(CTRL_HTTPS_PORT))
+				compRef.DefArgs = []string{"-http-server", grpcUrl, "--debug"}
 				compRef.Port = CTRL_GNMI_PORT
 			case IMAGE_GRPC_SERVER:
 				compRef.ContainerName = GRPC_NAME
@@ -952,7 +952,7 @@ func (r *IxiaTGReconciler) podForIxia(ctx context.Context, podName string, intfL
 					Image:           cont.Path + ":" + cont.Tag,
 					ImagePullPolicy: "IfNotPresent",
 				}
-				updateControllerContainer(&initCont, cont, false)
+				updateControllerContainer(&initCont, cont)
 				// Since the args are dynamic based on topology deployment, we verify if args
 				// are applied based on configmap spec; otherwise apply default args
 				if len(initCont.Args) == 0 {
@@ -1102,7 +1102,7 @@ func (r *IxiaTGReconciler) getControllerService(ixia *networkv1beta1.IxiaTG, isO
 	return services
 }
 
-func updateControllerContainer(cont *corev1.Container, pubRel componentRel, newGNMI bool) {
+func updateControllerContainer(cont *corev1.Container, pubRel componentRel) {
 	conEnvs := []corev1.EnvVar{}
 	cfgMapEnv := make(map[string]string)
 	for ek, ev := range pubRel.DefEnv {
@@ -1121,15 +1121,11 @@ func updateControllerContainer(cont *corev1.Container, pubRel componentRel, newG
 
 	if len(pubRel.Args) > 0 {
 		cont.Args = pubRel.Args
-	} else if newGNMI {
-		cont.Args = []string{"-http-server", "https://localhost:8443", "--debug"}
 	} else if len(pubRel.DefArgs) > 0 {
 		cont.Args = pubRel.DefArgs
 	}
 	if len(pubRel.Command) > 0 {
 		cont.Command = pubRel.Command
-	} else if newGNMI {
-		cont.Command = []string{}
 	} else if len(pubRel.DefCmd) > 0 {
 		cont.Command = pubRel.DefCmd
 	}
@@ -1156,8 +1152,6 @@ func versionLaterOrEqual(baseVer string, chkVer string) (bool, error) {
 func (r *IxiaTGReconciler) containersForController(ctx context.Context, ixia *networkv1beta1.IxiaTG, release string, otg bool) ([]corev1.Container, error) {
 	log.Infof("Get containers for Controller (release %s)", release)
 	var containers []corev1.Container
-	var newGNMI bool
-	var err error
 	lic_found := false
 	lic_container := corev1.Container{}
 	var lic_server_image, lic_server_secret bool
@@ -1211,8 +1205,6 @@ func (r *IxiaTGReconciler) containersForController(ctx context.Context, ixia *ne
 			port := corev1.ContainerPort{Name: comp.ContainerName, ContainerPort: comp.Port, Protocol: "TCP"}
 			container.Ports = []corev1.ContainerPort{port}
 		}
-		newGNMI = false
-		err = nil
 		resRequest := corev1.ResourceList{}
 		if r, ok := comp.MinResource["cpu"]; ok {
 			resRequest["cpu"] = resource.MustParse(r)
@@ -1223,10 +1215,6 @@ func (r *IxiaTGReconciler) containersForController(ctx context.Context, ixia *ne
 		if name == GNMI_NAME {
 			tcpSock := corev1.TCPSocketAction{Port: intstr.IntOrString{IntVal: CTRL_GNMI_PORT}}
 			pbHdlr = &corev1.ProbeHandler{TCPSocket: &tcpSock}
-			newGNMI, err = versionLaterOrEqual(GNMI_NEW_BASE_VERSION, comp.Tag)
-			if err != nil {
-				log.Error(err)
-			}
 			if _, ok := resRequest["cpu"]; !ok {
 				resRequest["cpu"] = resource.MustParse(MIN_CPU_GNMI)
 			}
@@ -1259,7 +1247,7 @@ func (r *IxiaTGReconciler) containersForController(ctx context.Context, ixia *ne
 			container.LivenessProbe = &probe
 		}
 
-		updateControllerContainer(&container, comp, newGNMI)
+		updateControllerContainer(&container, comp)
 		// License server related handling
 		if name == CONTROLLER_NAME {
 			// First check is corresponding secret is present
@@ -1396,7 +1384,7 @@ func (r *IxiaTGReconciler) containersForIxia(podName string, intfList []string, 
 			}
 			container.LivenessProbe = &probe
 		}
-		updateControllerContainer(&container, compCopy, false)
+		updateControllerContainer(&container, compCopy)
 		log.Infof("Adding to pod: %s, container: %s, Image: %s, Args: %v, Cmd: %v, Env: %v",
 			podName, name, image, container.Args, container.Command, container.Env)
 		containers = append(containers, container)
