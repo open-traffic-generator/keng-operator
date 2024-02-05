@@ -24,7 +24,7 @@ def test_liveness_default_config():
         '-protocol-engine',
         '-traffic-engine'
     ]
-    count = 3
+    count = 10
     try:
         op_rscount = utils.get_operator_restart_count()
         

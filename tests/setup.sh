@@ -10,7 +10,7 @@ ARISTA_CEOS_OPERATOR_VERSION="2.0.1"
 ARISTA_CEOS_OPERATOR_YAML="https://github.com/aristanetworks/arista-ceoslab-operator/config/default?ref=v${ARISTA_CEOS_OPERATOR_VERSION}"
 ARISTA_CEOS_VERSION="4.29.1F-29233963"
 ARISTA_CEOS_IMAGE="ghcr.io/open-traffic-generator/ceos"
-KNE_VERSION=v0.1.15
+KNE_VERSION=v0.1.16
 
 TIMEOUT_SECONDS=300
 APT_GET_UPDATE=true
@@ -231,12 +231,9 @@ rm_arista_ceos_operator() {
 }
 
 get_kne() {
-    which kne > /dev/null 2>&1 && return
     echo "Installing KNE ${KNE_VERSION} ..."
     CGO_ENBLED=0 go install github.com/openconfig/kne/kne_cli@${KNE_VERSION} \
     && mv $(which kne_cli) $(dirname $(which kne_cli))/kne
-    echo "kne ----- path"
-    which kne
 }
 
 get_kubemod() {
