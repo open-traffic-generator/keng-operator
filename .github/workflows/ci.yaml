@@ -86,7 +86,7 @@ jobs:
         - name: Copy Artifacts
           run: |
             cp release/ixiatg-operator.yaml tests/deployments
-            cp release/gnmi-server.tar.gz tests/deployments
+            cp release/keng-operator.tar.gz tests/deployments
 
         - name: Setup KNE cluster
           run: |
@@ -133,7 +133,7 @@ jobs:
         - name: Copy Artifacts
           run: |
             cp release/ixiatg-operator.yaml tests/deployments
-            cp release/gnmi-server.tar.gz tests/deployments
+            cp release/keng-operator.tar.gz tests/deployments
 
         - name: Setup KNE cluster
           run: |
@@ -179,7 +179,7 @@ jobs:
         - name: Copy Artifacts
           run: |
             cp release/ixiatg-operator.yaml tests/deployments
-            cp release/gnmi-server.tar.gz tests/deployments
+            cp release/keng-operator.tar.gz tests/deployments
 
         - name: Setup KNE cluster
           run: |
@@ -224,7 +224,7 @@ jobs:
         - name: Copy Artifacts
           run: |
             cp release/ixiatg-operator.yaml tests/deployments
-            cp release/gnmi-server.tar.gz tests/deployments
+            cp release/keng-operator.tar.gz tests/deployments
 
         - name: Setup KNE cluster
           run: |
@@ -270,7 +270,7 @@ jobs:
         - name: Copy Artifacts
           run: |
             cp release/ixiatg-operator.yaml tests/deployments
-            cp release/gnmi-server.tar.gz tests/deployments
+            cp release/keng-operator.tar.gz tests/deployments
 
         - name: Setup KNE cluster
           run: |
@@ -316,7 +316,7 @@ jobs:
         - name: Copy Artifacts
           run: |
             cp release/ixiatg-operator.yaml tests/deployments
-            cp release/gnmi-server.tar.gz tests/deployments
+            cp release/keng-operator.tar.gz tests/deployments
 
         - name: Setup KNE cluster
           run: |
@@ -362,7 +362,7 @@ jobs:
         - name: Copy Artifacts
           run: |
             cp release/ixiatg-operator.yaml tests/deployments
-            cp release/gnmi-server.tar.gz tests/deployments
+            cp release/keng-operator.tar.gz tests/deployments
 
         - name: Setup KNE cluster
           run: |
@@ -408,7 +408,7 @@ jobs:
         - name: Copy Artifacts
           run: |
             cp release/ixiatg-operator.yaml tests/deployments
-            cp release/gnmi-server.tar.gz tests/deployments
+            cp release/keng-operator.tar.gz tests/deployments
 
         - name: Setup KNE cluster
           run: |
@@ -454,7 +454,7 @@ jobs:
         - name: Copy Artifacts
           run: |
             cp release/ixiatg-operator.yaml tests/deployments
-            cp release/gnmi-server.tar.gz tests/deployments
+            cp release/keng-operator.tar.gz tests/deployments
 
         - name: Setup KNE cluster
           run: |
@@ -500,7 +500,7 @@ jobs:
         - name: Copy Artifacts
           run: |
             cp release/ixiatg-operator.yaml tests/deployments
-            cp release/gnmi-server.tar.gz tests/deployments
+            cp release/keng-operator.tar.gz tests/deployments
 
         - name: Setup KNE cluster
           run: |
