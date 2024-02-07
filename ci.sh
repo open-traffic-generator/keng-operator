@@ -143,7 +143,7 @@ publish() {
     branch=${1}
     docker images
     version=$(get_version)
-    img="${IXIA_C_OPERATOR_IMAGE}:${version}"
+    docker load -i release/gnmi-server.tar.gz
     github_img="${GITHUB_REPO}/${IXIA_C_OPERATOR_IMAGE}:${version}"
     github_img_latest="${GITHUB_REPO}/${IXIA_C_OPERATOR_IMAGE}:latest"
     docker tag ${img} "${github_img}"
@@ -164,16 +164,22 @@ publish() {
         push_github_docker_image ${github_img_latest}
         verify_github_images ${github_img_latest}
     fi
-    cicd_gen_release_art
 }
 
-cicd_gen_release_art() {
+gen_artifacts() {
     mkdir -p ${release}
-    rm -rf ./ixiatg-operator.yaml
-    rm -rf ${release}/*.yaml
+
+    rm -rf ./gnmi-server.tar.gz
+    rm -rf ${release}/*.tar.gz
+    img="${IXIA_C_OPERATOR_IMAGE}:${version}"
+    github_img="${GITHUB_REPO}/${IXIA_C_OPERATOR_IMAGE}:${version}"
+    git tag $img $github_img
+    docker save ${github_img} | gzip > ${release}/gnmi-server.tar.gz
+
+    
     gen_ixia_c_op_dep_yaml "${GITHUB_REPO}/${IXIA_C_OPERATOR_IMAGE}"
     mv ./ixiatg-operator.yaml ${release}/
-     echo "Files in ./release: $(ls -lht ${release})"
+    echo "Files in ./release: $(ls -lht ${release})"
 }
 
 gen_operator_artifacts() {

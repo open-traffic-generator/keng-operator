@@ -55,10 +55,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.ENV_GITHUB_PAT }}
 
-      - name: Publishing Artifacts
-        if: steps.check_tag.outputs.exists == 'false'
+      - name: Generate Artifacts
         run: |
-          GITHUB_USER=${{ secrets.ENV_GITHUB_USER }} GITHUB_PAT=${{ secrets.ENV_GITHUB_PAT }} ./ci.sh publish ${{ steps.get_branch.outputs.branch }}
+          chmod u+x ./ci.sh
+          ./ci.sh gen_artifacts
 
       - uses: actions/upload-artifact@master
         with:
@@ -86,6 +86,7 @@ jobs:
         - name: Copy Artifacts
           run: |
             cp release/ixiatg-operator.yaml tests/deployments
+            cp release/gnmi-server.tar.gz tests/deployments
 
         - name: Setup KNE cluster
           run: |
@@ -132,6 +133,7 @@ jobs:
         - name: Copy Artifacts
           run: |
             cp release/ixiatg-operator.yaml tests/deployments
+            cp release/gnmi-server.tar.gz tests/deployments
 
         - name: Setup KNE cluster
           run: |
@@ -177,6 +179,7 @@ jobs:
         - name: Copy Artifacts
           run: |
             cp release/ixiatg-operator.yaml tests/deployments
+            cp release/gnmi-server.tar.gz tests/deployments
 
         - name: Setup KNE cluster
           run: |
@@ -221,6 +224,7 @@ jobs:
         - name: Copy Artifacts
           run: |
             cp release/ixiatg-operator.yaml tests/deployments
+            cp release/gnmi-server.tar.gz tests/deployments
 
         - name: Setup KNE cluster
           run: |
@@ -266,6 +270,7 @@ jobs:
         - name: Copy Artifacts
           run: |
             cp release/ixiatg-operator.yaml tests/deployments
+            cp release/gnmi-server.tar.gz tests/deployments
 
         - name: Setup KNE cluster
           run: |
@@ -311,6 +316,7 @@ jobs:
         - name: Copy Artifacts
           run: |
             cp release/ixiatg-operator.yaml tests/deployments
+            cp release/gnmi-server.tar.gz tests/deployments
 
         - name: Setup KNE cluster
           run: |
@@ -356,6 +362,7 @@ jobs:
         - name: Copy Artifacts
           run: |
             cp release/ixiatg-operator.yaml tests/deployments
+            cp release/gnmi-server.tar.gz tests/deployments
 
         - name: Setup KNE cluster
           run: |
@@ -401,6 +408,7 @@ jobs:
         - name: Copy Artifacts
           run: |
             cp release/ixiatg-operator.yaml tests/deployments
+            cp release/gnmi-server.tar.gz tests/deployments
 
         - name: Setup KNE cluster
           run: |
@@ -446,6 +454,7 @@ jobs:
         - name: Copy Artifacts
           run: |
             cp release/ixiatg-operator.yaml tests/deployments
+            cp release/gnmi-server.tar.gz tests/deployments
 
         - name: Setup KNE cluster
           run: |
@@ -490,7 +499,8 @@ jobs:
 
         - name: Copy Artifacts
           run: |
-            cp release/ixiatg-operator.yaml tests/deployments/ixiatg-operator.yaml
+            cp release/ixiatg-operator.yaml tests/deployments
+            cp release/gnmi-server.tar.gz tests/deployments
 
         - name: Setup KNE cluster
           run: |
@@ -539,7 +549,12 @@ jobs:
         id: get_version
         run: |
           echo "version=v$(head ./version | cut -d' ' -f1)" >> $GITHUB_OUTPUT
-          echo "package_version=$(head ./version | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+
+      - name: Get Artifacts
+        uses: actions/download-artifact@master
+        with:
+          name: release-artifact
+          path: release/
 
       - name: Check tag for current version
         if: always()
@@ -550,27 +565,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.ENV_GITHUB_PAT }}
 
-      - name: Get Version ID from the Versions List
-        id: get_version_id
-        if: always()
+      - name: Publishing Artifacts
+        if: steps.check_tag.outputs.exists == 'false'
         run: |
-          curl -X GET -H "Authorization: Bearer ${{secrets.ENV_GITHUB_PAT}}" https://api.github.com/orgs/open-traffic-generator/packages/container/keng-operator/versions >> $HOME/versionIds.json
-            echo "version_id=$(jq -r '.[] | select(.name == "${{ steps.get_version.outputs.package_version }}").id' $HOME/versionIds.json)" >> $GITHUB_OUTPUT
-
-      - name: Delete Non-Main Branch Images
-        if: steps.get_branch.outputs.branch != 'main' && always()
-        run: |
-          curl -i \
-            -X DELETE \
-            -H 'Authorization: Bearer ${{secrets.ENV_GITHUB_PAT}}' \
-            -H "Accept: application/vnd.github.v3+json" \
-            https://api.github.com/orgs/open-traffic-generator/packages/container/keng-operator/versions/173317052
-
-      - name: Get Artifacts
-        uses: actions/download-artifact@master
-        with:
-          name: release-artifact
-          path: release/
+          GITHUB_USER=${{ secrets.ENV_GITHUB_USER }} GITHUB_PAT=${{ secrets.ENV_GITHUB_PAT }} ./ci.sh publish ${{ steps.get_branch.outputs.branch }}
       
       - name: Create Release
         if: steps.check_tag.outputs.exists == 'false' && steps.get_branch.outputs.branch == 'main'
