@@ -121,6 +121,9 @@ const (
 	LIVENESS_PERIOD  int32 = 10
 	LIVENESS_FAILURE int32 = 6
 
+	STARTUP_PERIOD  int32 = 3
+	STARTUP_FAILURE int32 = 20
+
 	MIN_MEM_CONTROLLER string = "25Mi"
 	MIN_MEM_GNMI       string = "15Mi"
 	MIN_CPU_PROTOCOL   string = "200m"
@@ -157,6 +160,7 @@ type componentRel struct {
 	Name            string                 `json:"name"`
 	Path            string                 `json:"path"`
 	Port            int32
+	StartUpEnable   *bool  `json:"startup-enable,omitempty"`
 	Tag             string `json:"tag"`
 	VolMntName      string
 	VolMntPath      string
@@ -437,9 +441,9 @@ func (r *IxiaTGReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 			var contStatus []corev1.ContainerStatus
 			if found.Status.Phase != corev1.PodRunning {
 				requeue = true
-				for _, s := range found.Status.ContainerStatuses {
-					contStatus = append(contStatus, s)
-				}
+			}
+			for _, s := range found.Status.ContainerStatuses {
+				contStatus = append(contStatus, s)
 			}
 			for _, podEntry := range ixia.Status.Interfaces {
 				err = r.Get(ctx, types.NamespacedName{Name: podEntry.PodName, Namespace: ixia.Namespace}, found)
@@ -452,9 +456,9 @@ func (r *IxiaTGReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 				}
 				if found.Status.Phase != corev1.PodRunning {
 					requeue = true
-					for _, s := range found.Status.ContainerStatuses {
-						contStatus = append(contStatus, s)
-					}
+				}
+				for _, s := range found.Status.ContainerStatuses {
+					contStatus = append(contStatus, s)
 				}
 			}
 
@@ -466,6 +470,9 @@ func (r *IxiaTGReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 							err = errors.New(fmt.Sprintf("Container %s failed - %s", c.Name, c.State.Waiting.Message))
 							break
 						}
+					}
+					if !c.Ready {
+						requeue = true
 					}
 				}
 			}
@@ -1258,6 +1265,14 @@ func (r *IxiaTGReconciler) containersForController(ctx context.Context, ixia *ne
 			}
 			container.LivenessProbe = &probe
 		}
+		if pbHdlr != nil && (comp.StartUpEnable == nil || *comp.StartUpEnable) {
+			probe := corev1.Probe{
+				ProbeHandler:     *pbHdlr,
+				PeriodSeconds:    STARTUP_PERIOD,
+				FailureThreshold: STARTUP_FAILURE,
+			}
+			container.StartupProbe = &probe
+		}
 
 		updateControllerContainer(&container, comp, newGNMI)
 		// License server related handling
@@ -1334,6 +1349,7 @@ func (r *IxiaTGReconciler) containersForIxia(podName string, intfList []string, 
 	}
 	for cName, comp := range componentDep[versionToDeploy].Ixia.Containers {
 		var tcpSock corev1.TCPSocketAction
+		var pbHdlr *corev1.ProbeHandler = nil
 		if strings.HasPrefix(comp.Name, INIT_CONT_NAME_PREFIX) {
 			continue
 		}
@@ -1362,6 +1378,7 @@ func (r *IxiaTGReconciler) containersForIxia(podName string, intfList []string, 
 		if cName == IMAGE_PROTOCOL_ENG {
 			compCopy.DefEnv["INTF_LIST"] = strings.Join(intfList, ",")
 			tcpSock = corev1.TCPSocketAction{Port: intstr.IntOrString{IntVal: PROTOCOL_ENG_PORT}}
+			pbHdlr = &corev1.ProbeHandler{TCPSocket: &tcpSock}
 			if _, ok := resRequest["cpu"]; !ok {
 				resRequest["cpu"] = resource.MustParse(MIN_CPU_PROTOCOL)
 			}
@@ -1375,6 +1392,7 @@ func (r *IxiaTGReconciler) containersForIxia(podName string, intfList []string, 
 		} else {
 			compCopy.DefEnv["ARG_IFACE_LIST"] = argIntfList
 			tcpSock = corev1.TCPSocketAction{Port: intstr.IntOrString{IntVal: TRAFFIC_ENG_PORT}}
+			pbHdlr = &corev1.ProbeHandler{TCPSocket: &tcpSock}
 			if _, ok := resRequest["cpu"]; !ok {
 				resRequest["cpu"] = resource.MustParse(MIN_CPU_TRAFFIC)
 			}
@@ -1385,16 +1403,23 @@ func (r *IxiaTGReconciler) containersForIxia(podName string, intfList []string, 
 		}
 		container.Resources.Requests = resRequest
 
-		if compCopy.LiveNessEnable == nil || *compCopy.LiveNessEnable {
-			pbHdlr := corev1.ProbeHandler{TCPSocket: &tcpSock}
+		if pbHdlr != nil && (compCopy.LiveNessEnable == nil || *compCopy.LiveNessEnable) {
 			probe := corev1.Probe{
-				ProbeHandler:                  pbHdlr,
+				ProbeHandler:                  *pbHdlr,
 				InitialDelaySeconds:           compCopy.LiveNessDelay,
 				PeriodSeconds:                 compCopy.LiveNessPeriod,
 				FailureThreshold:              compCopy.LiveNessFailure,
 				TerminationGracePeriodSeconds: pointer.Int64(1),
 			}
 			container.LivenessProbe = &probe
+		}
+		if pbHdlr != nil && (compCopy.StartUpEnable == nil || *compCopy.StartUpEnable) {
+			probe := corev1.Probe{
+				ProbeHandler:     *pbHdlr,
+				PeriodSeconds:    STARTUP_PERIOD,
+				FailureThreshold: STARTUP_FAILURE,
+			}
+			container.StartupProbe = &probe
 		}
 		updateControllerContainer(&container, compCopy, false)
 		log.Infof("Adding to pod: %s, container: %s, Image: %s, Args: %v, Cmd: %v, Env: %v",

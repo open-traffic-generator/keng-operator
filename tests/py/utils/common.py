@@ -561,8 +561,12 @@ def ixia_c_operator_ok(prev_op_rscount):
     return op_rscount
 
 
-def check_liveness_data(cont, pod, namespace, enabled=True, delay=0, period=0, failure=0):
-    base_cmd = "'jsonpath={.spec.containers[?(@.name==\"" + cont + "\")].livenessProbe"
+def check_probe_data(cont, pod, namespace, liveness=True, enabled=True, delay=0, period=0, failure=0):
+    base_cmd = "'jsonpath={.spec.containers[?(@.name==\"" + cont + "\")]."
+    if liveness:
+        base_cmd = base_cmd + "livenessProbe"
+    else:
+        base_cmd = base_cmd + "startupProbe"
     base_cmd = "kubectl get pod/{} -n {} -o ".format(pod, namespace) + base_cmd
     cmd = base_cmd + "}'"
     out, _ = exec_shell(cmd, True, True)

@@ -10,7 +10,7 @@ def test_liveness_disabled_config():
     Delete pd kne topology,
     - namespace - 1: ixia-c
     Validate,
-    - disabled liveness parameters for traffic engines
+    - disabled startup probe parameters for protocol engines
     """
     namespace1 = 'ixia-c'
     namespace1_config = 'ixia_c_pd_topology.yaml'
@@ -19,8 +19,8 @@ def test_liveness_disabled_config():
         'otg-port-eth1',
         'arista1'
     ]
-    container_extension = '-traffic-engine'
-    probe_params = {'traffic-engine':{'liveness-enable': False}}
+    container_extension = '-protocol-engine'
+    probe_params = {'protocol-engine':{'startup-enable': False}}
     try:
         op_rscount = utils.get_operator_restart_count()
         print("[Namespace:{}]Deploying KNE topology".format(
@@ -29,7 +29,7 @@ def test_liveness_disabled_config():
         utils.load_liveness_configmap(probe_params)
         utils.create_kne_config(namespace1_config, namespace1)
         utils.ixia_c_pods_ok(namespace1, expected_pods)
-        utils.check_probe_data(expected_pods[1]+container_extension, expected_pods[1], namespace1, True, False)
+        utils.check_probe_data(expected_pods[1]+container_extension, expected_pods[1], namespace1, False, False)
         op_rscount = utils.ixia_c_operator_ok(op_rscount)
 
         print("[Namespace:{}]Deleting KNE topology".format(
