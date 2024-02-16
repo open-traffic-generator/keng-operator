@@ -35,11 +35,11 @@ def test_liveness_default_config():
             ))
             utils.create_kne_config(namespace1_config, namespace1)
             utils.ixia_c_pods_ok(namespace1, expected_pods)
-            utils.check_liveness_data('ixia-c', expected_pods[0], namespace1, True, 1, 10, 6)
-            utils.check_liveness_data('gnmi', expected_pods[0], namespace1, True, 1, 10, 6)
-            utils.check_liveness_data('license-server', expected_pods[0], namespace1, True, 1, 10, 6)
-            utils.check_liveness_data(expected_pods[1]+container_extensions[0], expected_pods[1], namespace1, True, 1, 10, 6)
-            utils.check_liveness_data(expected_pods[1]+container_extensions[1], expected_pods[1], namespace1, True, 1, 10, 6)
+            utils.check_probe_data('ixia-c', expected_pods[0], namespace1, True, True, 1, 10, 6)
+            utils.check_probe_data('gnmi', expected_pods[0], namespace1, True, True, 1, 10, 6)
+            utils.check_probe_data('license-server', expected_pods[0], namespace1, True, True, 1, 10, 6)
+            utils.check_probe_data(expected_pods[1]+container_extensions[0], expected_pods[1], namespace1, True, True, 1, 10, 6)
+            utils.check_probe_data(expected_pods[1]+container_extensions[1], expected_pods[1], namespace1, True, True, 1, 10, 6)
             op_rscount = utils.ixia_c_operator_ok(op_rscount)
 
             print("[Namespace:{}]Deleting KNE topology".format(
