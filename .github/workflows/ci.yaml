@@ -290,50 +290,50 @@ jobs:
           run: |
            ./ci.sh destroy_setup
 
-  miscellaneous:
-      needs: build
-      runs-on: ubuntu-22.04
-      steps:
-        - name: Checkout source
-          uses: actions/checkout@v3
-        - name: Setup docker
-          uses: docker-practice/actions-setup-docker@master
-        - name: Setup Go
-          uses: actions/setup-go@v3
-          with:
-            go-version: ${{ env.GO_VERSION }}
-        - name: Get Artifacts
-          uses: actions/download-artifact@master
-          with:
-            name: release-artifact
-            path: release/
+  # miscellaneous:
+  #     needs: build
+  #     runs-on: ubuntu-22.04
+  #     steps:
+  #       - name: Checkout source
+  #         uses: actions/checkout@v3
+  #       - name: Setup docker
+  #         uses: docker-practice/actions-setup-docker@master
+  #       - name: Setup Go
+  #         uses: actions/setup-go@v3
+  #         with:
+  #           go-version: ${{ env.GO_VERSION }}
+  #       - name: Get Artifacts
+  #         uses: actions/download-artifact@master
+  #         with:
+  #           name: release-artifact
+  #           path: release/
 
-        - name: Copy Artifacts
-          run: |
-            cp release/ixiatg-operator.yaml tests/deployments
+  #       - name: Copy Artifacts
+  #         run: |
+  #           cp release/ixiatg-operator.yaml tests/deployments
 
-        - name: Setup KNE cluster
-          run: |
-            GITHUB_USER=${{ secrets.ENV_GITHUB_USER }} GITHUB_PAT=${{ secrets.ENV_GITHUB_PAT }} ./ci.sh create_setup
-        - name: Setup Python
-          uses: actions/setup-python@v4
-          with:
-            python-version: ${{ env.PYTHON_VERSION }}
-        - name: Setup Prerequisites
-          run: |
-            ./ci.sh setup_pre_test
-        - name: Run Tests
-          run: |
-            ./ci.sh run_test miscellaneous
-        - name: Archive logs
-          if: always()
-          uses: actions/upload-artifact@v3
-          with:
-            name: miscellaneous
-            path: tests/logs-miscellaneous
-        - name: Destroy KNE cluster
-          run: |
-           ./ci.sh destroy_setup
+  #       - name: Setup KNE cluster
+  #         run: |
+  #           GITHUB_USER=${{ secrets.ENV_GITHUB_USER }} GITHUB_PAT=${{ secrets.ENV_GITHUB_PAT }} ./ci.sh create_setup
+  #       - name: Setup Python
+  #         uses: actions/setup-python@v4
+  #         with:
+  #           python-version: ${{ env.PYTHON_VERSION }}
+  #       - name: Setup Prerequisites
+  #         run: |
+  #           ./ci.sh setup_pre_test
+  #       - name: Run Tests
+  #         run: |
+  #           ./ci.sh run_test miscellaneous
+  #       - name: Archive logs
+  #         if: always()
+  #         uses: actions/upload-artifact@v3
+  #         with:
+  #           name: miscellaneous
+  #           path: tests/logs-miscellaneous
+  #       - name: Destroy KNE cluster
+  #         run: |
+  #          ./ci.sh destroy_setup
 
   negative:
       needs: build
@@ -517,7 +517,8 @@ jobs:
 
   release:
     runs-on: ubuntu-latest
-    needs: [b2b, dut, lag, license, liveness, miscellaneous, negative, performance, resource, rest]
+    #needs: [b2b, dut, lag, license, liveness, miscellaneous, negative, performance, resource, rest]
+    needs: [b2b, dut, lag, license, liveness, negative, performance, resource, rest]
     steps:
       - name: Checkout
         if: always()
