@@ -203,21 +203,22 @@ get_meshnet() {
     && cd ${oldpwd}
 }
 
-get_keng_operator_offline_image() {
+get_keng_operator_image() {
     if [ -f "$KENG_OPERATOR_IMAGE_FILE" ]; 
     then
         echo "Operator tar found...."
         docker load -i $KENG_OPERATOR_IMAGE_FILE
+        kind load docker-image "$(keng_operator_image)"
     else 
-        echo "Operator tar not found!!!"
+        echo "Operator tar not found!!!"\
+        load_image_to_kind $(keng_operator_image)
     fi
 }
 
 get_keng_operator() {
     echo "Installing keng-operator ${KENG_OPERATOR_YAML} ..."
     cat ${KENG_OPERATOR_YAML}
-    get_keng_operator_offline_image \
-    && load_image_to_kind $(keng_operator_image) \
+    get_keng_operator_image \
     && kubectl apply -f ${KENG_OPERATOR_YAML} \
     && wait_for_pods ixiatg-op-system \
     && kubectl get pods -A
