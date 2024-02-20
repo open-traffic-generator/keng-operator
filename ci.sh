@@ -8,7 +8,7 @@ GO_VERSION=1.17.9
 export DEBIAN_FRONTEND=noninteractive
 
 
-IXIA_C_OPERATOR_IMAGE=keng-operator
+KENG_OPERATOR_IMAGE=keng-operator
 GO_TARGZ=""
 
 GITHUB_REPO="ghcr.io/open-traffic-generator"
@@ -74,7 +74,7 @@ get_docker_build() {
     # Generating docker build using Makefile
     echo "Generating docker build ..."
     export VERSION=$(get_version)
-    export IMAGE_TAG_BASE=${IXIA_C_OPERATOR_IMAGE}
+    export IMAGE_TAG_BASE=${KENG_OPERATOR_IMAGE}
     make docker-build
     docker rmi -f $(docker images | grep '<none>') 2> /dev/null || true
 }
@@ -143,9 +143,9 @@ publish() {
     branch=${1}
     docker images
     version=$(get_version)
-    img="${IXIA_C_OPERATOR_IMAGE}:${version}"
-    github_img="${GITHUB_REPO}/${IXIA_C_OPERATOR_IMAGE}:${version}"
-    github_img_latest="${GITHUB_REPO}/${IXIA_C_OPERATOR_IMAGE}:latest"
+    docker load -i release/keng-operator.tar.gz
+    github_img="${GITHUB_REPO}/${KENG_OPERATOR_IMAGE}:${version}"
+    github_img_latest="${GITHUB_REPO}/${KENG_OPERATOR_IMAGE}:latest"
     docker tag ${img} "${github_img}"
     if [ "$branch" = "main" ]
     then
@@ -164,16 +164,23 @@ publish() {
         push_github_docker_image ${github_img_latest}
         verify_github_images ${github_img_latest}
     fi
-    cicd_gen_release_art
 }
 
-cicd_gen_release_art() {
+gen_artifacts() {
+    version=$(get_version)
     mkdir -p ${release}
-    rm -rf ./ixiatg-operator.yaml
-    rm -rf ${release}/*.yaml
-    gen_ixia_c_op_dep_yaml "${GITHUB_REPO}/${IXIA_C_OPERATOR_IMAGE}"
+
+    rm -rf ./keng-operator.tar.gz
+    rm -rf ${release}/*.tar.gz
+    img="${KENG_OPERATOR_IMAGE}:${version}"
+    github_img="${GITHUB_REPO}/${KENG_OPERATOR_IMAGE}:${version}"
+    docker tag $img $github_img
+    docker save ${github_img} | gzip > ${release}/keng-operator.tar.gz
+
+    
+    gen_ixia_c_op_dep_yaml "${GITHUB_REPO}/${KENG_OPERATOR_IMAGE}"
     mv ./ixiatg-operator.yaml ${release}/
-     echo "Files in ./release: $(ls -lht ${release})"
+    echo "Files in ./release: $(ls -lht ${release})"
 }
 
 gen_operator_artifacts() {
@@ -183,12 +190,12 @@ gen_operator_artifacts() {
     rm -rf ${art}/*.yaml
     rm -rf ${art}/*.tar.gz
     mv ./ixiatg-operator.yaml ${art}/
-    docker save ${IXIA_C_OPERATOR_IMAGE}:${version} | gzip > ${art}/keng-operator.tar.gz
+    docker save ${KENG_OPERATOR_IMAGE}:${version} | gzip > ${art}/keng-operator.tar.gz
 }
 
 build() {
     mkdir -p ${art}
-    gen_ixia_c_op_dep_yaml ${IXIA_C_OPERATOR_IMAGE} \
+    gen_ixia_c_op_dep_yaml ${KENG_OPERATOR_IMAGE} \
     && get_docker_build \
     && gen_operator_artifacts ${art}
     version=$(get_version)
