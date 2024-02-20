@@ -1,5 +1,6 @@
 import pytest
 import utils
+import time
 
 @pytest.mark.miscellaneous
 def test_args_cmd_env_override():
@@ -33,7 +34,8 @@ def test_args_cmd_env_override():
             namespace1
         ))
         utils.load_custom_configmap()
-        utils.create_kne_config(namespace1_config, namespace1)
+        utils.create_kne_config(namespace1_config, namespace1, False)
+        time.sleep(30)
         utils.ixia_c_pods_ok(namespace1, expected_pods, True, False, True)
         utils.ixia_c_custom_pods_ok(namespace1)
         utils.ixia_c_services_ok(namespace1, expected_svcs)
