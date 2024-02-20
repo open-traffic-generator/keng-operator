@@ -312,12 +312,10 @@ jobs:
           with:
             name: release-artifact
             path: release/
-
         - name: Copy Artifacts
           run: |
             cp release/ixiatg-operator.yaml tests/deployments
             cp release/keng-operator.tar.gz tests/deployments
-
         - name: Setup KNE cluster
           run: |
             GITHUB_USER=${{ secrets.ENV_GITHUB_USER }} GITHUB_PAT=${{ secrets.ENV_GITHUB_PAT }} ./ci.sh create_setup
