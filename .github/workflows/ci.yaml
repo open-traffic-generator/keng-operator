@@ -47,11 +47,6 @@ jobs:
         run: |
           echo "version=v$(head ./version | cut -d' ' -f1)" >> $GITHUB_OUTPUT
 
-      - name: Check tag for current version
-        uses: mukunku/tag-exists-action@v1.0.0
-        id: check_tag
-        with:
-          tag: ${{ steps.get_version.outputs.version }}
         env:
           GITHUB_TOKEN: ${{ secrets.ENV_GITHUB_PAT }}
 
@@ -85,8 +80,9 @@ jobs:
 
         - name: Copy Artifacts
           run: |
-            cp release/ixiatg-operator.yaml tests/deployments
-            cp release/keng-operator.tar.gz tests/deployments
+            cp release/ixiatg-operator.yaml tests/deployments \
+            && cp release/keng-operator.tar.gz tests/deployments \
+            && ls tests/deployments
 
         - name: Setup KNE cluster
           run: |

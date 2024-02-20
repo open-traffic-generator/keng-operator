@@ -206,7 +206,10 @@ get_meshnet() {
 get_keng_operator_offline_image() {
     if [ -f "$KENG_OPERATOR_IMAGE_FILE" ]; 
     then
+        echo "Operator tar found...."
         docker load -i $KENG_OPERATOR_IMAGE_FILE
+    else 
+        echo "Operator tar not found!!!"
     fi
 }
 
