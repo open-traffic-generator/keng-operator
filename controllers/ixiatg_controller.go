@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -107,6 +108,7 @@ const (
 	CTRL_LICENSE_PORT int32 = 7443
 	PROTOCOL_ENG_PORT int32 = 50071
 	TRAFFIC_ENG_PORT  int32 = 5555
+	UHD_FRONT_PORT    int32 = 7531
 
 	STATE_INITED   string = "INITIATED"
 	STATE_DEPLOYED string = "DEPLOYED"
@@ -146,6 +148,8 @@ var (
 	componentDep   map[string]topoDep = make(map[string]topoDep)
 	latestVersion  string             = ""
 	licenseAddress string             = ""
+	trunkInterface string             = "eth1"
+	uhdVlanMap     []int              = []int{136, 144, 152, 160, 168, 176, 184, 192, 320, 312, 304, 296, 288, 280, 272, 264}
 )
 
 // IxiaTGReconciler reconciles a IxiaTG object
@@ -216,19 +220,22 @@ type location struct {
 
 // cpdpIntf denotes each interface in CP-DP docker containers for non-K8s
 type cpdpIntf struct {
-	Name     string
-	Peer     string
-	PeerIntf string
-	Create   bool
-	Index    int
+	Name        string
+	Peer        string
+	PeerIntf    string
+	Create      bool
+	Index       int
+	UhdPort     uint32
+	UhdHostPort *uint32
 }
 
 // cpdpNode denotes each CP-DP node to be docker deployed for non-K8s
 type cpdpNode struct {
-	CpName     string
-	DpName     string
-	MgmtIP     string
-	Interfaces []cpdpIntf
+	CpName      string
+	DpName      string
+	MgmtIP      string
+	Interfaces  []cpdpIntf
+	UhdHostPort uint32
 }
 
 // ctrlContData denotes controller node parameters to be docker deployed for non-K8s
@@ -238,6 +245,7 @@ type ctrlContData struct {
 	HttpOut   int32
 	GrpcOut   int32
 	GnmiOut   int32
+	UHDHost   string
 }
 
 // dockerContInfo denotes docker container related data that is successfully deployed for non-K8s
@@ -1674,7 +1682,7 @@ func deployDockerContainer(ctx context.Context, cli *dockerclient.Client, cfg *c
 	return response, nil
 }
 
-func (r *IxiaTGReconciler) deployCpDpNode(ctx context.Context, release string, node *cpdpNode) error {
+func (r *IxiaTGReconciler) deployCpDpNode(ctx context.Context, release string, node *cpdpNode, namespace string, uhdDeploy bool) error {
 	// CP docker container deploy
 	cli, err := dockerclient.NewEnvClient()
 	if err != nil {
@@ -1684,7 +1692,7 @@ func (r *IxiaTGReconciler) deployCpDpNode(ctx context.Context, release string, n
 	var cpIntfList, dpIntfList []string
 	component, ok := componentDep[release].Ixia.Containers[IMAGE_PROTOCOL_ENG]
 	if !ok {
-		return fmt.Errorf("Failed to find protocol engine image for release %s", release)
+		return fmt.Errorf("failed to find protocol engine image for release %s", release)
 	}
 
 	for index, intf := range node.Interfaces {
@@ -1696,6 +1704,14 @@ func (r *IxiaTGReconciler) deployCpDpNode(ctx context.Context, release string, n
 	envIntf := "INTF_LIST=" + strings.Join(cpIntfList, ",")
 	config := container.Config{Env: []string{envIntf}}
 	hostConfig := container.HostConfig{Privileged: true}
+	if uhdDeploy {
+		bindingMap := make(map[nat.Port][]nat.PortBinding)
+		bindingMap[nat.Port(fmt.Sprintf("%v/tcp", PROTOCOL_ENG_PORT))] = []nat.PortBinding{{
+			HostIP:   "0.0.0.0",
+			HostPort: fmt.Sprintf("%v", node.UhdHostPort),
+		}}
+		hostConfig.PortBindings = nat.PortMap(bindingMap)
+	}
 
 	var response dockerContInfo
 	if response, err = deployDockerContainer(ctx, cli, &config, &hostConfig, component, node.CpName); err != nil {
@@ -1705,30 +1721,62 @@ func (r *IxiaTGReconciler) deployCpDpNode(ctx context.Context, release string, n
 
 	// Make macvtap and push into CP netns
 	for _, intf := range node.Interfaces {
-		if intf.PeerIntf == "" {
+		if intf.PeerIntf == "" && !uhdDeploy {
 			continue
 		}
+		if uhdDeploy {
+			if intf.UhdPort < 1 || intf.UhdPort > 32 {
+				return fmt.Errorf("port %v out of range for interface %v", intf.UhdPort, intf.Name)
+			}
+		}
 		if intf.Peer != "localhost" {
-			return errors.New("Peer should be localhost")
+			return errors.New("peer should be localhost")
 		}
 		var link netlink.Link
-		parentLink, err := netlink.LinkByName(intf.PeerIntf)
+		targetIntf := intf.PeerIntf
+		if uhdDeploy {
+			targetIntf = trunkInterface
+		}
+		parentLink, err := netlink.LinkByName(targetIntf)
 		if err != nil {
 			return err
 		}
 		if err = netlink.SetPromiscOn(parentLink); err != nil {
 			return err
 		}
-		if intf.Create {
-			macvtapName := "macvtap" + intf.Name
-			macvlan := netlink.Macvlan{LinkAttrs: netlink.LinkAttrs{Name: macvtapName, ParentIndex: parentLink.Attrs().Index}, Mode: netlink.MACVLAN_MODE_PASSTHRU}
-			link = &netlink.Macvtap{Macvlan: macvlan}
+		if uhdDeploy {
+			vlanName := "vlan" + namespace + intf.Name
+			link = &netlink.Vlan{LinkAttrs: netlink.LinkAttrs{Name: vlanName, ParentIndex: parentLink.Attrs().Index}, VlanId: uhdVlanMap[intf.UhdPort-1], VlanProtocol: netlink.VLAN_PROTOCOL_8021Q}
 			if err = netlink.LinkAdd(link); err != nil {
 				return err
 			}
-			log.Infof("Created macvtap network interface %s on %s", link.Attrs().Name, intf.Name)
+			if err = netlink.LinkSetUp(link); err != nil {
+				return err
+			}
+			if err = netlink.SetPromiscOn(link); err != nil {
+				return err
+			}
+			macStr := fmt.Sprintf("00:60:2f:0a:0b:%02x", intf.UhdPort)
+			if macAddr, err := net.ParseMAC(macStr); err != nil {
+				return err
+			} else if err = netlink.LinkSetHardwareAddr(link, macAddr); err != nil {
+				return err
+			}
+
+			// ip link set "$pe_interface" address "$(printf '00:60:2F:0A:0B:%02X\n' "${port}")"
+			log.Infof("Created vlan network interface %s on %s", link.Attrs().Name, targetIntf)
 		} else {
-			link = parentLink
+			if intf.Create {
+				macvtapName := "macvtap" + intf.Name
+				macvlan := netlink.Macvlan{LinkAttrs: netlink.LinkAttrs{Name: macvtapName, ParentIndex: parentLink.Attrs().Index}, Mode: netlink.MACVLAN_MODE_PASSTHRU}
+				link = &netlink.Macvtap{Macvlan: macvlan}
+				if err = netlink.LinkAdd(link); err != nil {
+					return err
+				}
+				log.Infof("Created macvtap network interface %s on %s", link.Attrs().Name, intf.Name)
+			} else {
+				link = parentLink
+			}
 		}
 
 		if err = netlink.LinkSetNsPid(link, response.Pid); err != nil {
@@ -1748,23 +1796,25 @@ func (r *IxiaTGReconciler) deployCpDpNode(ctx context.Context, release string, n
 	}
 
 	// DP docker container deploy
-	component, ok = componentDep[release].Ixia.Containers[IMAGE_TRAFFIC_ENG]
-	if !ok {
-		return fmt.Errorf("Failed to find traffic engine image for release %s", release)
+	if !uhdDeploy {
+		component, ok = componentDep[release].Ixia.Containers[IMAGE_TRAFFIC_ENG]
+		if !ok {
+			return fmt.Errorf("failed to find traffic engine image for release %s", release)
+		}
+
+		argIntfList := "ARG_IFACE_LIST=" + strings.Join(dpIntfList, " ")
+		envArgs := []string{argIntfList}
+		config = container.Config{Env: envArgs}
+		networkMode := container.NetworkMode(fmt.Sprintf("container:%s", response.Id))
+		hostConfig = container.HostConfig{NetworkMode: networkMode, Privileged: true}
+
+		_, err = deployDockerContainer(ctx, cli, &config, &hostConfig, component, node.DpName)
 	}
-
-	argIntfList := "ARG_IFACE_LIST=" + strings.Join(dpIntfList, " ")
-	envArgs := []string{argIntfList}
-	config = container.Config{Env: envArgs}
-	networkMode := container.NetworkMode(fmt.Sprintf("container:%s", response.Id))
-	hostConfig = container.HostConfig{NetworkMode: networkMode, Privileged: true}
-
-	_, err = deployDockerContainer(ctx, cli, &config, &hostConfig, component, node.DpName)
 
 	return err
 }
 
-func (r *IxiaTGReconciler) deleteTopoContainers(ctx context.Context, contMap map[string]bool) error {
+func (r *IxiaTGReconciler) deleteTopoContainers(ctx context.Context, contMap map[string]bool, linkNames []string) error {
 	// CP docker container delete
 	var ret error
 	cli, err := dockerclient.NewEnvClient()
@@ -1787,13 +1837,13 @@ func (r *IxiaTGReconciler) deleteTopoContainers(ctx context.Context, contMap map
 				log.Infof("Deleting container: %s", name)
 				d := time.Second * 3
 				if err = cli.ContainerStop(ctx, cont.ID, &d); err != nil {
-					ret = errors.New(fmt.Sprintf("Failed to stop container: %s", name))
+					ret = fmt.Errorf("failed to stop container: %s", name)
 					log.Errorf("%v", ret)
 					continue
 				}
 
 				if err = cli.ContainerRemove(ctx, cont.ID, dockertypes.ContainerRemoveOptions{}); err != nil {
-					ret = errors.New(fmt.Sprintf("Failed to remove container: %s", name))
+					ret = fmt.Errorf("failed to remove container: %s", name)
 					log.Errorf("%v", ret)
 					continue
 				}
@@ -1802,10 +1852,17 @@ func (r *IxiaTGReconciler) deleteTopoContainers(ctx context.Context, contMap map
 		}
 	}
 
+	// For UHD deploy, remove any stale vlan links
+	for _, name := range linkNames {
+		if link, err := netlink.LinkByName(name); err == nil {
+			netlink.LinkDel(link)
+		}
+	}
+
 	return ret
 }
 
-func (r *IxiaTGReconciler) deployCtrlNode(ctx context.Context, release string, nList []cpdpNode, ctrlParam ctrlContData) (string, error) {
+func (r *IxiaTGReconciler) deployCtrlNode(ctx context.Context, release string, nList []cpdpNode, ctrlParam ctrlContData, uhdDeploy bool) (string, error) {
 	// Controller docker container deploy
 	httpStr := fmt.Sprintf("%v/tcp", CTRL_HTTPS_PORT)
 	grpcStr := fmt.Sprintf("%v/tcp", CTRL_GRPC_PORT)
@@ -1817,7 +1874,7 @@ func (r *IxiaTGReconciler) deployCtrlNode(ctx context.Context, release string, n
 
 	component, ok := componentDep[release].Controller.Containers[IMAGE_CONTROLLER]
 	if !ok {
-		return "", fmt.Errorf("Failed to find Controller image for release %s", release)
+		return "", fmt.Errorf("failed to find Controller image for release %s", release)
 	}
 
 	entryPoint := []string{"./bin/controller"}
@@ -1886,59 +1943,66 @@ func (r *IxiaTGReconciler) deployCtrlNode(ctx context.Context, release string, n
 	}
 
 	mgmtIp := response.MgmtIP
-	locations := []location{}
-	pePort := ":" + strconv.Itoa(int(PROTOCOL_ENG_PORT))
-	tePort := ":" + strconv.Itoa(int(TRAFFIC_ENG_PORT))
+	if !uhdDeploy || ctrlParam.UHDHost != "" {
+		locations := []location{}
+		pePort := ":" + strconv.Itoa(int(PROTOCOL_ENG_PORT))
+		tePort := ":" + strconv.Itoa(int(TRAFFIC_ENG_PORT))
 
-	for _, node := range nList {
-		for _, intf := range node.Interfaces {
-			loc := fmt.Sprintf("%s%s+%s%s", node.MgmtIP, tePort, node.MgmtIP, pePort)
-			if len(node.Interfaces) > 1 {
-				loc = fmt.Sprintf("%s%s;%d+%s%s", node.MgmtIP, tePort, intf.Index, node.MgmtIP, pePort)
+		for _, node := range nList {
+			for _, intf := range node.Interfaces {
+				var loc string
+				if uhdDeploy {
+					loc = fmt.Sprintf("%s:%v;%d+%s%s", ctrlParam.UHDHost, UHD_FRONT_PORT, intf.UhdPort, node.MgmtIP, pePort)
+				} else {
+					loc = fmt.Sprintf("%s%s+%s%s", node.MgmtIP, tePort, node.MgmtIP, pePort)
+					if len(node.Interfaces) > 1 {
+						loc = fmt.Sprintf("%s%s;%d+%s%s", node.MgmtIP, tePort, intf.Index, node.MgmtIP, pePort)
+					}
+				}
+				locations = append(locations, location{Location: intf.Name, EndPoint: loc})
 			}
-			locations = append(locations, location{Location: intf.Name, EndPoint: loc})
 		}
-	}
 
-	mappings := controllerMap{LocationMap: locations}
-	log.Infof("Prepared the location map object: %v", mappings)
-	yamlObj, err := yaml.Marshal(&mappings)
-	if err != nil {
-		return "", err
-	}
+		mappings := controllerMap{LocationMap: locations}
+		log.Infof("Prepared the location map object: %v", mappings)
+		yamlObj, err := yaml.Marshal(&mappings)
+		if err != nil {
+			return "", err
+		}
 
-	lastIndex := strings.LastIndex(CTRL_MAP_MOUNT_PATH, "/") + 1
-	baseDir := CTRL_MAP_MOUNT_PATH[:lastIndex]
-	buf := new(bytes.Buffer)
-	tw := tar.NewWriter(buf)
-	name, content := fmt.Sprintf("%s/%s", CTRL_MAP_MOUNT_PATH[lastIndex:], CTRL_MAP_FILE_NAME), string(yamlObj)
-	hdr := &tar.Header{
-		Name:  name,
-		Size:  int64(len(content)),
-		Mode:  0755,
-		Uname: CTRL_USER_NAME,
-		Gname: CTRL_USER_GROUP,
-	}
-	if err = tw.WriteHeader(hdr); err != nil {
-		return "", err
-	}
-	if _, err = tw.Write([]byte(content)); err != nil {
-		return "", err
-	}
-	if err = tw.Close(); err != nil {
-		return "", err
-	}
+		lastIndex := strings.LastIndex(CTRL_MAP_MOUNT_PATH, "/") + 1
+		baseDir := CTRL_MAP_MOUNT_PATH[:lastIndex]
+		buf := new(bytes.Buffer)
+		tw := tar.NewWriter(buf)
+		name, content := fmt.Sprintf("%s/%s", CTRL_MAP_MOUNT_PATH[lastIndex:], CTRL_MAP_FILE_NAME), string(yamlObj)
+		hdr := &tar.Header{
+			Name:  name,
+			Size:  int64(len(content)),
+			Mode:  0755,
+			Uname: CTRL_USER_NAME,
+			Gname: CTRL_USER_GROUP,
+		}
+		if err = tw.WriteHeader(hdr); err != nil {
+			return "", err
+		}
+		if _, err = tw.Write([]byte(content)); err != nil {
+			return "", err
+		}
+		if err = tw.Close(); err != nil {
+			return "", err
+		}
 
-	err = cli.CopyToContainer(ctx, response.Id, baseDir, buf, dockertypes.CopyToContainerOptions{})
-	if err != nil {
-		return "", err
+		err = cli.CopyToContainer(ctx, response.Id, baseDir, buf, dockertypes.CopyToContainerOptions{})
+		if err != nil {
+			return "", err
+		}
+		log.Infof("Successfully copied location map in controller container: %v", mappings)
 	}
-	log.Infof("Successfully copied location map in controller container: %v", mappings)
 
 	// gNMI docker container deploy
 	component, ok = componentDep[release].Controller.Containers[IMAGE_GNMI_SERVER]
 	if !ok {
-		return "", fmt.Errorf("Failed to find gNMI server image for release %s", release)
+		return "", fmt.Errorf("failed to find gNMI server image for release %s", release)
 	}
 
 	// Override default args and cmd for newer gnmi
@@ -2010,11 +2074,11 @@ func (r *IxiaTGReconciler) ManageDockerContainers(req *http.Request, setup bool)
 	ctx := context.Background()
 	jsonData, err := ioutil.ReadAll(req.Body)
 	if err != nil {
-		return "", errors.New(fmt.Sprintf("Error in topology file read %v\n", err))
+		return "", fmt.Errorf("error in topology file read %v", err)
 	}
 	err = json.Unmarshal(jsonData, &jsonSpec)
 	if err != nil {
-		return "", errors.New(fmt.Sprintf("Error in topology file unmarshall %v\n", err))
+		return "", fmt.Errorf("error in topology file unmarshall %v", err)
 	}
 
 	nodeList := []cpdpNode{}
@@ -2022,8 +2086,30 @@ func (r *IxiaTGReconciler) ManageDockerContainers(req *http.Request, setup bool)
 	namespace := jsonSpec.ObjectMeta.Namespace
 	groupMap := make(map[string][]cpdpIntf)
 	depVersion := DEFAULT_VERSION
+	uhdDeploy := false
+	if jsonSpec.Spec.Type != nil && *jsonSpec.Spec.Type == "uhd" {
+		uhdDeploy = true
+	}
+	if jsonSpec.Spec.TrunkInterface != nil {
+		trunkInterface = *jsonSpec.Spec.TrunkInterface
+	}
+	intfsInUse := make(map[string]bool)
+	portsInUse := make(map[uint32]bool)
+	hostPortsInUse := make(map[uint32]bool)
 	for _, intf := range jsonSpec.Spec.Interfaces {
-		nodeIntf := cpdpIntf{Name: intf.Name, Peer: intf.Peer, PeerIntf: intf.PeerIntf, Create: true, Index: 0}
+		if _, ok := intfsInUse[intf.Name]; ok {
+			return "", fmt.Errorf("interface name %s specified more than once", intf.Name)
+		}
+		intfsInUse[intf.Name] = true
+		if uhdDeploy {
+			if intf.Port == 0 {
+				return "", fmt.Errorf("uhd port must be specified between 1 and 32")
+			} else if _, ok := portsInUse[intf.Port]; ok {
+				return "", fmt.Errorf("uhd port %v specified more than once", intf.Port)
+			}
+			portsInUse[intf.Port] = true
+		}
+		nodeIntf := cpdpIntf{Name: intf.Name, Peer: intf.Peer, PeerIntf: intf.PeerIntf, UhdPort: intf.Port, UhdHostPort: intf.HostPort, Create: true, Index: 0}
 		if intf.UseRaw {
 			nodeIntf.Create = false
 		}
@@ -2045,6 +2131,33 @@ func (r *IxiaTGReconciler) ManageDockerContainers(req *http.Request, setup bool)
 		node.DpName = baseName + "_traffic-engine"
 		nodeList = append(nodeList, node)
 	}
+	// For UHD, verify mapped host port is unique
+	if uhdDeploy {
+		for _, svc := range jsonSpec.Spec.ApiEndPoint {
+			hostPortsInUse[uint32(svc.Out)] = true
+		}
+		for i, node := range nodeList {
+			var hostPort *uint32 = nil
+			for _, intf := range node.Interfaces {
+				if intf.UhdHostPort != nil {
+					if hostPort == nil {
+						hostPort = intf.UhdHostPort
+					} else if *hostPort != *intf.UhdHostPort {
+						return "", fmt.Errorf("uhd host port for LAG must be unique")
+					}
+				}
+			}
+			if hostPort == nil {
+				hostPort = new(uint32)
+				*hostPort = uint32(PROTOCOL_ENG_PORT)
+			}
+			if _, ok := hostPortsInUse[*hostPort]; ok {
+				return "", fmt.Errorf("host port %v mapped to multiple endpoints", *hostPort)
+			}
+			hostPortsInUse[*hostPort] = true
+			nodeList[i].UhdHostPort = *hostPort
+		}
+	}
 	if setup {
 		// First check if we have the component dependency data for the release
 		if jsonSpec.Spec.Release != "" {
@@ -2061,20 +2174,28 @@ func (r *IxiaTGReconciler) ManageDockerContainers(req *http.Request, setup bool)
 		if depVersion == DEFAULT_VERSION {
 			if latestVersion == "" {
 				log.Errorf("Failed to get release information for %s", depVersion)
-				return "", errors.New(fmt.Sprintf("Failed to get release information for version %s", DEFAULT_VERSION))
+				return "", fmt.Errorf("failed to get release information for version %s", DEFAULT_VERSION)
 			} else {
 				depVersion = latestVersion
 			}
 		}
 		for index, node := range nodeList {
 			log.Infof("Node: %s %s %v\n", node.CpName, node.DpName, node.Interfaces)
-			err = r.deployCpDpNode(ctx, depVersion, &nodeList[index])
+			err = r.deployCpDpNode(ctx, depVersion, &nodeList[index], namespace, uhdDeploy)
 			if err != nil {
-				return "", errors.New(fmt.Sprintf("Error in cpdp node deploy %v\n", err))
+				return "", fmt.Errorf("error in cpdp node deploy %v", err)
 			}
 		}
 		// Deploy ixia-c, grpc and gnmi
 		ctrlParam := ctrlContData{Name: name, Namespace: namespace, HttpOut: -1, GrpcOut: -1, GnmiOut: -1}
+		if uhdDeploy {
+			// if jsonSpec.Spec.UHDHost == nil {
+			// 	return "", fmt.Errorf("error UHD host not specified")
+			// }
+			if jsonSpec.Spec.UHDHost != nil {
+				ctrlParam.UHDHost = *jsonSpec.Spec.UHDHost
+			}
+		}
 		if val, ok := jsonSpec.Spec.ApiEndPoint["https"]; ok {
 			ctrlParam.HttpOut = val.Out
 		}
@@ -2084,20 +2205,26 @@ func (r *IxiaTGReconciler) ManageDockerContainers(req *http.Request, setup bool)
 		if val, ok := jsonSpec.Spec.ApiEndPoint["gnmi"]; ok {
 			ctrlParam.GnmiOut = val.Out
 		}
-		return r.deployCtrlNode(ctx, depVersion, nodeList, ctrlParam)
+		return r.deployCtrlNode(ctx, depVersion, nodeList, ctrlParam, uhdDeploy)
 	} else {
 		baseName := namespace + "_" + name + "-controller_"
 		contNameMap := make(map[string]bool)
+		uhdLinkNames := []string{}
 		for _, node := range nodeList {
 			contNameMap[node.CpName] = true
 			contNameMap[node.DpName] = true
+			if uhdDeploy {
+				for _, intf := range node.Interfaces {
+					uhdLinkNames = append(uhdLinkNames, "vlan"+namespace+intf.Name)
+				}
+			}
 		}
 		contNameMap[baseName+"ixia-c"] = true
 		contNameMap[baseName+"gnmi"] = true
 		contNameMap[baseName+"license-server"] = true
-		err = r.deleteTopoContainers(ctx, contNameMap)
+		err = r.deleteTopoContainers(ctx, contNameMap, uhdLinkNames)
 		if err != nil {
-			return "", errors.New(fmt.Sprintf("Error in topo delete %v\n", err))
+			return "", fmt.Errorf("error in topo delete %v", err)
 		}
 	}
 

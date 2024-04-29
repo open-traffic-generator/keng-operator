@@ -34,11 +34,13 @@ type IxiaTGSvcPort struct {
 
 // IxiaTGSvcPort defines the endpoint ports for network traffic for the OTG node
 type IxiaTGIntf struct {
-	Name     string `json:"name"`
-	Group    string `json:"group,omitempty"`
-	Peer     string `json:"peer,omitempty"`
-	PeerIntf string `json:"peer_interface,omitempty"`
-	UseRaw   bool   `json:"use_raw,omitempty"`
+	Name     string  `json:"name"`
+	Group    string  `json:"group,omitempty"`
+	Peer     string  `json:"peer,omitempty"`
+	PeerIntf string  `json:"peer_interface,omitempty"`
+	UseRaw   bool    `json:"use_raw,omitempty"`
+	Port     uint32  `json:"port,omitempty"`
+	HostPort *uint32 `json:"mapped_host_port,omitempty"`
 }
 
 // IxiaTGIntfStatus defines the mapping between endpoint ports and encasing pods
@@ -75,6 +77,12 @@ type IxiaTGSpec struct {
 	Interfaces []IxiaTGIntf `json:"interfaces,omitempty"`
 	// Init container image of the node
 	InitContainer IxiaTGInitContainer `json:"init_container,omitempty"`
+	// Type of deployment
+	Type *string `json:"type,omitempty"`
+	// Interface to use as trunk interface
+	TrunkInterface *string `json:"trunk_interface,omitempty"`
+	// UHD host server
+	UHDHost *string `json:"uhd_host,omitempty"`
 }
 
 // IxiaTGStatus defines the observed state of IxiaTG
