@@ -55,6 +55,15 @@ spec:
               desired_state:
                 description: Desired state by network emulation (KNE)
                 type: string
+              init_container:
+                description: Init container image of the node
+                properties:
+                  image:
+                    type: string
+                  sleep:
+                    format: int32
+                    type: integer
+                type: object
               interfaces:
                 description: Interfaces with DUT
                 items:
