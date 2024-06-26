@@ -1342,7 +1342,7 @@ func (r *IxiaTGReconciler) containersForIxia(podName string, intfList []string, 
 	argIntfList = argIntfList[:len(argIntfList)-1]
 	var containers []corev1.Container
 
-	conSecurityCtx := getDefaultSecurityContext()
+	conSecurityCtx := getHigherSecurityContext()
 	versionToDeploy := latestVersion
 	if ixia.Spec.Release != "" && ixia.Spec.Release != DEFAULT_VERSION {
 		versionToDeploy = ixia.Spec.Release
@@ -1361,7 +1361,11 @@ func (r *IxiaTGReconciler) containersForIxia(podName string, intfList []string, 
 			Name:            name,
 			Image:           image,
 			ImagePullPolicy: "IfNotPresent",
-			SecurityContext: conSecurityCtx,
+		}
+		// only PE and TE needs higher privilage
+		if cName == IMAGE_PROTOCOL_ENG ||
+			cName == IMAGE_TRAFFIC_ENG {
+			container.SecurityContext = conSecurityCtx
 		}
 		compCopy := comp
 		compCopy.DefEnv = make(map[string]string)
@@ -1448,11 +1452,18 @@ func containsString(slice []string, s string) bool {
 	return false
 }
 
-func getDefaultSecurityContext() *corev1.SecurityContext {
-	var sc *corev1.SecurityContext = new(corev1.SecurityContext)
-	t := true
-	sc.Privileged = new(bool)
-	sc.Privileged = &t
+// getHigherSecurityContext return security context for TE or PE
+func getHigherSecurityContext() *corev1.SecurityContext {
+	sc := &corev1.SecurityContext{
+		Capabilities: &corev1.Capabilities{
+			Add: []corev1.Capability{
+				"NET_ADMIN",  // for set mtu, promisc etc
+				"IPC_LOCK",   // for mmap
+				"NET_RAW",    // for af_packet
+				"SYS_PTRACE", // for debugging
+			},
+		},
+	}
 	return sc
 }
 
