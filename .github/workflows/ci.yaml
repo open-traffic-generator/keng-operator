@@ -55,7 +55,7 @@ jobs:
           chmod u+x ./ci.sh
           ./ci.sh gen_artifacts
 
-      - uses: actions/upload-artifact@master
+      - uses: actions/upload-artifact@v4
         with:
           name: release-artifact
           path: release/
@@ -99,7 +99,7 @@ jobs:
             ./ci.sh run_test b2b
         - name: Archive logs
           if: always()
-          uses: actions/upload-artifact@v3
+          uses: actions/upload-artifact@v4
           with:
             name: b2b
             path: tests/logs-b2b
@@ -146,7 +146,7 @@ jobs:
             ./ci.sh run_test dut
         - name: Archive logs
           if: always()
-          uses: actions/upload-artifact@v3
+          uses: actions/upload-artifact@v4
           with:
             name: dut
             path: tests/logs-dut
@@ -192,7 +192,7 @@ jobs:
             ./ci.sh run_test lag
         - name: Archive logs
           if: always()
-          uses: actions/upload-artifact@v3
+          uses: actions/upload-artifact@v4
           with:
             name: lag
             path: tests/logs-lag
@@ -237,7 +237,7 @@ jobs:
             ./ci.sh run_test license
         - name: Archive logs
           if: always()
-          uses: actions/upload-artifact@v3
+          uses: actions/upload-artifact@v4
           with:
             name: license
             path: tests/logs-license
@@ -283,7 +283,7 @@ jobs:
             ./ci.sh run_test liveness
         - name: Archive logs
           if: always()
-          uses: actions/upload-artifact@v3
+          uses: actions/upload-artifact@v4
           with:
             name: liveness
             path: tests/logs-liveness
@@ -327,7 +327,7 @@ jobs:
             ./ci.sh run_test miscellaneous
         - name: Archive logs
           if: always()
-          uses: actions/upload-artifact@v3
+          uses: actions/upload-artifact@v4
           with:
             name: miscellaneous
             path: tests/logs-miscellaneous
@@ -373,7 +373,7 @@ jobs:
             ./ci.sh run_test negative
         - name: Archive logs
           if: always()
-          uses: actions/upload-artifact@v3
+          uses: actions/upload-artifact@v4
           with:
             name: negative
             path: tests/logs-negative
@@ -419,7 +419,7 @@ jobs:
             ./ci.sh run_test performance
         - name: Archive logs
           if: always()
-          uses: actions/upload-artifact@v3
+          uses: actions/upload-artifact@v4
           with:
             name: performance
             path: tests/logs-performance
@@ -465,7 +465,7 @@ jobs:
             ./ci.sh run_test resource
         - name: Archive logs
           if: always()
-          uses: actions/upload-artifact@v3
+          uses: actions/upload-artifact@v4
           with:
             name: resource
             path: tests/logs-resource
@@ -511,7 +511,7 @@ jobs:
             ./ci.sh run_test rest
         - name: Archive logs
           if: always()
-          uses: actions/upload-artifact@v3
+          uses: actions/upload-artifact@v4
           with:
             name: rest
             path: tests/logs-rest
