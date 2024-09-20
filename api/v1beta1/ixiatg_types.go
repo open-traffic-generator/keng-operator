@@ -93,7 +93,7 @@ type IxiaTGStatus struct {
 //+kubebuilder:subresource:status
 
 // IxiaTG is the Schema for the ixiatg API
-//+kubebuilder:subresource:status
+// +kubebuilder:subresource:status
 type IxiaTG struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
