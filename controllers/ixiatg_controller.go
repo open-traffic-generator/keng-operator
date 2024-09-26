@@ -654,7 +654,7 @@ func (r *IxiaTGReconciler) loadRelInfo(ctx context.Context, release string, relD
 					"ARG_CORE_LIST":          "2 3 4",
 					"ARG_IFACE_LIST":         "virtual@af_packet,eth1",
 					"OPT_NO_HUGEPAGES":       "Yes",
-					"OPT_DEFAULT_PORT_SPEED": "1000",
+					"DEFAULT_PORT_SPEED":     "1000",
 					"OPT_ADAPTIVE_CPU_USAGE": "",
 				}
 			case IMAGE_PROTOCOL_ENG:
