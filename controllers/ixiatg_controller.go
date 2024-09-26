@@ -207,10 +207,10 @@ type location struct {
 //+kubebuilder:rbac:groups=network.keysight.com,resources=ixiatgs,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=network.keysight.com,resources=ixiatgs/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=network.keysight.com,resources=ixiatgs/finalizers,verbs=update
-//+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;create;delete
+//+kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;delete
+//+kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;delete
+//+kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -650,11 +650,12 @@ func (r *IxiaTGReconciler) loadRelInfo(ctx context.Context, release string, relD
 			case IMAGE_TRAFFIC_ENG:
 				compRef.ContainerName = IMAGE_TRAFFIC_ENG
 				compRef.DefEnv = map[string]string{
-					"OPT_LISTEN_PORT":    strconv.Itoa(int(TRAFFIC_ENG_PORT)),
-					"ARG_CORE_LIST":      "2 3 4",
-					"ARG_IFACE_LIST":     "virtual@af_packet,eth1",
-					"OPT_NO_HUGEPAGES":   "Yes",
-					"DEFAULT_PORT_SPEED": "1000",
+					"OPT_LISTEN_PORT":        strconv.Itoa(int(TRAFFIC_ENG_PORT)),
+					"ARG_CORE_LIST":          "2 3 4",
+					"ARG_IFACE_LIST":         "virtual@af_packet,eth1",
+					"OPT_NO_HUGEPAGES":       "Yes",
+					"OPT_DEFAULT_PORT_SPEED": "1000",
+					"OPT_ADAPTIVE_CPU_USAGE": "",
 				}
 			case IMAGE_PROTOCOL_ENG:
 				compRef.ContainerName = IMAGE_PROTOCOL_ENG

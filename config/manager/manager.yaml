@@ -38,6 +38,9 @@ spec:
             runAsGroup: 1000
             seccompProfile:
               type: RuntimeDefault
+            capabilities:
+              drop:
+                - all
           livenessProbe:
             httpGet:
               path: /healthz
