@@ -53,7 +53,6 @@ import (
 
 const (
 	CURRENT_NAMESPACE string = "ixiatg-op-system"
-	SECRET_NAME       string = "ixia-pull-secret"
 
 	LIC_SERVER_SECRET string = "license-server"
 	LIC_ENV_VAR       string = "LICENSE_SERVERS"
@@ -852,7 +851,6 @@ func (r *IxiaTGReconciler) deployController(ctx context.Context, podMap *map[str
 	}
 
 	// Deploy controller and services
-	imagePullSecrets := []corev1.LocalObjectReference{{Name: string(SECRET_NAME)}}
 	containers, err := r.containersForController(ctx, ixia, depVersion, isOtgCtrl)
 	if err != nil {
 		return isOtgCtrl, err
@@ -912,7 +910,6 @@ func (r *IxiaTGReconciler) deployController(ctx context.Context, podMap *map[str
 		},
 		Spec: corev1.PodSpec{
 			Containers:                    containers,
-			ImagePullSecrets:              imagePullSecrets,
 			TerminationGracePeriodSeconds: pointer.Int64(TERMINATION_TIMEOUT_SEC),
 		},
 	}
@@ -987,7 +984,6 @@ func (r *IxiaTGReconciler) podForIxia(ctx context.Context, podName string, intfL
 		initContainers = append(initContainers, defaultInitCont)
 	}
 	log.Info(initContainerMsg)
-	imagePullSecrets := []corev1.LocalObjectReference{{Name: string(SECRET_NAME)}}
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      podName,
@@ -1000,7 +996,6 @@ func (r *IxiaTGReconciler) podForIxia(ctx context.Context, podName string, intfL
 		Spec: corev1.PodSpec{
 			InitContainers:                initContainers,
 			Containers:                    r.containersForIxia(podName, intfList, ixia),
-			ImagePullSecrets:              imagePullSecrets,
 			TerminationGracePeriodSeconds: pointer.Int64(TERMINATION_TIMEOUT_SEC),
 		},
 	}
@@ -1469,7 +1464,7 @@ func (r *IxiaTGReconciler) GetSecret(ctx context.Context, name string, namespace
 }
 
 func (r *IxiaTGReconciler) DeleteSecrets(ctx context.Context, namespace string) error {
-	secretList := []string{SECRET_NAME, LIC_SERVER_SECRET}
+	secretList := []string{LIC_SERVER_SECRET}
 	for _, name := range secretList {
 		instance := &corev1.Secret{}
 		if r.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, instance) == nil {
@@ -1486,7 +1481,7 @@ func (r *IxiaTGReconciler) DeleteSecrets(ctx context.Context, namespace string) 
 func (r *IxiaTGReconciler) ReconcileSecrets(ctx context.Context,
 	req ctrl.Request, ixia *networkv1beta1.IxiaTG) error {
 	_ = r.Log.WithValues("ixiatg", req.NamespacedName)
-	secretList := []string{SECRET_NAME, LIC_SERVER_SECRET}
+	secretList := []string{LIC_SERVER_SECRET}
 	// Fetch the Secret instance
 	instance := &corev1.Secret{}
 
