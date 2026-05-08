@@ -11,6 +11,7 @@ ARISTA_CEOS_OPERATOR_VERSION="2.0.1"
 ARISTA_CEOS_OPERATOR_YAML="https://github.com/aristanetworks/arista-ceoslab-operator/config/default?ref=v${ARISTA_CEOS_OPERATOR_VERSION}"
 ARISTA_CEOS_VERSION="4.29.1F-29233963"
 ARISTA_CEOS_IMAGE="ghcr.io/open-traffic-generator/ceos"
+ARISTA_CEOS_KUBE_RBAC_PROXY_IMAGE="quay.io/brancz/kube-rbac-proxy:v0.18.1"
 KNE_VERSION=v0.1.16
 
 TIMEOUT_SECONDS=300
@@ -232,8 +233,11 @@ rm_keng_operator() {
 
 get_arista_ceos_operator() {
     echo "Installing arista ceos operator ${ARISTA_CEOS_OPERATOR_YAML} ..."
+    echo "Patching kube-rbac-proxy image to ${ARISTA_CEOS_KUBE_RBAC_PROXY_IMAGE} ..."
     load_image_to_kind $(arista_ceos_operator_image) "local" \
-    && kubectl apply -k ${ARISTA_CEOS_OPERATOR_YAML} \
+    && kubectl kustomize ${ARISTA_CEOS_OPERATOR_YAML} \
+        | sed -E "s#gcr\.io/kubebuilder/kube-rbac-proxy:v[0-9]+\.[0-9]+\.[0-9]+#${ARISTA_CEOS_KUBE_RBAC_PROXY_IMAGE}#g" \
+        | kubectl apply -f - \
     && wait_for_pods arista-ceoslab-operator-system
 }
 
