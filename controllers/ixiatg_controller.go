@@ -652,6 +652,7 @@ func (r *IxiaTGReconciler) loadRelInfo(ctx context.Context, release string, relD
 				compRef.DefEnv = map[string]string{
 					"OPT_LISTEN_PORT":        strconv.Itoa(int(TRAFFIC_ENG_PORT)),
 					"OPT_NO_PINNING":         "Yes",
+					"OPT_MEMORY":             "1024",
 					"ARG_IFACE_LIST":         "virtual@af_packet,eth1",
 					"OPT_NO_HUGEPAGES":       "Yes",
 					"DEFAULT_PORT_SPEED":     "1000",
