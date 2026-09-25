@@ -23,7 +23,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"slices"
+	//"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -1334,7 +1334,7 @@ func (r *IxiaTGReconciler) containersForController(ctx context.Context, ixia *ne
 func (r *IxiaTGReconciler) containersForIxia(podName string, intfList []string, ixia *networkv1beta1.IxiaTG) []corev1.Container {
 	log.Infof("Get containers for Ixia: %s", podName)
 	argIntfList := ""
-	slices.Sort(intfList)
+	//slices.Sort(intfList)
 	for _, intf := range intfList {
 		argIntfList += "virtual@af_packet," + intf + " "
 	}
