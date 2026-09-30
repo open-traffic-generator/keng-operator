@@ -22,8 +22,8 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"net/http"
-	//"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -130,6 +130,9 @@ const (
 	MIN_CPU_TRAFFIC    string = "200m"
 	MIN_CPU_CONTROLLER string = "10m"
 	MIN_CPU_GNMI       string = "10m"
+
+	MEM_STEP_TRAFFIC      int   = 4
+	MEM_INCR_SIZE_TRAFFIC int32 = 1024
 )
 
 var (
@@ -1333,12 +1336,15 @@ func (r *IxiaTGReconciler) containersForController(ctx context.Context, ixia *ne
 
 func (r *IxiaTGReconciler) containersForIxia(podName string, intfList []string, ixia *networkv1beta1.IxiaTG) []corev1.Container {
 	log.Infof("Get containers for Ixia: %s", podName)
-	argIntfList := ""
-	//slices.Sort(intfList)
+	argIntfList, argTrafficMem := "", "1024"
 	for _, intf := range intfList {
 		argIntfList += "virtual@af_packet," + intf + " "
 	}
 	argIntfList = argIntfList[:len(argIntfList)-1]
+	if len(intfList) > MEM_STEP_TRAFFIC {
+		memIncFactor := int32(math.Ceil(float64(len(intfList)) / float64(MEM_STEP_TRAFFIC)))
+		argTrafficMem = fmt.Sprintf("%v", memIncFactor * MEM_INCR_SIZE_TRAFFIC)
+	}
 	var containers []corev1.Container
 
 	conSecurityCtx := getDefaultSecurityContext()
@@ -1390,6 +1396,7 @@ func (r *IxiaTGReconciler) containersForIxia(podName string, intfList []string, 
 			}
 		} else {
 			compCopy.DefEnv["ARG_IFACE_LIST"] = argIntfList
+			compCopy.DefEnv["OPT_MEMORY"] = argTrafficMem
 			tcpSock = corev1.TCPSocketAction{Port: intstr.IntOrString{IntVal: TRAFFIC_ENG_PORT}}
 			pbHdlr = &corev1.ProbeHandler{TCPSocket: &tcpSock}
 			if _, ok := resRequest["cpu"]; !ok {
