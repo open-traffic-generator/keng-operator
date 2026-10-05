@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -131,8 +130,8 @@ const (
 	MIN_CPU_CONTROLLER string = "10m"
 	MIN_CPU_GNMI       string = "10m"
 
-	MEM_STEP_TRAFFIC      int   = 4
-	MEM_INCR_SIZE_TRAFFIC int32 = 1024
+	DEF_LAG_INTF_SIZE int = 4
+	MAX_LAG_INTF_SIZE int = 8
 )
 
 var (
@@ -418,8 +417,13 @@ func (r *IxiaTGReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 			log.Infof("Successfully deployed controller pod")
 			for name, intfs := range podMap {
 				log.Infof("Creating pod %v", name)
+				if len(intfs) > MAX_LAG_INTF_SIZE {
+					err = fmt.Errorf("Lag with maximum %v ports is currently supported", MAX_LAG_INTF_SIZE)
+					log.Errorf("Pod %v create failed!", name)
+					break
+				}
 				if err = r.podForIxia(ctx, name, intfs, ixia); err != nil {
-					log.Infof("Pod %v create failed!", name)
+					log.Errorf("Pod %v create failed!", name)
 					break
 				}
 				log.Infof("Pod %v created!", name)
@@ -1341,9 +1345,8 @@ func (r *IxiaTGReconciler) containersForIxia(podName string, intfList []string, 
 		argIntfList += "virtual@af_packet," + intf + " "
 	}
 	argIntfList = argIntfList[:len(argIntfList)-1]
-	if len(intfList) > MEM_STEP_TRAFFIC {
-		memIncFactor := int32(math.Ceil(float64(len(intfList)) / float64(MEM_STEP_TRAFFIC)))
-		argTrafficMem = fmt.Sprintf("%v", memIncFactor * MEM_INCR_SIZE_TRAFFIC)
+	if len(intfList) > DEF_LAG_INTF_SIZE {
+		argTrafficMem = "2048"
 	}
 	var containers []corev1.Container
 
