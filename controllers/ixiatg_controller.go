@@ -659,7 +659,7 @@ func (r *IxiaTGReconciler) loadRelInfo(ctx context.Context, release string, relD
 				compRef.DefEnv = map[string]string{
 					"OPT_LISTEN_PORT":        strconv.Itoa(int(TRAFFIC_ENG_PORT)),
 					"OPT_NO_PINNING":         "Yes",
-					"OPT_MEMORY":             "1024",
+					"OPT_MEMORY":             "512",
 					"ARG_IFACE_LIST":         "virtual@af_packet,eth1",
 					"OPT_NO_HUGEPAGES":       "Yes",
 					"DEFAULT_PORT_SPEED":     "1000",
@@ -1340,13 +1340,15 @@ func (r *IxiaTGReconciler) containersForController(ctx context.Context, ixia *ne
 
 func (r *IxiaTGReconciler) containersForIxia(podName string, intfList []string, ixia *networkv1beta1.IxiaTG) []corev1.Container {
 	log.Infof("Get containers for Ixia: %s", podName)
-	argIntfList, argTrafficMem := "", "1024"
+	argIntfList, argTrafficMem := "", "512"
 	for _, intf := range intfList {
 		argIntfList += "virtual@af_packet," + intf + " "
 	}
 	argIntfList = argIntfList[:len(argIntfList)-1]
 	if len(intfList) > DEF_LAG_INTF_SIZE {
 		argTrafficMem = "2048"
+	} else if len(intfList) > 1 {
+		argTrafficMem = "1024"
 	}
 	var containers []corev1.Container
 
